@@ -111,7 +111,7 @@ export default function VencimientosPage() {
               <span style={{ flex: 1, textAlign: 'center' }}>Cantidad</span>
               <span style={{ flex: 1.2 }}>Fecha de vencimiento</span>
               <span style={{ flex: 1 }}>Estado</span>
-              <span style={{ width: 90 }} />
+              <span style={{ width: 104, flexShrink: 0 }} />
             </div>
 
             {vencidos.map((lote) => (
@@ -129,7 +129,7 @@ export default function VencimientosPage() {
                     Vencido hace {etiquetaDias(lote.dias_vencido, 'día', 'días')}
                   </span>
                 </span>
-                <span style={{ width: 90, display: 'flex', justifyContent: 'flex-end' }}>
+                <span style={{ width: 104, flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
                   {puedeRetirar &&
                     (confirmandoLoteId === lote.lote_id ? (
                       <div className="vencimientos-confirm">
@@ -164,7 +164,7 @@ export default function VencimientosPage() {
                     {lote.dias_restantes === 0 ? 'Vence hoy' : `Vence en ${etiquetaDias(lote.dias_restantes, 'día', 'días')}`}
                   </span>
                 </span>
-                <span style={{ width: 90, display: 'flex', justifyContent: 'flex-end' }}>
+                <span style={{ width: 104, flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
                   <button
                     type="button"
                     className="btn vencimientos-btn-ver"

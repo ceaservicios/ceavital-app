@@ -5,14 +5,20 @@
   border-bottom: 1px solid var(--border-default);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
   padding: 0 32px;
 }
 .topbar-title {
+  flex: 1;
+  min-width: 0;
   font-size: 20px;
   font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .topbar-pill {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -23,4 +29,41 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
+}
+/* Botón del menú: solo existe en pantallas angostas. */
+.topbar-menu {
+  display: none;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+@media (max-width: 860px) {
+  .topbar {
+    padding: 0 16px;
+  }
+  .topbar-menu {
+    display: flex;
+  }
+  .topbar-title {
+    font-size: 17px;
+  }
+}
+@media (max-width: 480px) {
+  .topbar {
+    padding: 0 12px;
+  }
+  .topbar-pill svg {
+    display: none;
+  }
+  .topbar-pill {
+    padding: 6px 12px;
+  }
 }

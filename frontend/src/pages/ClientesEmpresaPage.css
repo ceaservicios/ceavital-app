@@ -1,350 +1,399 @@
-.clientes-page {
+/* Clientes-Empresa: todo el módulo fluye en una sola columna a todo el ancho,
+   sin alturas fijas ni paneles con scroll propio (eso era lo que hacía que los
+   bloques se pisaran). El scroll lo maneja solo .app-layout-content. */
+.cliente-page {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  height: 100%;
-  min-height: 0;
+  gap: 20px;
+  width: 100%;
 }
-.clientes-kpis {
+
+/* Encabezado de páginas internas */
+.cliente-encabezado {
   display: flex;
-  gap: 16px;
+  flex-direction: column;
+  gap: 6px;
+}
+.cliente-volver {
+  font-size: 13.5px;
+  font-weight: 600;
+  align-self: flex-start;
+}
+.cliente-titulo-fila {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   flex-wrap: wrap;
 }
-.clientes-kpi {
-  flex: 1;
-  min-width: 180px;
+.cliente-h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.cliente-subtitulo {
+  font-size: 14px;
+  color: var(--text-tertiary);
+}
+
+/* KPIs */
+.cliente-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+.cliente-kpi {
   padding: 16px 20px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 }
-.clientes-kpi-label {
+.cliente-kpi-label {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-tertiary);
 }
-.clientes-kpi-value {
+.cliente-kpi-value {
   font-size: 26px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
-
-.clientes-body {
-  flex: 1;
-  display: flex;
-  gap: 16px;
-  min-height: 0;
+.cliente-kpi-texto {
+  font-size: 17px;
 }
-@media (max-width: 960px) {
-  .clientes-body {
-    flex-direction: column;
+
+@media (max-width: 600px) {
+  .cliente-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
   }
 }
 
-.clientes-lista {
-  flex: 1.7;
-  padding: 20px;
+/* Tarjetas */
+.cliente-card {
+  padding: 22px 24px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  min-height: 0;
-  overflow: auto;
+  gap: 18px;
+  min-width: 0;
 }
-.clientes-lista-header {
+.cliente-seccion-titulo {
+  font-size: 15px;
+  font-weight: 700;
+}
+.cliente-seccion-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Barra de herramientas del listado */
+.cliente-toolbar {
   display: flex;
   align-items: center;
   gap: 12px;
 }
-.clientes-titulo {
-  font-size: 14px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-.clientes-search {
+.cliente-buscar {
   flex: 1;
-}
-.clientes-search input {
-  width: 100%;
-  padding: 8px 12px;
+  min-width: 0;
+  padding: 11px 14px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-default);
   background: var(--bg-muted);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 14px;
+}
+.cliente-buscar:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  background: var(--bg-surface);
+}
+.cliente-toolbar .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
-.clientes-vacio {
-  padding: 24px;
-  text-align: center;
-  color: var(--text-tertiary);
-  font-size: 13.5px;
+/* Tablas reales: encabezado y celdas comparten columna, así nunca se desalinean */
+.cliente-tabla-wrap {
+  overflow-x: auto;
 }
-.clientes-tabla-head {
-  display: flex;
-  padding: 8px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--bg-app);
-}
-.clientes-fila {
-  display: flex;
-  align-items: center;
+.cliente-tabla {
   width: 100%;
-  padding: 11px 10px;
-  border: none;
-  border-bottom: 1px solid var(--bg-app);
-  background: transparent;
-  font: inherit;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.cliente-tabla th {
+  padding: 10px 14px;
   text-align: left;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-default);
+  white-space: nowrap;
+}
+.cliente-tabla td {
+  padding: 13px 14px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--bg-app);
+}
+.cliente-tabla tbody tr {
   cursor: pointer;
 }
-.clientes-fila:hover {
+.cliente-tabla tbody tr:hover {
   background: #f6f7f8;
 }
-.clientes-fila-activa {
-  background: #f1f6f4;
+.cliente-tabla tbody tr.sin-click {
+  cursor: default;
 }
-.clientes-fila-nombre {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 14px;
-  font-weight: 600;
-}
-.clientes-fila-cuit {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-.clientes-fila-muted {
-  font-size: 13.5px;
-  color: var(--text-secondary);
-}
-
-.clientes-saldo {
-  font-size: 14px;
-  font-weight: 800;
+.cliente-tabla .num {
+  text-align: right;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-/* Deudor = énfasis neutro fuerte, NO Rosa Coral/Dorado: esos son exclusivos
-   de alertas urgentes en marca.md, y un saldo a cobrar es información normal
-   de negocio, no una alerta. */
-.clientes-saldo-debe {
-  color: var(--text-primary);
+.cliente-td-nombre {
+  font-weight: 700;
 }
-.clientes-saldo-favor {
-  color: #0e4b38;
-}
-.clientes-saldo-aldia {
+.cliente-td-sub {
+  margin-top: 2px;
+  font-size: 12px;
   color: var(--text-muted);
 }
-
-.clientes-panel {
-  flex: 1;
-  min-width: 360px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  overflow: auto;
-}
-.clientes-panel-vacio {
-  margin: auto;
+.cliente-vacio {
+  padding: 32px 16px;
   text-align: center;
   color: var(--text-tertiary);
   font-size: 14px;
-  padding: 24px;
 }
-.clientes-panel-titulo {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 15px;
-  font-weight: 700;
-}
-.clientes-panel-cerrar {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 16px;
-  color: var(--text-tertiary);
-}
-.clientes-form,
-.clientes-detalle {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.clientes-grid2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+.cliente-mov-monto {
+  font-weight: 800;
 }
 
-.clientes-saldo-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  background: var(--bg-muted);
-  border-radius: var(--radius-sm);
-}
-.clientes-saldo-label {
-  flex: 1;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-secondary);
-}
-.clientes-saldo-valor {
-  font-size: 22px;
+/* Saldos: deudor en énfasis neutro, NO Rosa Coral/Dorado (marca.md los reserva
+   para alertas urgentes; un saldo a cobrar es información normal de negocio). */
+.cliente-saldo {
   font-weight: 800;
-  font-variant-numeric: tabular-nums;
 }
-.clientes-badge {
+.cliente-saldo-debe {
+  color: var(--text-primary);
+}
+.cliente-saldo-favor {
+  color: #0e4b38;
+}
+.cliente-saldo-aldia {
+  color: var(--text-muted);
+}
+.cliente-badge {
   display: inline-flex;
-  padding: 4px 10px;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.cliente-badge-debe {
+  background: #dde4f1;
+  color: #22428c;
+}
+.cliente-badge-favor {
+  background: #dceee5;
+  color: #0e4b38;
+}
+.cliente-badge-aldia {
+  background: #f1f3f4;
+  color: #5b6664;
+}
+.cliente-tipo {
+  display: inline-block;
+  min-width: 64px;
+  text-align: center;
+  padding: 3px 10px;
   border-radius: var(--radius-pill);
   font-size: 12px;
   font-weight: 700;
 }
-.clientes-badge-debe {
+.cliente-tipo-CARGO {
   background: #dde4f1;
   color: #22428c;
 }
-.clientes-badge-favor {
+.cliente-tipo-PAGO {
   background: #dceee5;
   color: #0e4b38;
 }
-.clientes-badge-aldia {
-  background: #f1f3f4;
+.cliente-tipo-AJUSTE {
+  background: #e3e6e8;
   color: #5b6664;
 }
 
-.clientes-seccion {
+/* Pestañas */
+.cliente-tabs {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-default);
+  gap: 4px;
+  border-bottom: 1px solid var(--border-default);
+  overflow-x: auto;
+  overflow-y: hidden;
 }
-.clientes-seccion-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.clientes-section-label {
-  font-size: 13.5px;
+.cliente-tab {
+  padding: 11px 18px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  font-size: 14px;
   font-weight: 700;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  white-space: nowrap;
 }
-.clientes-link {
+.cliente-tab:hover {
+  color: var(--text-primary);
+}
+.cliente-tab-activa {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+/* Formularios: grilla de 2 columnas, cada celda con la misma altura de label
+   + input, así todo queda alineado a la misma línea. */
+.cliente-campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px 20px;
+  align-items: start;
+}
+.cliente-campo-full {
+  grid-column: 1 / -1;
+}
+.cliente-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.cliente-hint {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+.cliente-link {
   border: none;
   background: transparent;
   color: var(--color-secondary);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
   padding: 0;
 }
-.clientes-hint {
-  font-size: 13px;
-  color: var(--text-tertiary);
-  line-height: 1.4;
-}
-.clientes-ajuste {
+.cliente-ajuste {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  gap: 14px;
+  padding: 16px;
   background: var(--bg-muted);
   border-radius: var(--radius-sm);
 }
 
-.clientes-movimientos {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 320px;
-  overflow: auto;
+/* Ficha de solo lectura */
+.cliente-datos {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px 24px;
 }
-.clientes-mov {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  background: var(--bg-muted);
-  border-radius: var(--radius-sm);
-}
-.clientes-tipo {
-  flex-shrink: 0;
-  min-width: 58px;
-  text-align: center;
-  padding: 3px 8px;
-  border-radius: var(--radius-pill);
-  font-size: 11.5px;
+.cliente-datos dt {
+  font-size: 12px;
   font-weight: 700;
-}
-.clientes-tipo-CARGO {
-  background: #dde4f1;
-  color: #22428c;
-}
-.clientes-tipo-PAGO {
-  background: #dceee5;
-  color: #0e4b38;
-}
-.clientes-tipo-AJUSTE {
-  background: #e3e6e8;
-  color: #5b6664;
-}
-.clientes-mov-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.clientes-mov-desc {
-  font-size: 13.5px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.clientes-mov-meta {
-  font-size: 11.5px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
   color: var(--text-muted);
+  margin-bottom: 4px;
 }
-.clientes-mov-monto {
-  flex-shrink: 0;
-  font-size: 13.5px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
+.cliente-datos dd {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.cliente-dato-full {
+  grid-column: 1 / -1;
 }
 
-.clientes-eliminar {
-  padding-top: 10px;
-  border-top: 1px solid var(--border-default);
-  text-align: center;
+/* Mensajes y eliminar */
+.alert-exito {
+  background: rgba(14, 75, 56, 0.08);
+  color: #0e4b38;
+  border: 1px solid rgba(14, 75, 56, 0.25);
 }
-.clientes-eliminar-link {
+.btn-peligro {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+.cliente-eliminar {
+  padding-top: 16px;
+  border-top: 1px solid var(--border-default);
+}
+.cliente-eliminar-link {
   border: none;
   background: transparent;
   color: var(--color-danger);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
+  padding: 0;
 }
-.clientes-eliminar-confirm {
+.cliente-eliminar-confirm {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  font-size: 13px;
+  gap: 12px;
+  font-size: 13.5px;
   color: var(--text-secondary);
 }
-.clientes-eliminar-confirm > div {
+
+/* Las páginas de clientes encajan en la ventana: encabezado, KPIs y pestañas
+   quedan fijos y solo el contenido (tabla/ficha) scrollea por dentro. */
+.cliente-page {
+  height: 100%;
+  min-height: 0;
+}
+.cliente-page > .cliente-card:last-child,
+.cliente-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.cliente-scroll {
   display: flex;
-  gap: 8px;
-  justify-content: center;
+  flex-direction: column;
+  gap: 20px;
+}
+/* Celular / tablet vertical: la página crece con su contenido y scrollea una
+   sola vez (sin tarjetas con scroll propio dentro de la página). */
+@media (max-width: 860px) {
+  .cliente-page {
+    height: auto;
+  }
+  .cliente-page > .cliente-card:last-child,
+  .cliente-page > .cliente-card.cliente-form-card:last-child,
+  .cliente-scroll {
+    flex: none;
+    overflow: visible;
+  }
+}
+
+/* El formulario de alta mide lo que miden sus campos; no se estira hasta el
+   borde inferior de la ventana (si no entra, scrollea por dentro). */
+.cliente-page > .cliente-card.cliente-form-card:last-child {
+  flex: 0 1 auto;
+}
+.cliente-card .cliente-tabla-wrap {
+  overflow-y: auto;
+  min-height: 0;
+}
+.cliente-tabla th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-surface);
 }

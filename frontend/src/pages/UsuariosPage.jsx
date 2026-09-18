@@ -180,7 +180,7 @@ export default function UsuariosPage() {
                 <span style={{ flex: 1 }}>
                   <span className={`usuarios-badge usuarios-badge-${u.rol}`}>{etiquetaRol(u.rol)}</span>
                 </span>
-                <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5 }}>
                   <span className={`usuarios-dot ${estaBloqueado(u) ? 'usuarios-dot-bloqueado' : 'usuarios-dot-activo'}`} />
                   {estaBloqueado(u) ? 'Bloqueado' : 'Activo'}
                 </span>

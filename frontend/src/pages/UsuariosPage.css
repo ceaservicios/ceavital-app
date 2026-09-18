@@ -35,9 +35,20 @@
   gap: 16px;
   min-height: 0;
 }
-@media (max-width: 900px) {
+/* Con el menú lateral (240px) los dos paneles ya no entran lado a lado por
+   debajo de ~1200px de ventana: se apilan y la página crece con su contenido
+   (sin altura fija, que era lo que hacía que los bloques se pisaran). */
+@media (max-width: 1200px) {
+  .usuarios-page {
+    height: auto;
+  }
   .usuarios-body {
     flex-direction: column;
+  }
+  .usuarios-body > * {
+    flex: none;
+    min-width: 0;
+    max-width: 100%;
   }
 }
 

@@ -180,7 +180,7 @@ export default function CierreCajaPage() {
           {puedeCerrar ? (
             <>
               <div className="field">
-                <label>Monto contado físicamente</label>
+                <label>Monto contado</label>
                 <input
                   type="number"
                   min="0"
@@ -191,7 +191,7 @@ export default function CierreCajaPage() {
               </div>
 
               <div className="field">
-                <label>Fondo a dejar para el turno/día siguiente (opcional)</label>
+                <label>Fondo a dejar (opcional)</label>
                 <input
                   type="number"
                   min="0"

@@ -79,6 +79,7 @@ button {
   font-size: 14.5px;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
   transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
 .btn:hover {
@@ -110,6 +111,9 @@ button {
   font-size: 13px;
   font-weight: 700;
   color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .field input,
@@ -152,4 +156,80 @@ button {
   background: rgba(224, 90, 101, 0.1);
   color: #a13640;
   border: 1px solid rgba(224, 90, 101, 0.3);
+}
+
+/* Columnas de las "tablas" armadas con flex (Stock, Vencimientos, Proveedores,
+   Costos, Usuarios, Cierre de Caja, carrito de Caja): cada columna recibe su
+   ancho por `style={{ flex: N }}` en el encabezado y en cada fila. Sin
+   `min-width: 0` el ancho real dependía del contenido de cada fila y las
+   columnas dejaban de coincidir con su encabezado (textos pegados, "$2.200La
+   Serenisima"). Con min-width: 0 el reparto es exactamente proporcional en
+   todas las filas, y el padding evita que un valor toque al de al lado. */
+[style*='flex:'] {
+  min-width: 0;
+  padding-right: 12px;
+  overflow-wrap: break-word;
+}
+[style*='flex:']:last-child {
+  padding-right: 0;
+}
+
+/* Encabezados de esas tablas: una sola línea ("PRECIO VENTA" no se parte). */
+[class$='-head'] > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Un placeholder largo termina en "…" en vez de cortarse a la mitad de una letra. */
+input {
+  text-overflow: ellipsis;
+}
+
+/* Celular: las tarjetas de resumen (KPI) van de a dos por fila, no una por
+   fila (ocupaban toda la pantalla antes de llegar al contenido). */
+@media (max-width: 600px) {
+  .app-layout-content [class$='-kpis'] > * {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 0;
+    padding: 12px 14px;
+  }
+  .app-layout-content [class*='-kpi-value'] {
+    font-size: 22px;
+  }
+
+  /* Tablas armadas con columnas flex (Stock, Costos, Proveedores, Usuarios,
+     Vencimientos, historial de Cierre, carrito): en un ancho de celular las
+     columnas se aplastaban ("$2.2 / 00"). Mantienen un ancho mínimo legible y
+     la tabla scrollea de costado dentro de su tarjeta, sin mover la página. */
+  .stock-tabla,
+  .costos-tabla,
+  .proveedores-tabla,
+  .usuarios-tabla,
+  .vencimientos-tabla-scroll,
+  .cierre-historial-tabla,
+  .caja-cart-list {
+    overflow-x: auto;
+  }
+  .stock-tabla > *,
+  .costos-tabla > *,
+  .proveedores-tabla > *,
+  .usuarios-tabla > *,
+  .vencimientos-tabla-scroll > *,
+  .cierre-historial-tabla > *,
+  .caja-cart-list > * {
+    min-width: 520px;
+  }
+}
+
+/* Badges/píldoras: nunca se parten en dos líneas ("Administrad/or"). */
+[class*='badge'] {
+  white-space: nowrap;
+}
+/* Texto largo de una celda (email, etc.): una línea con "…" en vez de
+   cortarse a la mitad de una palabra. Poner el texto completo en title. */
+.celda-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

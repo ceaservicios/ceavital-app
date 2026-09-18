@@ -97,12 +97,12 @@ const SECCIONES = [
   },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ abierto = false }) {
   const { usuario, logout } = useAuth();
   const rol = usuario?.rol;
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${abierto ? ' sidebar-abierto' : ''}`}>
       <div className="sidebar-brand">
         <div className="sidebar-brand-title">CEAVital</div>
         <div className="sidebar-brand-subtitle">POS Management</div>

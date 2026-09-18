@@ -35,9 +35,20 @@
   gap: 16px;
   min-height: 0;
 }
-@media (max-width: 960px) {
+/* Con el menú lateral (240px) los dos paneles ya no entran lado a lado por
+   debajo de ~1200px de ventana: se apilan y la página crece con su contenido
+   (sin altura fija, que era lo que hacía que los bloques se pisaran). */
+@media (max-width: 1200px) {
+  .proveedores-page {
+    height: auto;
+  }
   .proveedores-body {
     flex-direction: column;
+  }
+  .proveedores-body > * {
+    flex: none;
+    min-width: 0;
+    max-width: 100%;
   }
 }
 
@@ -67,6 +78,18 @@
 }
 .proveedores-search {
   flex: 1;
+}
+/* Celular: título y botón en una fila, buscador debajo a todo el ancho. */
+@media (max-width: 600px) {
+  .proveedores-card-header {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+  .proveedores-search {
+    order: 3;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
 }
 .proveedores-search input {
   width: 100%;

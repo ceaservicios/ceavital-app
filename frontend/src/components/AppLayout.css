@@ -15,3 +15,24 @@
   overflow: auto;
   padding: 24px 32px;
 }
+.app-layout-backdrop {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .app-layout-content {
+    padding: 16px;
+  }
+  .app-layout-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.4);
+  }
+}
+@media (max-width: 480px) {
+  .app-layout-content {
+    padding: 12px;
+  }
+}

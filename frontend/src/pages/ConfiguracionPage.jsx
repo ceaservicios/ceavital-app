@@ -6,7 +6,7 @@ import './ConfiguracionPage.css';
 // de pago): misma forma exacta para las 3, evita duplicar el mismo CRUD
 // (corrección pedida 2026-09-15; condiciones de pago sumada 2026-09-18). Exclusivo Admin -- esta pantalla entera ya está gateada por
 // RequireRole en App.jsx.
-function SeccionCatalogo({ titulo, endpoint, singular }) {
+function SeccionCatalogo({ titulo, endpoint, singular, descripcion }) {
   const [items, setItems] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
@@ -85,7 +85,10 @@ function SeccionCatalogo({ titulo, endpoint, singular }) {
 
   return (
     <div className="card config-catalogo">
-      <span className="config-catalogo-titulo">{titulo}</span>
+      <div className="config-seccion-cabecera">
+        <span className="config-seccion-titulo">{titulo}</span>
+        <p className="config-seccion-desc">{descripcion}</p>
+      </div>
       {error && <div className="alert alert-danger">{error}</div>}
 
       <form className="config-catalogo-nuevo" onSubmit={crear}>
@@ -159,23 +162,76 @@ function SeccionCatalogo({ titulo, endpoint, singular }) {
   );
 }
 
+const SECCIONES = [
+  {
+    clave: 'categorias',
+    texto: 'Categorías',
+    descripcion: 'Rubros con los que se clasifican los productos en Stock (ej. Bebidas, Lácteos). Aparecen como opciones al cargar o editar un producto.',
+    endpoint: '/categorias',
+    singular: 'categoría',
+  },
+  {
+    clave: 'unidades',
+    texto: 'Unidades de medida',
+    descripcion: 'Cómo se mide cada producto (ej. unidad, kg, litro). Aparecen como opciones al cargar o editar un producto.',
+    endpoint: '/unidades-medida',
+    singular: 'unidad de medida',
+  },
+  {
+    clave: 'pagos',
+    texto: 'Condiciones de pago',
+    descripcion: 'Plazos que se le pueden asignar a un cliente-empresa (ej. Contado, 30 días). Aparecen como opciones en la ficha del cliente.',
+    endpoint: '/condiciones-pago',
+    singular: 'condición de pago',
+  },
+  { clave: 'backups', texto: 'Backups y Seguridad' },
+];
+
 export default function ConfiguracionPage() {
+  const [tab, setTab] = useState('categorias');
+  const seccion = SECCIONES.find((s) => s.clave === tab);
+
   return (
     <div className="config-page">
-      <div className="config-grid">
-        <SeccionCatalogo titulo="Categorías" endpoint="/categorias" singular="categoría" />
-        <SeccionCatalogo titulo="Unidades de medida" endpoint="/unidades-medida" singular="unidad de medida" />
-        <SeccionCatalogo titulo="Condiciones de pago" endpoint="/condiciones-pago" singular="condición de pago" />
+      <div className="config-encabezado">
+        <span className="config-subtitulo">Listas de opciones y ajustes generales del sistema. Solo el Administrador tiene acceso.</span>
       </div>
 
-      <div className="card config-proximamente">
-        <span className="config-catalogo-titulo">Backups y Seguridad</span>
-        <p className="config-proximamente-texto">
-          La configuración de backups (destino, frecuencia, retención) y la restauración ya existen en el backend
-          (<code>/api/configuracion</code>) pero todavía no tienen pantalla propia -- se gestionan por ahora vía API o
-          desde la terminal del servidor. Se suma acá cuando haga falta.
-        </p>
+      <div className="config-tabs" role="tablist">
+        {SECCIONES.map((s) => (
+          <button
+            key={s.clave}
+            type="button"
+            role="tab"
+            aria-selected={tab === s.clave}
+            className={`config-tab${tab === s.clave ? ' config-tab-activa' : ''}`}
+            onClick={() => setTab(s.clave)}
+          >
+            {s.texto}
+          </button>
+        ))}
       </div>
+
+      {seccion.endpoint ? (
+        <SeccionCatalogo
+          key={seccion.clave}
+          titulo={seccion.texto}
+          descripcion={seccion.descripcion}
+          endpoint={seccion.endpoint}
+          singular={seccion.singular}
+        />
+      ) : (
+        <div className="card config-catalogo">
+          <div className="config-seccion-cabecera">
+            <span className="config-seccion-titulo">{seccion.texto}</span>
+            <p className="config-seccion-desc">
+              La configuración de backups (destino, frecuencia, retención) y la restauración ya existen en el backend
+              (<code>/api/configuracion</code>) pero todavía no tienen pantalla propia: se gestionan por ahora vía API o
+              desde la terminal del servidor. Se suma acá cuando haga falta.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

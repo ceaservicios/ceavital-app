@@ -9,6 +9,8 @@ import StockPage from './pages/StockPage.jsx';
 import VencimientosPage from './pages/VencimientosPage.jsx';
 import ProveedoresPage from './pages/ProveedoresPage.jsx';
 import ClientesEmpresaPage from './pages/ClientesEmpresaPage.jsx';
+import ClienteEmpresaNuevoPage from './pages/ClienteEmpresaNuevoPage.jsx';
+import ClienteEmpresaDetallePage from './pages/ClienteEmpresaDetallePage.jsx';
 import CierreCajaPage from './pages/CierreCajaPage.jsx';
 import CostosPage from './pages/CostosPage.jsx';
 import UsuariosPage from './pages/UsuariosPage.jsx';
@@ -40,14 +42,11 @@ export default function App() {
               </RequireRole>
             }
           />
-          <Route
-            path="clientes-empresa"
-            element={
-              <RequireRole modulo="clientes-empresa">
-                <ClientesEmpresaPage />
-              </RequireRole>
-            }
-          />
+          <Route path="clientes-empresa" element={<RequireRole modulo="clientes-empresa" />}>
+            <Route index element={<ClientesEmpresaPage />} />
+            <Route path="nuevo" element={<ClienteEmpresaNuevoPage />} />
+            <Route path=":id" element={<ClienteEmpresaDetallePage />} />
+          </Route>
           <Route path="cierre-caja" element={<CierreCajaPage />} />
           <Route
             path="costos"

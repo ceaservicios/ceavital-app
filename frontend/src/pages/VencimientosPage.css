@@ -102,6 +102,15 @@
 .vencimientos-fila:hover {
   background: #f6f7f8;
 }
+/* Fechas, lotes y cantidades en una línea ("01/09/2 026" no se parte). */
+.vencimientos-fila > span:not(.vencimientos-fila-nombre) {
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .app-layout-content .vencimientos-tabla-scroll > * {
+    min-width: 700px;
+  }
+}
 .vencimientos-fila-nombre {
   font-size: 14px;
   font-weight: 600;

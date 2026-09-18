@@ -136,26 +136,57 @@
   color: #ffffff;
 }
 
+/* Celular y tablet vertical: el menú es un cajón que sale desde la izquierda
+   (se abre con el botón de la barra superior, ver AppLayout/Topbar). */
 @media (max-width: 860px) {
   .sidebar {
-    width: 76px;
-    padding: 20px 10px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 50;
+    width: min(280px, 85vw);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 0.2s ease, visibility 0.2s;
+    box-shadow: none;
   }
-  .sidebar-brand-subtitle,
-  .sidebar-section-title,
-  .sidebar-item-label,
-  .sidebar-user {
-    display: none;
-  }
-  .sidebar-brand-title {
-    font-size: 15px;
-    text-align: center;
+  .sidebar-abierto {
+    transform: translateX(0);
+    visibility: visible;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25);
   }
   .sidebar-item {
-    justify-content: center;
     padding: 12px;
   }
+}
+
+/* Ventanas de poca altura: el menú se compacta para que entre completo, con el
+   usuario y el botón de salir siempre visibles (sin scroll propio). */
+@media (max-height: 820px) {
+  .sidebar {
+    padding: 14px 12px;
+    gap: 12px;
+  }
+  .sidebar-nav {
+    gap: 10px;
+  }
+  .sidebar-item {
+    padding: 6px 12px;
+    font-size: 14px;
+  }
+  .sidebar-section-title {
+    padding-bottom: 3px;
+  }
   .sidebar-footer {
-    justify-content: center;
+    padding-top: 10px;
+  }
+}
+@media (max-height: 640px) {
+  .sidebar-brand-subtitle {
+    display: none;
+  }
+  .sidebar-item {
+    padding: 4px 12px;
   }
 }

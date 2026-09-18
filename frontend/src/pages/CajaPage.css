@@ -34,11 +34,52 @@
   flex: 1;
   display: flex;
   gap: 16px;
-  min-height: 0;
+  /* sin min-height: 0: si el contenido es más alto que la ventana, la página crece y scrollea en vez de pisar lo que sigue */
 }
-@media (max-width: 960px) {
+/* Pantallas anchas: carrito y gastos en la columna izquierda, cobro a la
+   derecha ocupando toda la altura. Así los gastos no quedan escondidos debajo
+   del fondo de la ventana y la página solo scrollea si el cobro no entra. */
+@media (min-width: 1201px) {
+  .caja-page {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 18px 16px;
+  }
+  .caja-kpis {
+    grid-column: 1 / -1;
+  }
+  .caja-body {
+    display: contents;
+  }
+  .caja-carrito {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .caja-gastos {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  .caja-cobro {
+    grid-column: 2;
+    grid-row: 2 / 4;
+  }
+}
+
+/* Con el menú lateral (240px) los dos paneles ya no entran lado a lado por
+   debajo de ~1200px de ventana: se apilan y la página crece con su contenido
+   (sin altura fija, que era lo que hacía que los bloques se pisaran). */
+@media (max-width: 1200px) {
+  .caja-page {
+    height: auto;
+  }
   .caja-body {
     flex-direction: column;
+  }
+  .caja-body > * {
+    flex: none;
+    min-width: 0;
+    max-width: 100%;
   }
 }
 

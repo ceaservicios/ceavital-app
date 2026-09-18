@@ -325,7 +325,7 @@ export default function StockPage() {
               <span style={{ flex: 2.2 }}>Producto</span>
               <span style={{ flex: 1.2 }}>Categoría</span>
               <span style={{ flex: 1, textAlign: 'center' }}>Stock</span>
-              <span style={{ flex: 1, textAlign: 'right' }}>Precio venta</span>
+              <span style={{ flex: 1, textAlign: 'right', paddingRight: 20 }}>Precio</span>
               <span style={{ flex: 1.4 }}>Proveedor</span>
             </div>
             <div className="stock-tabla-body">
@@ -354,7 +354,7 @@ export default function StockPage() {
                   >
                     {p.stock_total}
                   </span>
-                  <span style={{ flex: 1, textAlign: 'right' }}>{formatearMonto(p.precio_venta)}</span>
+                  <span style={{ flex: 1, textAlign: 'right', paddingRight: 20 }}>{formatearMonto(p.precio_venta)}</span>
                   <span style={{ flex: 1.4 }} className="stock-fila-muted">
                     {p.proveedor_id ? mapaProveedores.get(p.proveedor_id) ?? '—' : '—'}
                   </span>
@@ -479,7 +479,7 @@ export default function StockPage() {
                   />
                 </div>
                 <div className="field">
-                  <label>Aviso de vencimiento (días)</label>
+                  <label>Días de aviso</label>
                   <input
                     type="number"
                     min="0"
@@ -512,7 +512,7 @@ export default function StockPage() {
                       />
                     </div>
                     <div className="field">
-                      <label>Fecha de vencimiento (opcional)</label>
+                      <label>Vencimiento (opcional)</label>
                       <input
                         type="date"
                         value={loteInicial.fecha_vencimiento}
@@ -673,7 +673,7 @@ export default function StockPage() {
                   />
                 </div>
                 <div className="field">
-                  <label>Aviso de vencimiento (días)</label>
+                  <label>Días de aviso</label>
                   <input
                     type="number"
                     min="0"
@@ -737,7 +737,7 @@ export default function StockPage() {
                     />
                   </div>
                   <div className="field">
-                    <label>Fecha de vencimiento (opcional)</label>
+                    <label>Vencimiento (opcional)</label>
                     <input
                       type="date"
                       value={nuevoLote.fecha_vencimiento}

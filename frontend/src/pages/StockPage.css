@@ -36,9 +36,20 @@
   gap: 16px;
   min-height: 0;
 }
-@media (max-width: 960px) {
+/* Con el menú lateral (240px) los dos paneles ya no entran lado a lado por
+   debajo de ~1200px de ventana: se apilan y la página crece con su contenido
+   (sin altura fija, que era lo que hacía que los bloques se pisaran). */
+@media (max-width: 1200px) {
+  .stock-page {
+    height: auto;
+  }
   .stock-body {
     flex-direction: column;
+  }
+  .stock-body > * {
+    flex: none;
+    min-width: 0;
+    max-width: 100%;
   }
 }
 
@@ -76,6 +87,18 @@
 .stock-nuevo-btn {
   white-space: nowrap;
   padding: 10px 18px;
+}
+@media (max-width: 600px) {
+  .stock-lista-header {
+    flex-wrap: wrap;
+  }
+  .stock-search {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .stock-nuevo-btn {
+    flex: 1 1 100%;
+  }
 }
 
 .stock-tabla {

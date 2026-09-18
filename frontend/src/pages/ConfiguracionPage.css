@@ -4,20 +4,64 @@
   gap: 16px;
 }
 
-.config-grid {
+.config-encabezado {
   display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 4px;
 }
-@media (max-width: 900px) {
-  .config-grid {
-    flex-direction: column;
-  }
+.config-h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+}
+.config-subtitulo {
+  font-size: 14px;
+  color: var(--text-tertiary);
+}
+.config-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-default);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.config-tab {
+  padding: 11px 18px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.config-tab:hover {
+  color: var(--text-primary);
+}
+.config-tab-activa {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+.config-seccion-cabecera {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.config-seccion-titulo {
+  font-size: 17px;
+  font-weight: 800;
+}
+.config-seccion-desc {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
 }
 
 .config-catalogo {
-  flex: 1;
-  min-width: 300px;
+  min-width: 0;
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -96,4 +140,23 @@
   font-size: 13.5px;
   color: var(--text-tertiary);
   line-height: 1.5;
+}
+
+/* La página encaja siempre en la ventana: encabezado y pestañas quedan fijos y
+   solo la lista de opciones scrollea por dentro. */
+.config-page {
+  height: 100%;
+  min-height: 0;
+}
+.config-page > .config-catalogo {
+  flex: 1;
+  min-height: 0;
+}
+.config-catalogo-lista {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.config-page > .config-catalogo {
+  overflow: hidden;
 }

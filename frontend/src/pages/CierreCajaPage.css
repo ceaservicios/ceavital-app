@@ -22,11 +22,22 @@
   display: flex;
   gap: 16px;
   flex: 1;
-  min-height: 0;
+  /* sin min-height: 0: si el contenido es más alto que la ventana, la página crece y scrollea en vez de pisar lo que sigue */
 }
-@media (max-width: 900px) {
+/* Con el menú lateral (240px) los dos paneles ya no entran lado a lado por
+   debajo de ~1200px de ventana: se apilan y la página crece con su contenido
+   (sin altura fija, que era lo que hacía que los bloques se pisaran). */
+@media (max-width: 1200px) {
+  .cierre-page {
+    height: auto;
+  }
   .cierre-body {
     flex-direction: column;
+  }
+  .cierre-body > * {
+    flex: none;
+    min-width: 0;
+    max-width: 100%;
   }
 }
 

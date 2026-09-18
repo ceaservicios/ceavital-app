@@ -332,7 +332,7 @@ export default function ProveedoresPage() {
                 <div className="proveedores-tabla-head">
                   <span style={{ flex: 1.3 }}>Nombre</span>
                   <span style={{ flex: 1.6 }}>Contacto</span>
-                  <span style={{ flex: 1 }}>Condición de pago</span>
+                  <span style={{ flex: 1 }}>Cond. de pago</span>
                   <span style={{ flex: 0.8, textAlign: 'center' }}>Productos</span>
                 </div>
                 {proveedoresFiltrados.map((p) => (
@@ -341,7 +341,18 @@ export default function ProveedoresPage() {
                       {p.nombre}
                     </span>
                     <span style={{ flex: 1.6 }} className="proveedores-fila-muted">
-                      {[p.telefono, p.email].filter(Boolean).join(' · ') || '—'}
+                      {p.telefono || p.email ? (
+                        <>
+                          {p.telefono && <div>{p.telefono}</div>}
+                          {p.email && (
+                            <div className="celda-ellipsis" title={p.email}>
+                              {p.email}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        '—'
+                      )}
                     </span>
                     <span style={{ flex: 1 }} className="proveedores-fila-muted">
                       {p.condicion_pago || '—'}
