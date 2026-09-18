@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
-import { categoriasController, unidadesMedidaController } from '../controllers/catalogos.controller.js';
+import {
+  categoriasController,
+  condicionesPagoController,
+  unidadesMedidaController,
+} from '../controllers/catalogos.controller.js';
 
 const router = Router();
 
@@ -19,5 +23,13 @@ router.get('/unidades-medida', requireAuth(['admin', 'encargado']), unidadesMedi
 router.post('/unidades-medida', requireAuth(['admin']), unidadesMedidaController.crear);
 router.patch('/unidades-medida/:id', requireAuth(['admin']), unidadesMedidaController.editar);
 router.delete('/unidades-medida/:id', requireAuth(['admin']), unidadesMedidaController.eliminar);
+
+// Condiciones de pago (B2B, pedido del usuario 2026-09-18) -- mismo criterio:
+// Ver = Admin + Encargado (necesitan el listado para el <select> de
+// Clientes-Empresa), Crear/Editar/Eliminar = exclusivo Admin.
+router.get('/condiciones-pago', requireAuth(['admin', 'encargado']), condicionesPagoController.listar);
+router.post('/condiciones-pago', requireAuth(['admin']), condicionesPagoController.crear);
+router.patch('/condiciones-pago/:id', requireAuth(['admin']), condicionesPagoController.editar);
+router.delete('/condiciones-pago/:id', requireAuth(['admin']), condicionesPagoController.eliminar);
 
 export default router;

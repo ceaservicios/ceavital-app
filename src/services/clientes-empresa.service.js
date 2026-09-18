@@ -33,10 +33,38 @@ function verificarCuitLibre(cuit, excluirId = null) {
   if (existente) throw new ApiError(409, 'Ya existe un cliente-empresa activo con ese CUIT');
 }
 
+// Columnas explícitas (no c.*): la columna de texto vieja
+// clientes_empresa.condicion_pago quedó en el esquema sin uso (migración 023,
+// nunca se borra nada) y chocaría con el nombre resuelto por JOIN contra el
+// catálogo, que es el que la API expone como `condicion_pago` (string, igual
+// que `categoria`/`unidad_medida` en stock.service.js). El JOIN no filtra por
+// cp.eliminado_en a propósito: un cliente cuya condición se dio de baja
+// después sigue mostrando su nombre real.
+const SELECT_CLIENTE = `
+  SELECT
+    c.id, c.razon_social, c.cuit, c.contacto_nombre, c.telefono, c.email, c.direccion,
+    c.condicion_pago_id, cp.nombre AS condicion_pago,
+    c.eliminado_en, c.creado_en, c.actualizado_en
+  FROM clientes_empresa c
+  LEFT JOIN condiciones_pago cp ON cp.id = c.condicion_pago_id
+`;
+
 function obtenerClienteActivo(id) {
-  const cliente = db.prepare('SELECT * FROM clientes_empresa WHERE id = ? AND eliminado_en IS NULL').get(id);
+  const cliente = db.prepare(`${SELECT_CLIENTE} WHERE c.id = ? AND c.eliminado_en IS NULL`).get(id);
   if (!cliente) throw new ApiError(404, 'Cliente-empresa no encontrado');
   return cliente;
+}
+
+// undefined/null/'' = sin condición de pago (es opcional). Si viene un valor,
+// tiene que ser una fila ACTIVA del catálogo -- no se puede asignar una ya
+// dada de baja (mismo criterio que obtenerCategoriaActiva en stock.service.js).
+function validarCondicionPagoId(valor) {
+  if (valor === undefined || valor === null || valor === '') return null;
+  const id = Number(valor);
+  if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, 'condicion_pago_id inválido');
+  const fila = db.prepare('SELECT id FROM condiciones_pago WHERE id = ? AND eliminado_en IS NULL').get(id);
+  if (!fila) throw new ApiError(400, 'La condición de pago indicada no existe o está eliminada');
+  return id;
 }
 
 function saldoDe(clienteEmpresaId) {
@@ -63,21 +91,20 @@ function movimientosDe(clienteEmpresaId) {
 // quién vende en Caja, nunca cuánto debe cada cliente). El saldo se calcula en
 // la misma consulta (una subquery por cliente), no una request por cliente.
 export function listarClientesEmpresa({ buscar, incluirSaldo = false } = {}) {
-  const columnas = incluirSaldo
-    ? `c.*, COALESCE((SELECT SUM(monto) FROM cuenta_corriente_movimientos WHERE cliente_empresa_id = c.id), 0) AS saldo`
-    : 'c.*';
+  const base = incluirSaldo
+    ? SELECT_CLIENTE.replace(
+        'c.eliminado_en, c.creado_en, c.actualizado_en',
+        `c.eliminado_en, c.creado_en, c.actualizado_en,
+    COALESCE((SELECT SUM(monto) FROM cuenta_corriente_movimientos WHERE cliente_empresa_id = c.id), 0) AS saldo`
+      )
+    : SELECT_CLIENTE;
 
   if (buscar) {
     return db
-      .prepare(
-        `SELECT ${columnas} FROM clientes_empresa c
-         WHERE c.eliminado_en IS NULL AND c.razon_social LIKE ? ORDER BY c.razon_social`
-      )
+      .prepare(`${base} WHERE c.eliminado_en IS NULL AND c.razon_social LIKE ? ORDER BY c.razon_social`)
       .all(`%${buscar}%`);
   }
-  return db
-    .prepare(`SELECT ${columnas} FROM clientes_empresa c WHERE c.eliminado_en IS NULL ORDER BY c.razon_social`)
-    .all();
+  return db.prepare(`${base} WHERE c.eliminado_en IS NULL ORDER BY c.razon_social`).all();
 }
 
 export function obtenerClienteEmpresa(id) {
@@ -92,22 +119,22 @@ export function crearClienteEmpresa(datos) {
   const telefono = validarString(datos.telefono, 'telefono', { requerido: false });
   const email = validarString(datos.email, 'email', { requerido: false });
   const direccion = validarString(datos.direccion, 'direccion', { requerido: false });
-  const condicionPago = validarString(datos.condicion_pago, 'condicion_pago', { requerido: false });
+  const condicionPagoId = validarCondicionPagoId(datos.condicion_pago_id);
 
   verificarCuitLibre(cuit);
 
   const resultado = db
     .prepare(
-      `INSERT INTO clientes_empresa (razon_social, cuit, contacto_nombre, telefono, email, direccion, condicion_pago)
+      `INSERT INTO clientes_empresa (razon_social, cuit, contacto_nombre, telefono, email, direccion, condicion_pago_id)
        VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(razonSocial, cuit, contactoNombre, telefono, email, direccion, condicionPago);
+    .run(razonSocial, cuit, contactoNombre, telefono, email, direccion, condicionPagoId);
 
   return obtenerClienteEmpresa(resultado.lastInsertRowid);
 }
 
 export function editarClienteEmpresa(id, datos) {
-  obtenerClienteActivo(id);
+  const actual = obtenerClienteActivo(id);
 
   const actualizaciones = {};
   if (datos.razon_social !== undefined) actualizaciones.razon_social = validarString(datos.razon_social, 'razon_social');
@@ -126,8 +153,16 @@ export function editarClienteEmpresa(id, datos) {
   if (datos.direccion !== undefined) {
     actualizaciones.direccion = validarString(datos.direccion, 'direccion', { requerido: false });
   }
-  if (datos.condicion_pago !== undefined) {
-    actualizaciones.condicion_pago = validarString(datos.condicion_pago, 'condicion_pago', { requerido: false });
+  if (datos.condicion_pago_id !== undefined) {
+    // Reenviar la MISMA condición que ya tiene el cliente siempre se acepta,
+    // aunque esa condición se haya dado de baja en el catálogo: la pantalla
+    // manda el formulario completo al guardar, y si no, un cambio de teléfono
+    // quedaría bloqueado por una condición que el usuario ni tocó. Elegir OTRA
+    // sí exige que esté activa.
+    const pedido =
+      datos.condicion_pago_id === null || datos.condicion_pago_id === '' ? null : Number(datos.condicion_pago_id);
+    actualizaciones.condicion_pago_id =
+      pedido !== null && pedido === actual.condicion_pago_id ? pedido : validarCondicionPagoId(datos.condicion_pago_id);
   }
 
   const claves = Object.keys(actualizaciones);

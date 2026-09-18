@@ -63,3 +63,4 @@ function crearServicioCatalogo(tabla, etiqueta) {
 
 export const categoriasService = crearServicioCatalogo('categorias', 'Categoría');
 export const unidadesMedidaService = crearServicioCatalogo('unidades_medida', 'Unidad de medida');
+export const condicionesPagoService = crearServicioCatalogo('condiciones_pago', 'Condición de pago');

@@ -11,7 +11,7 @@ const CLIENTE_VACIO = {
   telefono: '',
   email: '',
   direccion: '',
-  condicion_pago: '',
+  condicion_pago_id: '',
 };
 
 const ETIQUETA_TIPO = { CARGO: 'Cargo', PAGO: 'Pago', AJUSTE: 'Ajuste' };
@@ -24,8 +24,37 @@ function aFormulario(cliente) {
     telefono: cliente.telefono ?? '',
     email: cliente.email ?? '',
     direccion: cliente.direccion ?? '',
-    condicion_pago: cliente.condicion_pago ?? '',
+    condicion_pago_id: cliente.condicion_pago_id != null ? String(cliente.condicion_pago_id) : '',
   };
+}
+
+const idONull = (valor) => (valor === '' ? null : Number(valor));
+
+// La condición de pago se elige de un catálogo que el Admin gestiona en
+// Configuración (pedido del usuario 2026-09-18). Si la condición del cliente
+// se dio de baja después, se sigue mostrando (marcada) en vez de dejar el
+// select en blanco y perderla sin querer al guardar.
+function SelectCondicionPago({ value, onChange, condiciones, nombreActual }) {
+  const idActual = idONull(value);
+  const dadaDeBaja = idActual !== null && !condiciones.some((c) => c.id === idActual);
+  return (
+    <>
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Sin condición de pago</option>
+        {dadaDeBaja && (
+          <option value={value}>{nombreActual ? `${nombreActual} (ya no disponible)` : `#${idActual} (ya no disponible)`}</option>
+        )}
+        {condiciones.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.nombre}
+          </option>
+        ))}
+      </select>
+      {condiciones.length === 0 && (
+        <span className="clientes-hint">Todavía no hay opciones. El Administrador las carga en Configuración → Condiciones de pago.</span>
+      )}
+    </>
+  );
 }
 
 // Convención de signo (Docs/Modelo-de-Datos.md): saldo positivo = el cliente
@@ -41,6 +70,7 @@ export default function ClientesEmpresaPage() {
   const esAdmin = usuario?.rol === 'admin';
 
   const [clientes, setClientes] = useState([]);
+  const [condiciones, setCondiciones] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
@@ -80,6 +110,10 @@ export default function ClientesEmpresaPage() {
 
   useEffect(() => {
     cargarClientes();
+    api
+      .get('/condiciones-pago')
+      .then((data) => setCondiciones(data.items))
+      .catch(() => setCondiciones([]));
   }, []);
 
   const clientesFiltrados = useMemo(() => {
@@ -159,7 +193,7 @@ export default function ClientesEmpresaPage() {
         telefono: nuevoCliente.telefono || null,
         email: nuevoCliente.email || null,
         direccion: nuevoCliente.direccion || null,
-        condicion_pago: nuevoCliente.condicion_pago || null,
+        condicion_pago_id: idONull(nuevoCliente.condicion_pago_id),
       });
       await cargarClientes();
       setPanel('detalle');
@@ -178,7 +212,7 @@ export default function ClientesEmpresaPage() {
         telefono: edicion.telefono || null,
         email: edicion.email || null,
         direccion: edicion.direccion || null,
-        condicion_pago: edicion.condicion_pago || null,
+        condicion_pago_id: idONull(edicion.condicion_pago_id),
       });
       setDetalle(actualizado);
       setEdicion(aFormulario(actualizado));
@@ -356,7 +390,11 @@ export default function ClientesEmpresaPage() {
               </div>
               <div className="field">
                 <label>Condición de pago</label>
-                <input placeholder="Ej: Cta. cte. a 30 días" value={nuevoCliente.condicion_pago} onChange={(e) => setNuevoCliente({ ...nuevoCliente, condicion_pago: e.target.value })} />
+                <SelectCondicionPago
+                  value={nuevoCliente.condicion_pago_id}
+                  onChange={(v) => setNuevoCliente({ ...nuevoCliente, condicion_pago_id: v })}
+                  condiciones={condiciones}
+                />
               </div>
               <button type="submit" className="btn btn-primary" disabled={guardando} style={{ width: '100%' }}>
                 {guardando ? 'Creando…' : 'Crear Cliente'}
@@ -487,7 +525,12 @@ export default function ClientesEmpresaPage() {
                 </div>
                 <div className="field">
                   <label>Condición de pago</label>
-                  <input value={edicion.condicion_pago} onChange={(e) => setEdicion({ ...edicion, condicion_pago: e.target.value })} />
+                  <SelectCondicionPago
+                    value={edicion.condicion_pago_id}
+                    onChange={(v) => setEdicion({ ...edicion, condicion_pago_id: v })}
+                    condiciones={condiciones}
+                    nombreActual={detalle.condicion_pago}
+                  />
                 </div>
                 <button type="button" className="btn btn-primary" disabled={guardando} onClick={guardarCliente}>
                   Guardar cambios

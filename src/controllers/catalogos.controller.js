@@ -1,5 +1,5 @@
 import { ApiError } from '../utils/api-error.js';
-import { categoriasService, unidadesMedidaService } from '../services/catalogos.service.js';
+import { categoriasService, condicionesPagoService, unidadesMedidaService } from '../services/catalogos.service.js';
 
 function parsearId(valor) {
   const id = Number(valor);
@@ -27,3 +27,4 @@ function crearControladorCatalogo(servicio) {
 
 export const categoriasController = crearControladorCatalogo(categoriasService);
 export const unidadesMedidaController = crearControladorCatalogo(unidadesMedidaService);
+export const condicionesPagoController = crearControladorCatalogo(condicionesPagoService);

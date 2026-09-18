@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
 import './ConfiguracionPage.css';
 
-// Sección genérica de catálogo (categorías / unidades de medida): misma forma
-// exacta para las 2, evita duplicar el mismo CRUD 2 veces (corrección pedida
-// 2026-09-15). Exclusivo Admin -- esta pantalla entera ya está gateada por
+// Sección genérica de catálogo (categorías / unidades de medida / condiciones
+// de pago): misma forma exacta para las 3, evita duplicar el mismo CRUD
+// (corrección pedida 2026-09-15; condiciones de pago sumada 2026-09-18). Exclusivo Admin -- esta pantalla entera ya está gateada por
 // RequireRole en App.jsx.
 function SeccionCatalogo({ titulo, endpoint, singular }) {
   const [items, setItems] = useState([]);
@@ -165,6 +165,7 @@ export default function ConfiguracionPage() {
       <div className="config-grid">
         <SeccionCatalogo titulo="Categorías" endpoint="/categorias" singular="categoría" />
         <SeccionCatalogo titulo="Unidades de medida" endpoint="/unidades-medida" singular="unidad de medida" />
+        <SeccionCatalogo titulo="Condiciones de pago" endpoint="/condiciones-pago" singular="condición de pago" />
       </div>
 
       <div className="card config-proximamente">
