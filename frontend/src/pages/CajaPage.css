@@ -224,11 +224,6 @@
   cursor: pointer;
   font-family: inherit;
 }
-.caja-medio-btn-full {
-  width: 100%;
-  flex-direction: row;
-  justify-content: center;
-}
 .caja-medio-btn-active {
   border: 2px solid var(--color-primary);
   background: var(--color-primary);
