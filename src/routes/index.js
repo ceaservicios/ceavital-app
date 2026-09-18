@@ -7,6 +7,7 @@ import cajaRoutes from './caja.routes.js';
 import proveedoresRoutes from './proveedores.routes.js';
 import usuariosRoutes from './usuarios.routes.js';
 import configuracionRoutes from './configuracion.routes.js';
+import catalogosRoutes from './catalogos.routes.js';
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.use('/caja', cajaRoutes);
 router.use('/proveedores', proveedoresRoutes);
 router.use('/usuarios', usuariosRoutes);
 router.use('/configuracion', configuracionRoutes);
+router.use('/', catalogosRoutes);
 
 export default router;

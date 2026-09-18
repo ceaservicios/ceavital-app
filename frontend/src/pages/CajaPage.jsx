@@ -59,6 +59,10 @@ const MEDIOS_PAGO = [
 ];
 
 const PUEDE_ANULAR = new Set(['admin', 'encargado']);
+// Gastos y pagos a proveedores (corrección 2026-09-15, decisiones confirmadas
+// 2026-09-18): Crear -- los 3 roles. Eliminar (corregir un gasto mal
+// cargado) -- Admin+Encargado, mismo criterio que anular una venta.
+const PUEDE_ELIMINAR_GASTO = new Set(['admin', 'encargado']);
 
 export default function CajaPage() {
   const { usuario } = useAuth();
@@ -78,6 +82,14 @@ export default function CajaPage() {
   const [anulando, setAnulando] = useState(false);
   const [errorBusqueda, setErrorBusqueda] = useState(false);
 
+  const [gastosHoy, setGastosHoy] = useState([]);
+  const [proveedoresGasto, setProveedoresGasto] = useState([]);
+  const [mostrarFormGasto, setMostrarFormGasto] = useState(false);
+  const [nuevoGasto, setNuevoGasto] = useState({ concepto: '', monto: '', proveedor_id: '' });
+  const [registrandoGasto, setRegistrandoGasto] = useState(false);
+  const [errorGasto, setErrorGasto] = useState(null);
+  const [eliminandoGastoId, setEliminandoGastoId] = useState(null);
+
   const searchInputRef = useRef(null);
   // Guardia real contra doble-click (mismo criterio que "Confirmar Cierre de
   // Caja", ver hallazgo Baja #3 de verificador-funcional 2026-09-10): un ref
@@ -87,15 +99,18 @@ export default function CajaPage() {
   const anulandoRef = useRef(false);
 
   const puedeAnular = PUEDE_ANULAR.has(usuario?.rol);
+  const puedeEliminarGasto = PUEDE_ELIMINAR_GASTO.has(usuario?.rol);
 
   const cargarResumen = useCallback(async () => {
     try {
-      const [resumenData, ventasData] = await Promise.all([
+      const [resumenData, ventasData, gastosData] = await Promise.all([
         api.get('/caja/resumen'),
         api.get(`/ventas?fecha=${fechaHoyISO()}`),
+        api.get(`/caja/gastos?fecha=${fechaHoyISO()}`),
       ]);
       setResumen(resumenData);
       setVentasHoy(ventasData.ventas);
+      setGastosHoy(gastosData.gastos);
     } catch {
       // Los KPIs son informativos -- si fallan, no bloquean el uso de Caja.
     }
@@ -104,6 +119,51 @@ export default function CajaPage() {
   useEffect(() => {
     cargarResumen();
   }, [cargarResumen]);
+
+  // Proveedores solo para el <select> opcional "pago a proveedor" del
+  // formulario de gasto -- Cajero no tiene acceso a /proveedores (ni
+  // siquiera Ver, ver proveedores.routes.js), así que ese select se omite
+  // para ese rol en vez de intentar un fetch que le va a devolver 403.
+  useEffect(() => {
+    if (usuario?.rol === 'admin' || usuario?.rol === 'encargado') {
+      api
+        .get('/proveedores')
+        .then((data) => setProveedoresGasto(data.proveedores))
+        .catch(() => setProveedoresGasto([]));
+    }
+  }, [usuario?.rol]);
+
+  async function registrarGasto(e) {
+    e.preventDefault();
+    setRegistrandoGasto(true);
+    setErrorGasto(null);
+    try {
+      await api.post('/caja/gastos', {
+        concepto: nuevoGasto.concepto,
+        monto: Number(nuevoGasto.monto),
+        proveedor_id: nuevoGasto.proveedor_id === '' ? null : Number(nuevoGasto.proveedor_id),
+      });
+      setNuevoGasto({ concepto: '', monto: '', proveedor_id: '' });
+      setMostrarFormGasto(false);
+      cargarResumen();
+    } catch (err) {
+      setErrorGasto(err instanceof ApiError ? err.message : 'No se pudo registrar el gasto.');
+    } finally {
+      setRegistrandoGasto(false);
+    }
+  }
+
+  async function eliminarGasto(id) {
+    setEliminandoGastoId(id);
+    try {
+      await api.delete(`/caja/gastos/${id}`);
+      cargarResumen();
+    } catch (err) {
+      setErrorGasto(err instanceof ApiError ? err.message : 'No se pudo eliminar el gasto.');
+    } finally {
+      setEliminandoGastoId(null);
+    }
+  }
 
   useEffect(() => {
     if (query.trim().length < 1) {
@@ -238,6 +298,12 @@ export default function CajaPage() {
         <div className="card caja-kpi">
           <span className="caja-kpi-label">Ticket promedio</span>
           <span className="caja-kpi-value">{formatearMonto(ticketPromedio)}</span>
+        </div>
+        <div className="card caja-kpi">
+          <span className="caja-kpi-label">Gastos del turno</span>
+          <span className="caja-kpi-value" style={{ color: (resumen?.total_gastos ?? 0) > 0 ? 'var(--color-danger)' : undefined }}>
+            {formatearMonto(resumen?.total_gastos ?? 0)}
+          </span>
         </div>
       </div>
 
@@ -412,6 +478,87 @@ export default function CajaPage() {
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="card caja-gastos">
+        <div className="caja-gastos-header">
+          <span className="caja-section-label" style={{ marginBottom: 0 }}>
+            Gastos y pagos a proveedores
+          </span>
+          {!mostrarFormGasto && (
+            <button type="button" className="btn" onClick={() => setMostrarFormGasto(true)}>
+              + Registrar gasto
+            </button>
+          )}
+        </div>
+
+        {errorGasto && <div className="alert alert-danger">{errorGasto}</div>}
+
+        {mostrarFormGasto && (
+          <form className="caja-gasto-form" onSubmit={registrarGasto}>
+            <input
+              required
+              placeholder="Concepto (ej. flete, limpieza…)"
+              value={nuevoGasto.concepto}
+              onChange={(e) => setNuevoGasto({ ...nuevoGasto, concepto: e.target.value })}
+            />
+            <input
+              required
+              type="number"
+              min="1"
+              placeholder="Monto"
+              value={nuevoGasto.monto}
+              onChange={(e) => setNuevoGasto({ ...nuevoGasto, monto: e.target.value })}
+            />
+            {proveedoresGasto.length > 0 && (
+              <select
+                value={nuevoGasto.proveedor_id}
+                onChange={(e) => setNuevoGasto({ ...nuevoGasto, proveedor_id: e.target.value })}
+              >
+                <option value="">Sin proveedor asociado</option>
+                {proveedoresGasto.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button type="submit" className="btn btn-primary" disabled={registrandoGasto}>
+              {registrandoGasto ? 'Guardando…' : 'Guardar'}
+            </button>
+            <button type="button" className="btn" onClick={() => setMostrarFormGasto(false)}>
+              Cancelar
+            </button>
+          </form>
+        )}
+
+        <div className="caja-gastos-lista">
+          {gastosHoy.length === 0 ? (
+            <div className="caja-gastos-vacio">Todavía no se registró ningún gasto hoy.</div>
+          ) : (
+            gastosHoy.map((g) => (
+              <div className="caja-gasto-row" key={g.id}>
+                <span className="caja-gasto-concepto">{g.concepto}</span>
+                <span className="caja-gasto-monto">{formatearMonto(g.monto)}</span>
+                {puedeEliminarGasto && (
+                  <button
+                    type="button"
+                    className="caja-gasto-eliminar"
+                    disabled={eliminandoGastoId === g.id}
+                    onClick={() => eliminarGasto(g.id)}
+                    title="Eliminar gasto"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18" />
+                      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

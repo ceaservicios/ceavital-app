@@ -9,15 +9,22 @@ const PUEDE_EDITAR = new Set(['admin', 'encargado']);
 
 const PRODUCTO_VACIO = {
   nombre: '',
-  categoria: '',
+  categoria_id: '',
   codigo_barras: '',
-  unidad_medida: 'unidad',
+  unidad_medida_id: '',
   precio_costo: '',
   precio_venta: '',
   proveedor_id: '',
   stock_minimo: '0',
   dias_aviso_vencimiento: '',
 };
+
+// Lote inicial directo en el alta de producto (corrección 2026-09-15): antes
+// había que crear el producto y recién ahí, en un segundo paso separado
+// ("Ingreso de Nuevo Lote" -- pensado para reponer stock de un producto YA
+// existente), cargar el primer lote. Cantidad vacía = producto creado sin
+// stock todavía, sigue siendo válido.
+const LOTE_INICIAL_VACIO = { cantidad: '', fecha_ingreso: '', fecha_vencimiento: '' };
 
 export default function StockPage() {
   const { usuario } = useAuth();
@@ -27,6 +34,8 @@ export default function StockPage() {
 
   const [productos, setProductos] = useState([]);
   const [proveedores, setProveedores] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+  const [unidadesMedida, setUnidadesMedida] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
@@ -35,6 +44,7 @@ export default function StockPage() {
   const [detalle, setDetalle] = useState(null); // producto completo con lotes
   const [edicion, setEdicion] = useState(null); // copia editable del detalle
   const [nuevoProducto, setNuevoProducto] = useState(PRODUCTO_VACIO);
+  const [loteInicial, setLoteInicial] = useState(LOTE_INICIAL_VACIO);
   const [nuevoLote, setNuevoLote] = useState({ cantidad: '', fecha_ingreso: fechaHoyISO(), fecha_vencimiento: '' });
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -68,6 +78,14 @@ export default function StockPage() {
         .get('/proveedores')
         .then((data) => setProveedores(data.proveedores))
         .catch(() => setProveedores([]));
+      api
+        .get('/categorias')
+        .then((data) => setCategorias(data.items))
+        .catch(() => setCategorias([]));
+      api
+        .get('/unidades-medida')
+        .then((data) => setUnidadesMedida(data.items))
+        .catch(() => setUnidadesMedida([]));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -109,9 +127,9 @@ export default function StockPage() {
       setDetalle(data);
       setEdicion({
         nombre: data.nombre,
-        categoria: data.categoria ?? '',
+        categoria_id: data.categoria_id ?? '',
         codigo_barras: data.codigo_barras ?? '',
-        unidad_medida: data.unidad_medida,
+        unidad_medida_id: data.unidad_medida_id ?? '',
         precio_costo: data.precio_costo ?? '',
         precio_venta: data.precio_venta,
         proveedor_id: data.proveedor_id ?? '',
@@ -127,6 +145,7 @@ export default function StockPage() {
   function abrirNuevoProducto() {
     setPanel('nuevo-producto');
     setNuevoProducto(PRODUCTO_VACIO);
+    setLoteInicial({ ...LOTE_INICIAL_VACIO, fecha_ingreso: fechaHoyISO() });
     setPanelError(null);
     setPanelExito(null);
   }
@@ -145,9 +164,9 @@ export default function StockPage() {
     try {
       const payload = {
         nombre: edicion.nombre,
-        categoria: edicion.categoria || null,
+        categoria_id: edicion.categoria_id === '' ? null : Number(edicion.categoria_id),
         codigo_barras: edicion.codigo_barras || null,
-        unidad_medida: edicion.unidad_medida,
+        unidad_medida_id: Number(edicion.unidad_medida_id),
         proveedor_id: edicion.proveedor_id === '' ? null : Number(edicion.proveedor_id),
         stock_minimo: Number(edicion.stock_minimo),
         dias_aviso_vencimiento: edicion.dias_aviso_vencimiento === '' ? null : Number(edicion.dias_aviso_vencimiento),
@@ -196,9 +215,9 @@ export default function StockPage() {
     try {
       const payload = {
         nombre: nuevoProducto.nombre,
-        categoria: nuevoProducto.categoria || null,
+        categoria_id: nuevoProducto.categoria_id === '' ? null : Number(nuevoProducto.categoria_id),
         codigo_barras: nuevoProducto.codigo_barras || null,
-        unidad_medida: nuevoProducto.unidad_medida,
+        unidad_medida_id: Number(nuevoProducto.unidad_medida_id),
         precio_costo: Number(nuevoProducto.precio_costo),
         precio_venta: Number(nuevoProducto.precio_venta),
         proveedor_id: nuevoProducto.proveedor_id === '' ? null : Number(nuevoProducto.proveedor_id),
@@ -206,6 +225,13 @@ export default function StockPage() {
         dias_aviso_vencimiento:
           nuevoProducto.dias_aviso_vencimiento === '' ? null : Number(nuevoProducto.dias_aviso_vencimiento),
       };
+      if (loteInicial.cantidad) {
+        payload.lote_inicial = {
+          cantidad: Number(loteInicial.cantidad),
+          fecha_ingreso: loteInicial.fecha_ingreso || fechaHoyISO(),
+          fecha_vencimiento: loteInicial.fecha_vencimiento || null,
+        };
+      }
       const creado = await api.post('/productos', payload);
       await cargarProductos();
       abrirDetalle(creado.id);
@@ -364,10 +390,20 @@ export default function StockPage() {
               </div>
               <div className="field">
                 <label>Categoría</label>
-                <input
-                  value={nuevoProducto.categoria}
-                  onChange={(e) => setNuevoProducto({ ...nuevoProducto, categoria: e.target.value })}
-                />
+                <select
+                  value={nuevoProducto.categoria_id}
+                  onChange={(e) => setNuevoProducto({ ...nuevoProducto, categoria_id: e.target.value })}
+                >
+                  <option value="">Sin categoría</option>
+                  {categorias.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre}
+                    </option>
+                  ))}
+                </select>
+                {categorias.length === 0 && (
+                  <span className="stock-hint">Todavía no hay categorías cargadas -- se crean en Configuración.</span>
+                )}
               </div>
               <div className="field">
                 <label>Código de barras</label>
@@ -378,11 +414,23 @@ export default function StockPage() {
               </div>
               <div className="field">
                 <label>Unidad de medida</label>
-                <input
+                <select
                   required
-                  value={nuevoProducto.unidad_medida}
-                  onChange={(e) => setNuevoProducto({ ...nuevoProducto, unidad_medida: e.target.value })}
-                />
+                  value={nuevoProducto.unidad_medida_id}
+                  onChange={(e) => setNuevoProducto({ ...nuevoProducto, unidad_medida_id: e.target.value })}
+                >
+                  <option value="" disabled>
+                    Elegí una unidad…
+                  </option>
+                  {unidadesMedida.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.nombre}
+                    </option>
+                  ))}
+                </select>
+                {unidadesMedida.length === 0 && (
+                  <span className="stock-hint">Todavía no hay unidades de medida cargadas -- se crean en Configuración.</span>
+                )}
               </div>
               <div className="stock-form-grid2">
                 <div className="field">
@@ -441,6 +489,40 @@ export default function StockPage() {
                 </div>
               </div>
 
+              <div className="stock-lote-inicial">
+                <span className="stock-section-label">Lote inicial (opcional)</span>
+                <div className="field">
+                  <label>Cantidad</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Dejar vacío si todavía no hay stock"
+                    value={loteInicial.cantidad}
+                    onChange={(e) => setLoteInicial({ ...loteInicial, cantidad: e.target.value })}
+                  />
+                </div>
+                {Number(loteInicial.cantidad) > 0 && (
+                  <div className="stock-form-grid2">
+                    <div className="field">
+                      <label>Fecha de ingreso</label>
+                      <input
+                        type="date"
+                        value={loteInicial.fecha_ingreso}
+                        onChange={(e) => setLoteInicial({ ...loteInicial, fecha_ingreso: e.target.value })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Fecha de vencimiento (opcional)</label>
+                      <input
+                        type="date"
+                        value={loteInicial.fecha_vencimiento}
+                        onChange={(e) => setLoteInicial({ ...loteInicial, fecha_vencimiento: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="stock-form-acciones">
                 <button type="submit" className="btn btn-primary" disabled={guardando} style={{ width: '100%' }}>
                   {guardando ? 'Creando…' : 'Crear Producto'}
@@ -479,11 +561,21 @@ export default function StockPage() {
               <div className="stock-form-grid2">
                 <div className="field">
                   <label>Categoría</label>
-                  <input
-                    disabled={!puedeEditar}
-                    value={edicion.categoria}
-                    onChange={(e) => setEdicion({ ...edicion, categoria: e.target.value })}
-                  />
+                  {puedeEditar ? (
+                    <select
+                      value={edicion.categoria_id}
+                      onChange={(e) => setEdicion({ ...edicion, categoria_id: e.target.value })}
+                    >
+                      <option value="">Sin categoría</option>
+                      {categorias.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="stock-campo-oculto">{detalle.categoria || '—'}</div>
+                  )}
                 </div>
                 <div className="field">
                   <label>Código de barras</label>
@@ -494,6 +586,30 @@ export default function StockPage() {
                   />
                 </div>
               </div>
+              {puedeEditar && (
+                <div className="field">
+                  <label>Unidad de medida</label>
+                  <select
+                    value={edicion.unidad_medida_id}
+                    onChange={(e) => setEdicion({ ...edicion, unidad_medida_id: e.target.value })}
+                  >
+                    <option value="" disabled>
+                      Elegí una unidad…
+                    </option>
+                    {unidadesMedida.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {!puedeEditar && (
+                <div className="field">
+                  <label>Unidad de medida</label>
+                  <div className="stock-campo-oculto">{detalle.unidad_medida || '—'}</div>
+                </div>
+              )}
               <div className="stock-form-grid2">
                 {esAdmin ? (
                   <div className="field">

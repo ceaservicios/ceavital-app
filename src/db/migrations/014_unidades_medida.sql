@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS unidades_medida (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nombre TEXT NOT NULL COLLATE NOCASE,
+  eliminado_en DATETIME,
+  creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unidades_medida_nombre_activo
+  ON unidades_medida(nombre) WHERE eliminado_en IS NULL;

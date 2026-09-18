@@ -51,6 +51,32 @@ function verificarProveedorActivo(proveedorId) {
   if (!proveedor) throw new ApiError(400, 'El proveedor indicado no existe o está eliminado');
 }
 
+// Categoría/unidad de medida pasaron a ser FK reales contra los catálogos
+// nuevos (corrección 2026-09-15) -- antes eran texto libre sin ningún
+// control ("Kg"/"kg" convivían como 2 valores distintos). Devuelven la fila
+// completa (no solo validan) porque productos.categoria/unidad_medida -- las
+// columnas de texto libre originales -- siguen existiendo en el esquema con
+// unidad_medida NOT NULL (agregada en la migración 004, antes de este
+// catálogo) y SQLite no permite relajar un NOT NULL con un ALTER simple ni
+// reconstruir la tabla dentro de una transacción con foreign_keys activado
+// (migrate.js envuelve cada migración en BEGIN/COMMIT, y foreign_keys no se
+// puede togglear con una transacción pendiente) -- en vez de una migración
+// riesgosa de reconstrucción de tabla, se mantienen esas 2 columnas viejas
+// espejando el nombre de la FK en cada escritura. Nadie las lee más (el
+// contrato de la API se arma por JOIN, ver SELECT_PRODUCTOS_CON_STOCK).
+function obtenerCategoriaActiva(categoriaId) {
+  if (categoriaId === null || categoriaId === undefined) return null;
+  const fila = db.prepare('SELECT * FROM categorias WHERE id = ? AND eliminado_en IS NULL').get(categoriaId);
+  if (!fila) throw new ApiError(400, 'La categoría indicada no existe o está eliminada');
+  return fila;
+}
+
+function obtenerUnidadMedidaActiva(unidadMedidaId) {
+  const fila = db.prepare('SELECT * FROM unidades_medida WHERE id = ? AND eliminado_en IS NULL').get(unidadMedidaId);
+  if (!fila) throw new ApiError(400, 'La unidad de medida indicada no existe o está eliminada');
+  return fila;
+}
+
 function verificarCodigoBarrasLibre(codigoBarras, excluirProductoId = null) {
   if (!codigoBarras) return;
   const existente = db
@@ -75,13 +101,27 @@ function obtenerLoteActivo(productoId, loteId) {
 
 // stock_total: suma de todos los lotes activos. stock_vendible: igual pero
 // excluyendo lotes vencidos (Docs\Modelo-de-Datos.md > productos/lotes).
+// categoria/unidad_medida acá SIEMPRE salen del JOIN contra los catálogos
+// nuevos (no de las columnas de texto libre de productos, que solo se
+// mantienen escritas por compatibilidad de esquema -- ver comentario en
+// obtenerCategoriaActiva/obtenerUnidadMedidaActiva), así el contrato de la
+// API (categoria/unidad_medida como string) no cambia para el frontend. El
+// JOIN no filtra por eliminado_en del catálogo a propósito: un producto ya
+// cargado con una categoría que después se desactivó sigue mostrando su
+// nombre real, no un "—" (mismo espíritu del proyecto: nunca perder historial).
 const SELECT_PRODUCTOS_CON_STOCK = `
   SELECT
-    p.*,
+    p.id, p.nombre, p.codigo_barras, p.precio_costo, p.precio_venta,
+    p.proveedor_id, p.stock_minimo, p.dias_aviso_vencimiento,
+    p.eliminado_en, p.creado_en, p.actualizado_en,
+    p.categoria_id, c.nombre AS categoria,
+    p.unidad_medida_id, u.nombre AS unidad_medida,
     COALESCE(SUM(l.cantidad), 0) AS stock_total,
     COALESCE(SUM(CASE WHEN l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= date('now') THEN l.cantidad ELSE 0 END), 0) AS stock_vendible
   FROM productos p
   LEFT JOIN lotes l ON l.producto_id = p.id AND l.eliminado_en IS NULL
+  LEFT JOIN categorias c ON c.id = p.categoria_id
+  LEFT JOIN unidades_medida u ON u.id = p.unidad_medida_id
 `;
 
 export function listarProductos({ rol, buscar, codigoBarras }) {
@@ -129,9 +169,9 @@ export function obtenerProducto(id, { rol }) {
 
 export function crearProducto(datos, { rol }) {
   const nombre = validarString(datos.nombre, 'nombre');
-  const categoria = validarString(datos.categoria, 'categoria', { requerido: false });
   const codigoBarras = validarString(datos.codigo_barras, 'codigo_barras', { requerido: false });
-  const unidadMedida = validarString(datos.unidad_medida, 'unidad_medida');
+  const categoriaId = datos.categoria_id != null ? validarEntero(datos.categoria_id, 'categoria_id') : null;
+  const unidadMedidaId = validarEntero(datos.unidad_medida_id, 'unidad_medida_id');
   const precioCosto = validarEntero(datos.precio_costo, 'precio_costo', { minimo: 0 });
   const precioVenta = validarEntero(datos.precio_venta, 'precio_venta', { minimo: 0 });
   const proveedorId = datos.proveedor_id != null ? validarEntero(datos.proveedor_id, 'proveedor_id') : null;
@@ -144,16 +184,77 @@ export function crearProducto(datos, { rol }) {
 
   verificarProveedorActivo(proveedorId);
   verificarCodigoBarrasLibre(codigoBarras);
+  const categoria = obtenerCategoriaActiva(categoriaId);
+  const unidadMedida = obtenerUnidadMedidaActiva(unidadMedidaId);
 
-  const resultado = db
-    .prepare(
-      `INSERT INTO productos
-         (nombre, categoria, codigo_barras, precio_costo, precio_venta, unidad_medida, proveedor_id, stock_minimo, dias_aviso_vencimiento)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(nombre, categoria, codigoBarras, precioCosto, precioVenta, unidadMedida, proveedorId, stockMinimo, diasAviso);
+  // Lote inicial opcional, directo en la misma alta (corrección 2026-09-15:
+  // antes había que crear el producto y recién en un segundo paso separado
+  // -- "Ingreso de Nuevo Lote", pensado para reponer stock de un producto YA
+  // existente -- cargar el primer lote). Si no se manda (o cantidad es 0),
+  // el producto queda creado sin stock -- catálogo cargado antes de que
+  // llegue la mercadería sigue siendo un caso válido.
+  let loteInicial = null;
+  if (datos.lote_inicial != null) {
+    if (typeof datos.lote_inicial !== 'object') throw new ApiError(400, 'lote_inicial tiene que ser un objeto');
+    // Cantidad vacía/0: se interpreta como "sin lote inicial todavía", no
+    // como un error -- catálogo cargado antes de que llegue la mercadería.
+    if (Number(datos.lote_inicial.cantidad) > 0) {
+      loteInicial = {
+        cantidad: validarEntero(datos.lote_inicial.cantidad, 'lote_inicial.cantidad', { minimo: 1 }),
+        fecha_ingreso:
+          datos.lote_inicial.fecha_ingreso != null
+            ? validarFecha(datos.lote_inicial.fecha_ingreso, 'lote_inicial.fecha_ingreso')
+            : new Date().toISOString().slice(0, 10),
+        fecha_vencimiento:
+          datos.lote_inicial.fecha_vencimiento != null
+            ? validarFecha(datos.lote_inicial.fecha_vencimiento, 'lote_inicial.fecha_vencimiento')
+            : null,
+      };
+    }
+  }
 
-  return obtenerProducto(resultado.lastInsertRowid, { rol });
+  // Transacción manual (node:sqlite no tiene .transaction() como
+  // better-sqlite3): si el lote inicial falla su validación, el producto no
+  // queda huérfano creado sin querer.
+  db.exec('BEGIN');
+  let productoId;
+  try {
+    const resultado = db
+      .prepare(
+        `INSERT INTO productos
+           (nombre, categoria, codigo_barras, precio_costo, precio_venta, unidad_medida, categoria_id, unidad_medida_id, proveedor_id, stock_minimo, dias_aviso_vencimiento)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        nombre,
+        categoria?.nombre ?? null,
+        codigoBarras,
+        precioCosto,
+        precioVenta,
+        unidadMedida.nombre,
+        categoriaId,
+        unidadMedidaId,
+        proveedorId,
+        stockMinimo,
+        diasAviso
+      );
+    productoId = resultado.lastInsertRowid;
+
+    if (loteInicial) {
+      db.prepare(`INSERT INTO lotes (producto_id, cantidad, fecha_ingreso, fecha_vencimiento) VALUES (?, ?, ?, ?)`).run(
+        productoId,
+        loteInicial.cantidad,
+        loteInicial.fecha_ingreso,
+        loteInicial.fecha_vencimiento
+      );
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+
+  return obtenerProducto(productoId, { rol });
 }
 
 export function editarProducto(id, datos, { rol }) {
@@ -169,11 +270,13 @@ export function editarProducto(id, datos, { rol }) {
   const actualizaciones = {};
 
   if (datos.nombre !== undefined) actualizaciones.nombre = validarString(datos.nombre, 'nombre');
-  if (datos.categoria !== undefined) {
-    actualizaciones.categoria = validarString(datos.categoria, 'categoria', { requerido: false });
+  if (datos.categoria_id !== undefined) {
+    actualizaciones.categoria_id = datos.categoria_id === null ? null : validarEntero(datos.categoria_id, 'categoria_id');
+    actualizaciones.categoria = obtenerCategoriaActiva(actualizaciones.categoria_id)?.nombre ?? null;
   }
-  if (datos.unidad_medida !== undefined) {
-    actualizaciones.unidad_medida = validarString(datos.unidad_medida, 'unidad_medida');
+  if (datos.unidad_medida_id !== undefined) {
+    actualizaciones.unidad_medida_id = validarEntero(datos.unidad_medida_id, 'unidad_medida_id');
+    actualizaciones.unidad_medida = obtenerUnidadMedidaActiva(actualizaciones.unidad_medida_id).nombre;
   }
   if (datos.stock_minimo !== undefined) {
     actualizaciones.stock_minimo = validarEntero(datos.stock_minimo, 'stock_minimo', { minimo: 0 });

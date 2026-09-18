@@ -55,6 +55,7 @@ export default function CierreCajaPage() {
   const [resumen, setResumen] = useState(null);
   const [cierres, setCierres] = useState([]);
   const [montoContado, setMontoContado] = useState('');
+  const [fondoDejado, setFondoDejado] = useState('');
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [enviando, setEnviando] = useState(false);
@@ -97,9 +98,13 @@ export default function CierreCajaPage() {
     setError(null);
     setExito(null);
     try {
-      const cierre = await api.post('/caja/cierres', { total_efectivo_contado: contadoNumerico });
+      const cierre = await api.post('/caja/cierres', {
+        total_efectivo_contado: contadoNumerico,
+        fondo_dejado: fondoDejado === '' ? 0 : Number(fondoDejado),
+      });
       setExito(`Cierre #${cierre.id} registrado.`);
       setMontoContado('');
+      setFondoDejado('');
       cargar();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo registrar el cierre.');
@@ -143,6 +148,23 @@ export default function CierreCajaPage() {
         <div className="card cierre-arqueo">
           <span className="cierre-titulo">Arqueo físico en efectivo</span>
 
+          {(resumen?.fondo_heredado > 0 || resumen?.total_gastos > 0) && (
+            <div className="cierre-desglose">
+              {resumen.fondo_heredado > 0 && (
+                <div className="cierre-desglose-row">
+                  <span>+ Fondo dejado el cierre anterior</span>
+                  <span>{formatearMonto(resumen.fondo_heredado)}</span>
+                </div>
+              )}
+              {resumen.total_gastos > 0 && (
+                <div className="cierre-desglose-row">
+                  <span>− Gastos y pagos a proveedores de hoy</span>
+                  <span>{formatearMonto(resumen.total_gastos)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="cierre-arqueo-row cierre-arqueo-destacado">
             <span>Total esperado en caja (efectivo)</span>
             <span>{formatearMonto(esperado)}</span>
@@ -157,6 +179,17 @@ export default function CierreCajaPage() {
                   min="0"
                   value={montoContado}
                   onChange={(e) => setMontoContado(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+
+              <div className="field">
+                <label>Fondo a dejar para el turno/día siguiente (opcional)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={fondoDejado}
+                  onChange={(e) => setFondoDejado(e.target.value)}
                   placeholder="0"
                 />
               </div>
@@ -200,6 +233,7 @@ export default function CierreCajaPage() {
               <span style={{ flex: 1 }}>Fecha</span>
               <span style={{ flex: 1, textAlign: 'right' }}>Total general</span>
               <span style={{ flex: 1, textAlign: 'right' }}>Diferencia efectivo</span>
+              <span style={{ flex: 1, textAlign: 'right' }}>Fondo dejado</span>
             </div>
             {cierres.map((c) => (
               <div className="cierre-historial-row" key={c.id}>
@@ -214,6 +248,7 @@ export default function CierreCajaPage() {
                 >
                   {formatearMonto(c.diferencia_efectivo)}
                 </span>
+                <span style={{ flex: 1, textAlign: 'right' }}>{c.fondo_dejado > 0 ? formatearMonto(c.fondo_dejado) : '—'}</span>
               </div>
             ))}
           </div>

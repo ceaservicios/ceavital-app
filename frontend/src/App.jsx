@@ -11,6 +11,7 @@ import ProveedoresPage from './pages/ProveedoresPage.jsx';
 import CierreCajaPage from './pages/CierreCajaPage.jsx';
 import CostosPage from './pages/CostosPage.jsx';
 import UsuariosPage from './pages/UsuariosPage.jsx';
+import ConfiguracionPage from './pages/ConfiguracionPage.jsx';
 
 export default function App() {
   return (
@@ -52,6 +53,14 @@ export default function App() {
             element={
               <RequireRole modulo="usuarios">
                 <UsuariosPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="configuracion"
+            element={
+              <RequireRole modulo="configuracion">
+                <ConfiguracionPage />
               </RequireRole>
             }
           />

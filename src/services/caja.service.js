@@ -2,6 +2,7 @@ import db from '../db/connection.js';
 import { ApiError } from '../utils/api-error.js';
 import { obtenerConfiguracionBackups } from './configuracion.service.js';
 import { ejecutarBackup } from './backups.service.js';
+import { totalGastosDelDia } from './gastos.service.js';
 
 const MEDIOS_PAGO = ['efectivo', 'tarjeta', 'transferencia_qr', 'mercado_pago', 'fiado'];
 
@@ -25,11 +26,28 @@ function fechaHoy() {
   return db.prepare(`SELECT date('now') AS hoy`).get().hoy;
 }
 
+// Fondo dejado en el cierre mas reciente ANTERIOR a esta fecha -- se suma al
+// efectivo esperado del dia siguiente (decision confirmada con el usuario
+// 2026-09-18: "se deja un monto del dia anterior... se suma a las ventas del
+// dia"). Si nunca se dejo fondo, o es el primer cierre del negocio, es 0.
+function fondoHeredado(fecha) {
+  const fila = db
+    .prepare(`SELECT fondo_dejado FROM cierres_caja WHERE fecha < ? ORDER BY fecha DESC, id DESC LIMIT 1`)
+    .get(fecha);
+  return fila?.fondo_dejado ?? 0;
+}
+
 // Totales del dia (fecha, default hoy) agrupados por medio de pago, en base a
 // las ventas REGISTRADAS (no anuladas) de ese dia -- calculo en vivo, no lee
 // de cierres_caja (esa tabla guarda la FOTO de un cierre ya ejecutado, ver
 // Docs/Modelo-de-Datos.md > cierres_caja). Es lo que ven los 3 roles como
 // "Cierre de caja -- Ver" antes de que Admin/Encargado ejecuten el cierre.
+//
+// El efectivo esperado no es solo la venta en efectivo del dia (corregido
+// 2026-09-15/2026-09-18): tambien suma el fondo heredado del cierre anterior
+// y resta los gastos/pagos a proveedores del dia (se asumen en efectivo,
+// salen fisicamente del cajon -- ver gastos.service.js) -- si no, el arqueo
+// nunca cuadraria con lo que realmente queda en la caja fisica.
 export function calcularResumenDelDia(fechaParam) {
   const fecha = validarFecha(fechaParam) ?? fechaHoy();
 
@@ -46,10 +64,14 @@ export function calcularResumenDelDia(fechaParam) {
   for (const fila of filas) totales[fila.medio_pago] = fila.total;
 
   const total_general = MEDIOS_PAGO.reduce((acc, m) => acc + totales[m], 0);
+  const fondo_heredado = fondoHeredado(fecha);
+  const total_gastos = totalGastosDelDia(fecha);
 
   return {
     fecha,
-    total_efectivo_esperado: totales.efectivo,
+    fondo_heredado,
+    total_gastos,
+    total_efectivo_esperado: totales.efectivo + fondo_heredado - total_gastos,
     total_tarjeta: totales.tarjeta,
     total_transferencia_qr: totales.transferencia_qr,
     total_mercado_pago: totales.mercado_pago,
@@ -74,8 +96,12 @@ export function obtenerCierre(id) {
 // despues). Solo efectivo tiene "esperado vs. contado": es el unico medio que
 // se cuenta fisicamente y puede tener diferencia; los demas son registros
 // digitales exactos que ya coinciden con lo esperado.
-export function registrarCierre({ fecha, total_efectivo_contado }, { usuarioId }) {
+export function registrarCierre({ fecha, total_efectivo_contado, fondo_dejado }, { usuarioId }) {
   const contado = validarEnteroNoNegativo(total_efectivo_contado, 'total_efectivo_contado');
+  // Fondo que este cierre deja para el turno/dia siguiente (corregido
+  // 2026-09-15) -- opcional, default 0 (mismo comportamiento de siempre si no
+  // se carga nada).
+  const fondoDejado = fondo_dejado != null ? validarEnteroNoNegativo(fondo_dejado, 'fondo_dejado') : 0;
   const resumen = calcularResumenDelDia(fecha);
   const diferencia = contado - resumen.total_efectivo_esperado;
 
@@ -103,13 +129,16 @@ export function registrarCierre({ fecha, total_efectivo_contado }, { usuarioId }
 
   // total_general usa el total esperado/real de ventas (no el contado): es un
   // total de auditoria de lo que se vendio, separado del desvio de caja
-  // fisica que ya queda aislado en diferencia_efectivo.
+  // fisica que ya queda aislado en diferencia_efectivo. fondo_heredado/
+  // total_gastos se guardan tal cual estaban en el momento del cierre (misma
+  // logica de "foto" que el resto de la tabla -- nunca se recalculan despues).
   const resultado = db
     .prepare(
       `INSERT INTO cierres_caja
          (usuario_id, fecha, total_efectivo_esperado, total_efectivo_contado, diferencia_efectivo,
-          total_tarjeta, total_transferencia_qr, total_mercado_pago, total_fiado, total_general)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          total_tarjeta, total_transferencia_qr, total_mercado_pago, total_fiado, total_general,
+          fondo_dejado, fondo_heredado, total_gastos)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       usuarioId,
@@ -121,7 +150,10 @@ export function registrarCierre({ fecha, total_efectivo_contado }, { usuarioId }
       resumen.total_transferencia_qr,
       resumen.total_mercado_pago,
       resumen.total_fiado,
-      resumen.total_general
+      resumen.total_general,
+      fondoDejado,
+      resumen.fondo_heredado,
+      resumen.total_gastos
     );
 
   // "Cuándo hacer backup": una de las 3 opciones es "en cada cierre de caja"

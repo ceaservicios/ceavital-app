@@ -6,6 +6,11 @@ import {
   obtenerResumenController,
   registrarCierreController,
 } from '../controllers/caja.controller.js';
+import {
+  eliminarGastoController,
+  listarGastosController,
+  registrarGastoController,
+} from '../controllers/gastos.controller.js';
 
 const router = Router();
 
@@ -19,5 +24,13 @@ router.get('/cierres/:id', requireAuth(), obtenerCierreController);
 // Cajero (Docs/Resumen-Ejecutivo.md: "Cajero... ve el cierre de caja, sin
 // editar ni eliminar nada").
 router.post('/cierres', requireAuth(['admin', 'encargado']), registrarCierreController);
+
+// Gastos y pagos a proveedores (corrección pedida 2026-09-15, decisiones
+// confirmadas 2026-09-18). Crear/Ver: los 3 roles (cualquiera en caja puede
+// registrar un gasto en el momento en que ocurre). Eliminar (corregir un
+// gasto mal cargado): Admin+Encargado, mismo criterio que anular una venta.
+router.get('/gastos', requireAuth(), listarGastosController);
+router.post('/gastos', requireAuth(), registrarGastoController);
+router.delete('/gastos/:id', requireAuth(['admin', 'encargado']), eliminarGastoController);
 
 export default router;

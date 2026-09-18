@@ -27,7 +27,7 @@ export function iniciales(nombre) {
  * reflejar la regla real.
  */
 export function puedeVerModulo(modulo, rol) {
-  if (modulo === 'costos' || modulo === 'usuarios') return rol === 'admin';
+  if (modulo === 'costos' || modulo === 'usuarios' || modulo === 'configuracion') return rol === 'admin';
   if (modulo === 'proveedores') return rol === 'admin' || rol === 'encargado';
   return true;
 }

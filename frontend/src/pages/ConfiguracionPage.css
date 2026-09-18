@@ -1,0 +1,99 @@
+.config-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.config-grid {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+@media (max-width: 900px) {
+  .config-grid {
+    flex-direction: column;
+  }
+}
+
+.config-catalogo {
+  flex: 1;
+  min-width: 300px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.config-catalogo-titulo {
+  font-size: 14px;
+  font-weight: 700;
+}
+.config-catalogo-nuevo {
+  display: flex;
+  gap: 8px;
+}
+.config-catalogo-nuevo input {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  font: inherit;
+  font-size: 13.5px;
+}
+.config-catalogo-lista {
+  display: flex;
+  flex-direction: column;
+}
+.config-catalogo-vacio {
+  padding: 16px 4px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 13.5px;
+}
+.config-catalogo-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--bg-app);
+}
+.config-catalogo-nombre {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+}
+.config-catalogo-input-edicion {
+  flex: 1;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  font: inherit;
+  font-size: 13.5px;
+}
+.config-catalogo-accion {
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.config-catalogo-accion:hover {
+  color: var(--text-primary);
+}
+.config-catalogo-accion-danger:hover {
+  color: var(--color-danger);
+}
+
+.config-proximamente {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.config-proximamente-texto {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
