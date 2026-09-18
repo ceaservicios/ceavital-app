@@ -32,6 +32,10 @@ export default function ClienteAccesoPortal({ clienteId, razonSocial, email }) {
   const [error, setError] = useState(null);
   const [entregar, setEntregar] = useState(null); // credenciales recién definidas, se muestran una sola vez
   const [copiado, setCopiado] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [enviadoA, setEnviadoA] = useState(null);
+  const [errorEnvio, setErrorEnvio] = useState(null);
+  const envioRef = useRef(false);
   // Guardia sincrónica contra doble click (mismo criterio que el resto de las pantallas).
   const guardaRef = useRef(false);
 
@@ -80,6 +84,8 @@ export default function ClienteAccesoPortal({ clienteId, razonSocial, email }) {
     if (nuevo) {
       if (password) setEntregar({ usuario: nuevo.usuario, password });
       else setEntregar(null);
+      setEnviadoA(null);
+      setErrorEnvio(null);
       setPassword('');
       setVerPassword(false);
       setCopiado(false);
@@ -91,14 +97,42 @@ export default function ClienteAccesoPortal({ clienteId, razonSocial, email }) {
     if (nuevo && !nuevo.habilitado) setEntregar(null);
   }
 
-  async function copiarDatos() {
-    const texto = [
+  function textoDeAcceso() {
+    return [
       `Acceso a tu cuenta corriente${razonSocial ? ` - ${razonSocial}` : ''}`,
       `Ingresá en: ${enlace}`,
       `Usuario: ${entregar.usuario}`,
       `Contraseña: ${entregar.password}`,
     ].join('\n');
-    setCopiado(await copiarAlPortapapeles(texto));
+  }
+
+  async function copiarDatos() {
+    setCopiado(await copiarAlPortapapeles(textoDeAcceso()));
+  }
+
+  // Sin SMTP en el servidor: se abre el programa de correo del usuario con el
+  // mensaje armado (funciona sin configurar nada).
+  function enlaceMailto() {
+    const asunto = `Acceso a tu cuenta corriente${razonSocial ? ` - ${razonSocial}` : ''}`;
+    const cuerpo = `Hola,\r\n\r\nYa podés ver tu cuenta corriente con nosotros.\r\n\r\n${textoDeAcceso().split('\n').slice(1).join('\r\n')}\r\n\r\nGuardá estos datos en un lugar seguro.`;
+    return `mailto:${encodeURIComponent(acceso.email_cliente)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+  }
+
+  async function enviarPorMail() {
+    if (envioRef.current) return;
+    envioRef.current = true;
+    setEnviando(true);
+    setErrorEnvio(null);
+    setEnviadoA(null);
+    try {
+      const resultado = await api.post(`/clientes-empresa/${clienteId}/acceso/enviar`, { password: entregar.password });
+      setEnviadoA(resultado.enviado_a);
+    } catch (err) {
+      setErrorEnvio(err instanceof ApiError ? err.message : 'No se pudo enviar el mail.');
+    } finally {
+      envioRef.current = false;
+      setEnviando(false);
+    }
   }
 
   if (cargando) return <div className="card cliente-card"><div className="cliente-vacio">Cargando…</div></div>;
@@ -210,10 +244,32 @@ export default function ClienteAccesoPortal({ clienteId, razonSocial, email }) {
               <dd>{entregar.password}</dd>
             </div>
           </dl>
-          <div className="cliente-acciones">
-            <button type="button" className="btn btn-primary" onClick={copiarDatos}>
+          {errorEnvio && <div className="alert alert-danger">{errorEnvio}</div>}
+          {enviadoA && <div className="alert alert-exito">Datos enviados a {enviadoA}.</div>}
+          {!acceso.email_cliente && (
+            <div className="cliente-hint">
+              Este cliente no tiene un email cargado. Cargalo en la pestaña Datos para poder enviarle los datos por mail.
+            </div>
+          )}
+          {acceso.email_cliente && !acceso.correo_disponible && (
+            <div className="cliente-hint">
+              Este servidor todavía no tiene configurado el envío de mails: el botón abre tu programa de correo con el mensaje listo para enviar a {acceso.email_cliente}.
+            </div>
+          )}
+          <div className="cliente-acciones cliente-acciones-envio">
+            <button type="button" className="btn" onClick={copiarDatos}>
               {copiado ? '¡Copiado!' : 'Copiar datos de acceso'}
             </button>
+            {acceso.email_cliente && acceso.correo_disponible && (
+              <button type="button" className="btn btn-primary" disabled={enviando} onClick={enviarPorMail}>
+                {enviando ? 'Enviando…' : `Enviar por mail a ${acceso.email_cliente}`}
+              </button>
+            )}
+            {acceso.email_cliente && !acceso.correo_disponible && (
+              <a className="btn btn-primary" href={enlaceMailto()}>
+                Abrir en mi correo
+              </a>
+            )}
           </div>
         </div>
       )}

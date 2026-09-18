@@ -6,6 +6,7 @@ import {
   crearClienteEmpresaController,
   descargarResumenCuentaController,
   editarClienteEmpresaController,
+  enviarAccesoController,
   eliminarClienteEmpresaController,
   listarClientesEmpresaController,
   listarMovimientosController,
@@ -35,6 +36,7 @@ router.get('/:id/movimientos', requireAuth(['admin', 'encargado']), listarMovimi
 // Acceso del cliente al portal (usuario y contraseña que carga el negocio).
 router.get('/:id/acceso', requireAuth(['admin', 'encargado']), obtenerAccesoController);
 router.put('/:id/acceso', requireAuth(['admin', 'encargado']), asyncHandler(configurarAccesoController));
+router.post('/:id/acceso/enviar', requireAuth(['admin', 'encargado']), asyncHandler(enviarAccesoController));
 // Resumen de cuenta en PDF (?desde=AAAA-MM-DD&hasta=AAAA-MM-DD, ambos opcionales).
 router.get('/:id/resumen', requireAuth(['admin', 'encargado']), descargarResumenCuentaController);
 router.post('/:id/pagos', requireAuth(['admin', 'encargado']), registrarPagoController);

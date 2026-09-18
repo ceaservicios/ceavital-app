@@ -1,3 +1,4 @@
+import config from '../config/env.js';
 import { ApiError } from '../utils/api-error.js';
 import * as clientesEmpresaService from '../services/clientes-empresa.service.js';
 import * as portalService from '../services/clientes-portal.service.js';
@@ -60,6 +61,23 @@ export function obtenerAccesoController(req, res) {
 export async function configurarAccesoController(req, res) {
   const id = parsearId(req.params.id, 'cliente_empresa_id');
   res.json(await portalService.configurarAcceso(id, req.body || {}));
+}
+
+// Enlace del portal para el mail: PUBLIC_URL si está configurada, y si no el
+// dominio con el que se está usando el sistema (detrás del proxy de Easypanel
+// es el dominio real).
+function enlaceDelPortal(req) {
+  const base = config.publicUrl || `${req.protocol}://${req.get('host')}`;
+  return `${base}/portal/login`;
+}
+
+export async function enviarAccesoController(req, res) {
+  const id = parsearId(req.params.id, 'cliente_empresa_id');
+  const resultado = await portalService.enviarAccesoPorCorreo(id, {
+    password: req.body?.password,
+    enlace: enlaceDelPortal(req),
+  });
+  res.json(resultado);
 }
 
 export function registrarPagoController(req, res) {

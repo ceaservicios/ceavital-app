@@ -132,6 +132,16 @@
   word-break: break-all;
   user-select: all;
 }
+.cliente-acciones-envio {
+  flex-wrap: wrap;
+}
+.cliente-acciones-envio .btn {
+  text-decoration: none;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+  word-break: break-word;
+}
 .cliente-btn-peligro {
   color: var(--color-danger);
   border-color: var(--color-danger);

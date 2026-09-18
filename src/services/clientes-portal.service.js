@@ -4,6 +4,7 @@ import config from '../config/env.js';
 import { ApiError } from '../utils/api-error.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
 import { AuthError } from './auth.service.js';
+import { armarCorreoAcceso, correoDisponible, enviarCorreo } from './mail.service.js';
 
 // Portal del cliente-empresa: credenciales que carga el Admin/Encargado desde
 // la ficha del cliente, y login propio del cliente para ver su cuenta. Vive
@@ -48,7 +49,7 @@ function obtenerClienteActivoParaAcceso(id) {
   // Columnas explícitas: nunca se lee portal_password_hash fuera del login.
   const fila = db
     .prepare(
-      `SELECT id, portal_usuario, portal_habilitado, portal_ultimo_acceso,
+      `SELECT id, razon_social, email, portal_usuario, portal_habilitado, portal_ultimo_acceso,
               (portal_bloqueado_hasta IS NOT NULL AND portal_bloqueado_hasta > datetime('now')) AS bloqueado,
               (portal_password_hash IS NOT NULL) AS tiene_password
        FROM clientes_empresa WHERE id = ? AND eliminado_en IS NULL`
@@ -66,7 +67,47 @@ function aAcceso(fila) {
     habilitado: Boolean(fila.portal_habilitado),
     bloqueado: Boolean(fila.bloqueado),
     ultimo_acceso: fila.portal_ultimo_acceso ?? null,
+    // Para el botón "Enviar por mail" de la ficha: si el servidor puede mandar
+    // mails y a qué dirección (el email que ya tiene cargado el cliente).
+    correo_disponible: correoDisponible(),
+    email_cliente: fila.email || null,
   };
+}
+
+const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Manda por mail los datos de acceso al email que el cliente ya tiene cargado
+// en su ficha (nunca a una dirección que llegue en el pedido). La contraseña en
+// texto plano solo la conoce quien acaba de definirla: se recibe para armar el
+// mail, se comprueba que sea la vigente (así no se manda una que ya cambió) y
+// no se guarda en ningún lado.
+export async function enviarAccesoPorCorreo(clienteEmpresaId, { password, enlace }) {
+  const cliente = obtenerClienteActivoParaAcceso(clienteEmpresaId);
+  if (!cliente.portal_usuario || !cliente.tiene_password) {
+    throw new ApiError(409, 'Este cliente todavía no tiene acceso configurado');
+  }
+  if (!cliente.portal_habilitado) throw new ApiError(409, 'El acceso está deshabilitado: habilitalo antes de enviarlo');
+  if (!cliente.email || !EMAIL_VALIDO.test(cliente.email)) {
+    throw new ApiError(400, 'El cliente no tiene un email válido cargado. Cargalo en la pestaña Datos.');
+  }
+  if (typeof password !== 'string' || !password) throw new ApiError(400, 'La contraseña es requerida');
+  if (typeof enlace !== 'string' || !/^https?:\/\//.test(enlace)) throw new ApiError(400, 'El enlace del portal no es válido');
+
+  const { password_hash: hash } = db
+    .prepare('SELECT portal_password_hash AS password_hash FROM clientes_empresa WHERE id = ?')
+    .get(clienteEmpresaId);
+  if (!(await verifyPassword(password, hash))) {
+    throw new ApiError(409, 'Esa contraseña ya no es la vigente. Definí una nueva y volvé a enviarla.');
+  }
+
+  const { asunto, texto, html } = armarCorreoAcceso({
+    razonSocial: cliente.razon_social,
+    enlace,
+    usuario: cliente.portal_usuario,
+    password,
+  });
+  await enviarCorreo({ para: cliente.email, asunto, texto, html });
+  return { enviado_a: cliente.email };
 }
 
 export function obtenerAcceso(clienteEmpresaId) {

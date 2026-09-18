@@ -89,6 +89,17 @@ button {
   opacity: 0.6;
   cursor: not-allowed;
 }
+/* Un <a> con forma de botón conserva los colores del botón (la regla de los
+   links, `a:hover`, le cambiaba el texto a azul oscuro sobre el fondo verde). */
+a.btn,
+a.btn:hover {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+a.btn-primary,
+a.btn-primary:hover {
+  color: #ffffff;
+}
 
 .btn-primary {
   border: 2px solid var(--color-primary);
