@@ -186,6 +186,88 @@ export function listarMovimientos(clienteEmpresaId) {
   return { saldo: saldoDe(clienteEmpresaId), movimientos: movimientosDe(clienteEmpresaId) };
 }
 
+// Zona horaria de negocio para armar el resumen: SQLite guarda CURRENT_TIMESTAMP
+// en UTC, y un rango "del 1 al 30" tiene que respetar el día calendario del
+// cliente (un cargo de las 22:00 no es del día siguiente). Argentina no tiene
+// horario de verano, así que la zona es fija.
+const ZONA_NEGOCIO = 'America/Argentina/Buenos_Aires';
+const FORMATO_DIA = new Intl.DateTimeFormat('en-CA', {
+  timeZone: ZONA_NEGOCIO,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+function utcADate(datetimeUtc) {
+  return new Date(`${datetimeUtc.replace(' ', 'T')}Z`);
+}
+
+function diaLocal(datetimeUtc) {
+  return FORMATO_DIA.format(utcADate(datetimeUtc)); // 'YYYY-MM-DD'
+}
+
+function validarFechaOpcional(valor, campo) {
+  if (valor === undefined || valor === null || valor === '') return null;
+  if (typeof valor !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+    throw new ApiError(400, `${campo} tiene que tener el formato AAAA-MM-DD`);
+  }
+  const fecha = new Date(`${valor}T00:00:00Z`);
+  if (Number.isNaN(fecha.getTime()) || fecha.toISOString().slice(0, 10) !== valor) {
+    throw new ApiError(400, `${campo} no es una fecha válida`);
+  }
+  return valor;
+}
+
+// Datos del resumen de cuenta (PDF). Sin desde/hasta = toda la historia. Con
+// rango: el saldo anterior es todo lo acumulado ANTES de `desde`, y los
+// movimientos son solo los del período, cada uno con su saldo corrido.
+export function armarResumenCuenta(clienteEmpresaId, { desde, hasta } = {}) {
+  const cliente = obtenerClienteActivo(clienteEmpresaId);
+  const desdeOk = validarFechaOpcional(desde, 'desde');
+  const hastaOk = validarFechaOpcional(hasta, 'hasta');
+  if (desdeOk && hastaOk && desdeOk > hastaOk) {
+    throw new ApiError(400, 'La fecha "desde" no puede ser posterior a "hasta"');
+  }
+
+  const todos = movimientosDe(clienteEmpresaId).reverse(); // cronológico: más viejo primero
+  let saldoAnterior = 0;
+  const delPeriodo = [];
+  for (const m of todos) {
+    const dia = diaLocal(m.creado_en);
+    if (desdeOk && dia < desdeOk) {
+      saldoAnterior += m.monto;
+    } else if (!hastaOk || dia <= hastaOk) {
+      delPeriodo.push(m);
+    }
+  }
+
+  let saldo = saldoAnterior;
+  let cargos = 0;
+  let pagos = 0;
+  let ajustes = 0;
+  const movimientos = delPeriodo.map((m) => {
+    saldo += m.monto;
+    if (m.tipo === 'CARGO') cargos += m.monto;
+    else if (m.tipo === 'PAGO') pagos += -m.monto;
+    else ajustes += m.monto;
+    return { ...m, saldo };
+  });
+
+  return {
+    cliente,
+    desde: desdeOk,
+    hasta: hastaOk,
+    saldo_anterior: saldoAnterior,
+    total_cargos: cargos,
+    total_pagos: pagos,
+    total_ajustes: ajustes,
+    saldo_final: saldo,
+    movimientos,
+  };
+}
+
+export { diaLocal, ZONA_NEGOCIO };
+
 // Pago manual (abono del cliente) -- se guarda negativo porque monto ya trae
 // el efecto real sobre el saldo (Docs/Modelo-de-Datos.md): un pago siempre
 // reduce lo que el cliente debe.

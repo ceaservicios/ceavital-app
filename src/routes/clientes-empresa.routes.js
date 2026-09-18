@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import {
   crearClienteEmpresaController,
+  descargarResumenCuentaController,
   editarClienteEmpresaController,
   eliminarClienteEmpresaController,
   listarClientesEmpresaController,
@@ -28,6 +29,8 @@ router.patch('/:id', requireAuth(['admin', 'encargado']), editarClienteEmpresaCo
 router.delete('/:id', requireAuth(['admin']), eliminarClienteEmpresaController);
 
 router.get('/:id/movimientos', requireAuth(['admin', 'encargado']), listarMovimientosController);
+// Resumen de cuenta en PDF (?desde=AAAA-MM-DD&hasta=AAAA-MM-DD, ambos opcionales).
+router.get('/:id/resumen', requireAuth(['admin', 'encargado']), descargarResumenCuentaController);
 router.post('/:id/pagos', requireAuth(['admin', 'encargado']), registrarPagoController);
 router.post('/:id/ajustes', requireAuth(['admin', 'encargado']), registrarAjusteController);
 

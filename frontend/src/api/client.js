@@ -40,7 +40,24 @@ async function request(path, { method = 'GET', body } = {}) {
   return data;
 }
 
+// Descarga de un archivo (PDF, etc.): devuelve { blob, nombre }. Aparte de
+// request() porque esa siempre espera JSON. Mantiene el mismo manejo de 401.
+async function descargar(path) {
+  const res = await fetch(`${BASE}${path}`, { credentials: 'include' });
+
+  if (!res.ok) {
+    if (res.status === 401) onUnauthorized?.();
+    const isJson = res.headers.get('content-type')?.includes('application/json');
+    const data = isJson ? await res.json() : null;
+    throw new ApiError(data?.error || 'No se pudo descargar el archivo', res.status);
+  }
+
+  const nombre = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') || '')?.[1] ?? 'descarga.pdf';
+  return { blob: await res.blob(), nombre };
+}
+
 export const api = {
+  descargar,
   get: (path) => request(path),
   post: (path, body) => request(path, { method: 'POST', body }),
   patch: (path, body) => request(path, { method: 'PATCH', body }),

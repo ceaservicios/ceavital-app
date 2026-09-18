@@ -1,5 +1,6 @@
 import { ApiError } from '../utils/api-error.js';
 import * as clientesEmpresaService from '../services/clientes-empresa.service.js';
+import { generarResumenCuentaPdf } from '../services/resumen-cuenta-pdf.service.js';
 
 function parsearId(valor, campo = 'id') {
   const id = Number(valor);
@@ -39,6 +40,31 @@ export function eliminarClienteEmpresaController(req, res) {
 export function listarMovimientosController(req, res) {
   const id = parsearId(req.params.id, 'cliente_empresa_id');
   res.json(clientesEmpresaService.listarMovimientos(id));
+}
+
+// Nombre de archivo seguro para el header Content-Disposition: solo ASCII, sin
+// espacios ni caracteres que rompan el header.
+function nombreArchivoSeguro(texto) {
+  return String(texto)
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50);
+}
+
+export function descargarResumenCuentaController(req, res) {
+  const id = parsearId(req.params.id, 'cliente_empresa_id');
+  // armarResumenCuenta valida las fechas y lanza ApiError(400) antes de que se
+  // escriba nada en la respuesta.
+  const resumen = clientesEmpresaService.armarResumenCuenta(id, { desde: req.query.desde, hasta: req.query.hasta });
+
+  const hoy = new Date().toISOString().slice(0, 10);
+  const nombre = `Resumen-cuenta-${nombreArchivoSeguro(resumen.cliente.razon_social) || 'cliente'}-${hoy}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${nombre}"`);
+  res.setHeader('Cache-Control', 'no-store');
+  generarResumenCuentaPdf(resumen).pipe(res);
 }
 
 export function registrarPagoController(req, res) {

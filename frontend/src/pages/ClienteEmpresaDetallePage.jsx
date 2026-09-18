@@ -4,6 +4,7 @@ import { api, ApiError } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatearFechaHora, formatearMonto } from '../utils/format.js';
 import { CamposCliente, aFormulario, aPayload, estadoSaldo, useCondicionesPago } from './clientesEmpresaComun.jsx';
+import ResumenCuentaDescarga from './ResumenCuentaDescarga.jsx';
 import './ClientesEmpresaPage.css';
 
 const ETIQUETA_TIPO = { CARGO: 'Cargo', PAGO: 'Pago', AJUSTE: 'Ajuste' };
@@ -19,7 +20,7 @@ function TablaMovimientos({ movimientos, vacio }) {
   if (movimientos.length === 0) return <div className="cliente-vacio">{vacio}</div>;
   return (
     <div className="cliente-tabla-wrap">
-      <table className="cliente-tabla">
+      <table className="cliente-tabla cliente-tabla-movs">
         <thead>
           <tr>
             <th>Fecha</th>
@@ -352,6 +353,8 @@ export default function ClienteEmpresaDetallePage() {
           </div>
         </>
       )}
+
+      {tab === 'cuenta' && <ResumenCuentaDescarga clienteId={id} />}
 
       {tab === 'cuenta' && (
         <div className="card cliente-card">

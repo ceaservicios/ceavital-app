@@ -63,6 +63,35 @@
   font-size: 17px;
 }
 
+/* Tabla de movimientos: fecha, tipo, usuario y monto en una línea; solo el
+   detalle (3ª columna) puede bajar de renglón. */
+.cliente-tabla-movs td:not(:nth-child(3)),
+.cliente-tabla-movs th {
+  white-space: nowrap;
+}
+
+/* Selector de período del resumen de cuenta (todo / entre fechas) */
+.cliente-radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+.cliente-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.cliente-radio input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--color-primary);
+}
+
 @media (max-width: 600px) {
   .cliente-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
