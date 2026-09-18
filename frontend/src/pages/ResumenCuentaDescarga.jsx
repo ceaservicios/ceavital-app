@@ -3,8 +3,10 @@ import { api, ApiError } from '../api/client.js';
 import { fechaHoyISO } from '../utils/format.js';
 
 // Descarga del resumen de cuenta corriente en PDF: todo el historial o un
-// rango de fechas (desde / hasta, cualquiera de los dos es opcional).
-export default function ResumenCuentaDescarga({ clienteId }) {
+// rango de fechas (desde / hasta, cualquiera de los dos es opcional). `ruta` es
+// el endpoint del resumen: el de la ficha (/clientes-empresa/:id/resumen) o el
+// del portal del cliente (/portal/resumen).
+export default function ResumenCuentaDescarga({ ruta }) {
   const [modo, setModo] = useState('todo'); // 'todo' | 'rango'
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
@@ -36,7 +38,7 @@ export default function ResumenCuentaDescarga({ clienteId }) {
     setDescargando(true);
     try {
       const consulta = params.toString();
-      const { blob, nombre } = await api.descargar(`/clientes-empresa/${clienteId}/resumen${consulta ? `?${consulta}` : ''}`);
+      const { blob, nombre } = await api.descargar(`${ruta}${consulta ? `?${consulta}` : ''}`);
       const url = URL.createObjectURL(blob);
       const enlace = document.createElement('a');
       enlace.href = url;

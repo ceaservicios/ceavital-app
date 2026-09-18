@@ -9,6 +9,7 @@ import usuariosRoutes from './usuarios.routes.js';
 import configuracionRoutes from './configuracion.routes.js';
 import catalogosRoutes from './catalogos.routes.js';
 import clientesEmpresaRoutes from './clientes-empresa.routes.js';
+import portalRoutes from './portal.routes.js';
 
 const router = Router();
 
@@ -22,6 +23,7 @@ router.use('/proveedores', proveedoresRoutes);
 router.use('/usuarios', usuariosRoutes);
 router.use('/configuracion', configuracionRoutes);
 router.use('/clientes-empresa', clientesEmpresaRoutes);
+router.use('/portal', portalRoutes);
 router.use('/', catalogosRoutes);
 
 export default router;

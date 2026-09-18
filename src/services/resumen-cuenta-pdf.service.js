@@ -200,6 +200,29 @@ function dibujarPies(doc) {
   }
 }
 
+// Nombre de archivo seguro para el header Content-Disposition: solo ASCII, sin
+// espacios ni caracteres que rompan el header.
+function nombreArchivoSeguro(texto) {
+  return String(texto)
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50);
+}
+
+// Arma el PDF y lo manda como descarga. Lo usan el resumen que baja el
+// Admin/Encargado desde la ficha y el que baja el propio cliente desde su
+// portal (mismo documento, distinto control de acceso).
+export function enviarResumenCuentaPdf(res, resumen) {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const nombre = `Resumen-cuenta-${nombreArchivoSeguro(resumen.cliente.razon_social) || 'cliente'}-${hoy}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${nombre}"`);
+  res.setHeader('Cache-Control', 'no-store');
+  generarResumenCuentaPdf(resumen).pipe(res);
+}
+
 // Devuelve el PDFDocument (stream legible): quien lo llama hace doc.pipe(res).
 // `resumen` es lo que devuelve armarResumenCuenta().
 export function generarResumenCuentaPdf(resumen) {

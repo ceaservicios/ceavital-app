@@ -34,6 +34,12 @@ const config = {
     .map((o) => o.trim())
     .filter(Boolean),
 
+  // Portal del cliente-empresa (login propio del cliente para ver su cuenta).
+  // Activo por defecto; PORTAL_CLIENTES=off lo apaga por completo (las rutas
+  // del portal responden 404 y la ficha lo avisa), por ejemplo en una
+  // instalación LAN donde no se quiere ofrecer.
+  portalClientes: process.env.PORTAL_CLIENTES !== 'off',
+
   session: {
     // Sesion inactiva se cierra sola a los 30 min (Instructivo-Funcional > Requisitos transversales).
     timeoutMinutes: 30,

@@ -1,12 +1,15 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
+import { asyncHandler } from '../utils/async-handler.js';
 import {
+  configurarAccesoController,
   crearClienteEmpresaController,
   descargarResumenCuentaController,
   editarClienteEmpresaController,
   eliminarClienteEmpresaController,
   listarClientesEmpresaController,
   listarMovimientosController,
+  obtenerAccesoController,
   obtenerClienteEmpresaController,
   registrarAjusteController,
   registrarPagoController,
@@ -29,6 +32,9 @@ router.patch('/:id', requireAuth(['admin', 'encargado']), editarClienteEmpresaCo
 router.delete('/:id', requireAuth(['admin']), eliminarClienteEmpresaController);
 
 router.get('/:id/movimientos', requireAuth(['admin', 'encargado']), listarMovimientosController);
+// Acceso del cliente al portal (usuario y contraseña que carga el negocio).
+router.get('/:id/acceso', requireAuth(['admin', 'encargado']), obtenerAccesoController);
+router.put('/:id/acceso', requireAuth(['admin', 'encargado']), asyncHandler(configurarAccesoController));
 // Resumen de cuenta en PDF (?desde=AAAA-MM-DD&hasta=AAAA-MM-DD, ambos opcionales).
 router.get('/:id/resumen', requireAuth(['admin', 'encargado']), descargarResumenCuentaController);
 router.post('/:id/pagos', requireAuth(['admin', 'encargado']), registrarPagoController);

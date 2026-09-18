@@ -4,6 +4,7 @@ import { api, ApiError } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatearFechaHora, formatearMonto } from '../utils/format.js';
 import { CamposCliente, aFormulario, aPayload, estadoSaldo, useCondicionesPago } from './clientesEmpresaComun.jsx';
+import ClienteAccesoPortal from './ClienteAccesoPortal.jsx';
 import ResumenCuentaDescarga from './ResumenCuentaDescarga.jsx';
 import './ClientesEmpresaPage.css';
 
@@ -14,6 +15,7 @@ const TABS = [
   { clave: 'compras', texto: 'Compras' },
   { clave: 'pagos', texto: 'Pagos' },
   { clave: 'cuenta', texto: 'Cuenta corriente' },
+  { clave: 'acceso', texto: 'Acceso' },
 ];
 
 function TablaMovimientos({ movimientos, vacio }) {
@@ -354,7 +356,9 @@ export default function ClienteEmpresaDetallePage() {
         </>
       )}
 
-      {tab === 'cuenta' && <ResumenCuentaDescarga clienteId={id} />}
+      {tab === 'acceso' && <ClienteAccesoPortal clienteId={id} razonSocial={detalle.razon_social} email={detalle.email} />}
+
+      {tab === 'cuenta' && <ResumenCuentaDescarga ruta={`/clientes-empresa/${id}/resumen`} />}
 
       {tab === 'cuenta' && (
         <div className="card cliente-card">

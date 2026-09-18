@@ -19,6 +19,13 @@ export function setUnauthorizedHandler(fn) {
   onUnauthorized = fn;
 }
 
+// El portal del cliente tiene su propia sesión: un 401 ahí (contraseña
+// incorrecta, sesión vencida) lo maneja la pantalla del portal, no debe
+// tratarse como "se venció la sesión interna".
+function esRutaDelPortal(path) {
+  return path.startsWith('/portal');
+}
+
 async function request(path, { method = 'GET', body } = {}) {
   const res = await fetch(`${BASE}${path}`, {
     method,
@@ -31,7 +38,7 @@ async function request(path, { method = 'GET', body } = {}) {
   const data = isJson ? await res.json() : null;
 
   if (!res.ok) {
-    if (res.status === 401 && path !== '/auth/login') {
+    if (res.status === 401 && path !== '/auth/login' && !esRutaDelPortal(path)) {
       onUnauthorized?.();
     }
     throw new ApiError(data?.error || 'Ocurrió un error inesperado', res.status);
@@ -46,7 +53,7 @@ async function descargar(path) {
   const res = await fetch(`${BASE}${path}`, { credentials: 'include' });
 
   if (!res.ok) {
-    if (res.status === 401) onUnauthorized?.();
+    if (res.status === 401 && !esRutaDelPortal(path)) onUnauthorized?.();
     const isJson = res.headers.get('content-type')?.includes('application/json');
     const data = isJson ? await res.json() : null;
     throw new ApiError(data?.error || 'No se pudo descargar el archivo', res.status);
@@ -61,5 +68,6 @@ export const api = {
   get: (path) => request(path),
   post: (path, body) => request(path, { method: 'POST', body }),
   patch: (path, body) => request(path, { method: 'PATCH', body }),
+  put: (path, body) => request(path, { method: 'PUT', body }),
   delete: (path) => request(path, { method: 'DELETE' }),
 };

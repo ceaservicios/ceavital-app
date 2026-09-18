@@ -12,6 +12,7 @@ import { errorHandler } from './middleware/error.middleware.js';
 import { buildCorsMiddleware, helmetMiddleware } from './middleware/security.middleware.js';
 import routes from './routes/index.js';
 import { cerrarSesionesInactivas } from './services/session.service.js';
+import { cerrarSesionesClienteInactivas } from './services/clientes-portal.service.js';
 import { obtenerConfiguracionBackups } from './services/configuracion.service.js';
 import { ejecutarBackup, listarHistorial } from './services/backups.service.js';
 
@@ -90,6 +91,10 @@ setInterval(() => {
   const cerradas = cerrarSesionesInactivas();
   if (cerradas > 0) {
     console.log(`[sesiones] ${cerradas} sesión(es) cerrada(s) por timeout`);
+  }
+  const cerradasCliente = cerrarSesionesClienteInactivas();
+  if (cerradasCliente > 0) {
+    console.log(`[sesiones] ${cerradasCliente} sesión(es) de cliente cerrada(s) por timeout`);
   }
 }, 5 * 60 * 1000);
 

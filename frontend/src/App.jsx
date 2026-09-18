@@ -15,12 +15,18 @@ import CierreCajaPage from './pages/CierreCajaPage.jsx';
 import CostosPage from './pages/CostosPage.jsx';
 import UsuariosPage from './pages/UsuariosPage.jsx';
 import ConfiguracionPage from './pages/ConfiguracionPage.jsx';
+import PortalLoginPage from './pages/PortalLoginPage.jsx';
+import PortalPage from './pages/PortalPage.jsx';
 
 export default function App() {
   return (
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+
+        {/* Portal del cliente-empresa: sesión propia, sin el menú ni las rutas internas. */}
+        <Route path="/portal/login" element={<PortalLoginPage />} />
+        <Route path="/portal" element={<PortalPage />} />
 
         <Route
           path="/"

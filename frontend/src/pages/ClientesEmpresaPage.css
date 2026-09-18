@@ -70,6 +70,73 @@
   white-space: nowrap;
 }
 
+/* Pestaña Acceso: estado, contraseña con botones, datos para entregar */
+.cliente-acceso-estado {
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+}
+.cliente-acceso-ok {
+  background: #d9f0e6;
+  color: #0e4b38;
+}
+.cliente-acceso-bloqueado {
+  background: #f5c6cb;
+  color: #8a2530;
+}
+.cliente-pass-fila {
+  display: flex;
+  gap: 8px;
+}
+.cliente-pass-fila input {
+  flex: 1;
+  min-width: 0;
+}
+.cliente-pass-fila .btn {
+  padding: 10px 14px;
+  flex-shrink: 0;
+}
+.cliente-credenciales {
+  border: 2px solid var(--color-primary);
+}
+.cliente-credenciales-lista {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cliente-credenciales-lista div {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.cliente-credenciales-lista dt {
+  width: 92px;
+  flex-shrink: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cliente-credenciales-lista dd {
+  margin: 0;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 15px;
+  font-weight: 700;
+  word-break: break-all;
+  user-select: all;
+}
+.cliente-btn-peligro {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
 /* Selector de período del resumen de cuenta (todo / entre fechas) */
 .cliente-radios {
   display: flex;

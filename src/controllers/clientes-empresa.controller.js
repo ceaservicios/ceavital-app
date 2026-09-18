@@ -1,6 +1,7 @@
 import { ApiError } from '../utils/api-error.js';
 import * as clientesEmpresaService from '../services/clientes-empresa.service.js';
-import { generarResumenCuentaPdf } from '../services/resumen-cuenta-pdf.service.js';
+import * as portalService from '../services/clientes-portal.service.js';
+import { enviarResumenCuentaPdf } from '../services/resumen-cuenta-pdf.service.js';
 
 function parsearId(valor, campo = 'id') {
   const id = Number(valor);
@@ -42,29 +43,23 @@ export function listarMovimientosController(req, res) {
   res.json(clientesEmpresaService.listarMovimientos(id));
 }
 
-// Nombre de archivo seguro para el header Content-Disposition: solo ASCII, sin
-// espacios ni caracteres que rompan el header.
-function nombreArchivoSeguro(texto) {
-  return String(texto)
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^A-Za-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 50);
-}
-
 export function descargarResumenCuentaController(req, res) {
   const id = parsearId(req.params.id, 'cliente_empresa_id');
   // armarResumenCuenta valida las fechas y lanza ApiError(400) antes de que se
   // escriba nada en la respuesta.
   const resumen = clientesEmpresaService.armarResumenCuenta(id, { desde: req.query.desde, hasta: req.query.hasta });
+  enviarResumenCuentaPdf(res, resumen);
+}
 
-  const hoy = new Date().toISOString().slice(0, 10);
-  const nombre = `Resumen-cuenta-${nombreArchivoSeguro(resumen.cliente.razon_social) || 'cliente'}-${hoy}.pdf`;
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="${nombre}"`);
-  res.setHeader('Cache-Control', 'no-store');
-  generarResumenCuentaPdf(resumen).pipe(res);
+export function obtenerAccesoController(req, res) {
+  const id = parsearId(req.params.id, 'cliente_empresa_id');
+  res.json(portalService.obtenerAcceso(id));
+}
+
+// async (hashea la contraseña): se registra con asyncHandler en las rutas.
+export async function configurarAccesoController(req, res) {
+  const id = parsearId(req.params.id, 'cliente_empresa_id');
+  res.json(await portalService.configurarAcceso(id, req.body || {}));
 }
 
 export function registrarPagoController(req, res) {
