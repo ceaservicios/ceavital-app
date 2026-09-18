@@ -1,0 +1,283 @@
+.stock-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  height: 100%;
+  min-height: 0;
+}
+
+.stock-kpis {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.stock-kpi {
+  flex: 1;
+  min-width: 200px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stock-kpi-label {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+.stock-kpi-value {
+  font-size: 26px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.stock-body {
+  flex: 1;
+  display: flex;
+  gap: 16px;
+  min-height: 0;
+}
+@media (max-width: 960px) {
+  .stock-body {
+    flex-direction: column;
+  }
+}
+
+.stock-lista {
+  flex: 1.7;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+.stock-lista-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.stock-search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+}
+.stock-search input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.stock-nuevo-btn {
+  white-space: nowrap;
+  padding: 10px 18px;
+}
+
+.stock-tabla {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+.stock-tabla-head {
+  display: flex;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--bg-app);
+}
+.stock-tabla-body {
+  display: flex;
+  flex-direction: column;
+}
+.stock-tabla-vacio {
+  padding: 32px 12px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+.stock-fila {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 11px 10px;
+  border: none;
+  border-bottom: 1px solid var(--bg-app);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.stock-fila:hover {
+  background: #f6f7f8;
+}
+.stock-fila-activa {
+  background: rgba(14, 75, 56, 0.06);
+}
+.stock-fila-nombre {
+  font-size: 14px;
+  font-weight: 600;
+}
+.stock-fila-muted {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.stock-valor-alerta {
+  color: var(--color-danger);
+}
+
+.stock-panel {
+  flex: 1;
+  min-width: 340px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: auto;
+}
+.stock-panel-vacio {
+  margin: auto;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  padding: 24px;
+}
+.stock-panel-titulo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 15px;
+  font-weight: 700;
+}
+.stock-panel-cerrar {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--text-tertiary);
+  line-height: 1;
+}
+
+.stock-form,
+.stock-detalle {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.stock-form-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.stock-form-acciones {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
+}
+.stock-campo-oculto {
+  font-size: 14px;
+  color: var(--text-tertiary);
+  padding: 11px 14px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-sm);
+}
+.stock-hint {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+.stock-section-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  display: block;
+}
+
+.stock-lotes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-default);
+}
+.stock-lotes-vacio {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.stock-lote-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+.stock-lote-cantidad {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.stock-lote-fechas {
+  flex: 1;
+  color: var(--text-secondary);
+}
+.stock-badge-vencido {
+  background: rgba(224, 90, 101, 0.15);
+  color: #a13640;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+}
+.stock-lote-eliminar {
+  border: none;
+  background: transparent;
+  color: #b0453b;
+  cursor: pointer;
+  display: flex;
+}
+
+.stock-nuevo-lote {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-default);
+}
+
+.stock-eliminar {
+  padding-top: 10px;
+  border-top: 1px solid var(--border-default);
+  text-align: center;
+}
+.stock-eliminar-link {
+  border: none;
+  background: transparent;
+  color: var(--color-danger);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.stock-eliminar-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.stock-eliminar-confirm > div {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}

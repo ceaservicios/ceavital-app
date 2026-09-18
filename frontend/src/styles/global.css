@@ -1,0 +1,155 @@
+:root {
+  /* Paleta -- Book de Marca (marca.md) + valores exactos ya usados en el
+     mockup aprobado (Artifact de Claude Design) para fondos/bordes neutros
+     que marca.md no fija en hex (ese documento deja la base neutra como
+     "Blanco/Gris Claro" nomás). */
+  --color-primary: #0e4b38; /* Verde Esmeralda Oscuro -- marca, nav, acciones primarias */
+  --color-primary-hover: #0b3c2d;
+  --color-secondary: #22428c; /* Azul -- links, acciones secundarias */
+  --color-warning: #f3c043; /* Dorado -- aviso, nunca decorativo */
+  --color-danger: #e05a65; /* Rosa Coral -- alerta urgente, nunca decorativo */
+
+  --bg-app: #ebecee;
+  --bg-surface: #ffffff;
+  --bg-muted: #f1f3f4;
+  --border-default: #dcdfe2;
+
+  --text-primary: #1b2622;
+  --text-secondary: #3a4642;
+  --text-tertiary: #6b7672;
+  --text-muted: #8a9490;
+
+  --sidebar-bg: var(--color-primary);
+  --sidebar-text-strong: #ffffff;
+  --sidebar-text-muted: #9cc7b7;
+  --sidebar-text-faint: #7fb39e;
+  --sidebar-text-link: #bfe0d3;
+  --sidebar-item-active-bg: rgba(255, 255, 255, 0.16);
+  --sidebar-item-hover-bg: rgba(255, 255, 255, 0.1);
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-pill: 20px;
+
+  --font-sans: 'Manrope', system-ui, -apple-system, sans-serif;
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--color-secondary);
+  text-decoration: none;
+}
+a:hover {
+  color: #16306b;
+}
+
+button {
+  font-family: inherit;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.btn:hover {
+  border-color: var(--color-primary);
+}
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  border: 2px solid var(--color-primary);
+  background: var(--color-primary);
+  color: #ffffff;
+}
+.btn-primary:hover {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.field input,
+.field select {
+  width: 100%;
+  font: inherit;
+  font-size: 14.5px;
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  background: var(--bg-surface);
+}
+.field input:disabled,
+.field select:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.alert {
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.alert-danger {
+  background: rgba(224, 90, 101, 0.1);
+  color: #a13640;
+  border: 1px solid rgba(224, 90, 101, 0.3);
+}

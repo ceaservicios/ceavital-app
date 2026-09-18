@@ -1,0 +1,64 @@
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext.jsx';
+import RequireAuth from './components/RequireAuth.jsx';
+import RequireRole from './components/RequireRole.jsx';
+import AppLayout from './components/AppLayout.jsx';
+import LoginPage from './pages/LoginPage.jsx';
+import CajaPage from './pages/CajaPage.jsx';
+import StockPage from './pages/StockPage.jsx';
+import VencimientosPage from './pages/VencimientosPage.jsx';
+import ProveedoresPage from './pages/ProveedoresPage.jsx';
+import CierreCajaPage from './pages/CierreCajaPage.jsx';
+import CostosPage from './pages/CostosPage.jsx';
+import UsuariosPage from './pages/UsuariosPage.jsx';
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+
+        <Route
+          path="/"
+          element={
+            <RequireAuth>
+              <AppLayout />
+            </RequireAuth>
+          }
+        >
+          <Route index element={<Navigate to="/caja" replace />} />
+          <Route path="caja" element={<CajaPage />} />
+          <Route path="stock" element={<StockPage />} />
+          <Route path="vencimientos" element={<VencimientosPage />} />
+          <Route
+            path="proveedores"
+            element={
+              <RequireRole modulo="proveedores">
+                <ProveedoresPage />
+              </RequireRole>
+            }
+          />
+          <Route path="cierre-caja" element={<CierreCajaPage />} />
+          <Route
+            path="costos"
+            element={
+              <RequireRole modulo="costos">
+                <CostosPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="usuarios"
+            element={
+              <RequireRole modulo="usuarios">
+                <UsuariosPage />
+              </RequireRole>
+            }
+          />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AuthProvider>
+  );
+}
