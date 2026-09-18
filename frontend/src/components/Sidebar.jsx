@@ -33,6 +33,12 @@ const ICONOS = {
       <circle cx="17.5" cy="18.5" r="1.8" />
     </svg>
   ),
+  'clientes-empresa': (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M9 8h6M9 12h6M9 16h3" />
+    </svg>
+  ),
   cierre: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 2v4" />
@@ -77,6 +83,7 @@ const SECCIONES = [
       { modulo: 'stock', to: '/stock', label: 'Stock y Lotes' },
       { modulo: 'vencimientos', to: '/vencimientos', label: 'Vencimientos' },
       { modulo: 'proveedores', to: '/proveedores', label: 'Proveedores y Pedidos' },
+      { modulo: 'clientes-empresa', to: '/clientes-empresa', label: 'Clientes y Cta. Cte.' },
       { modulo: 'cierre', to: '/cierre-caja', label: 'Cierre de Caja' },
     ],
   },

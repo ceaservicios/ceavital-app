@@ -235,6 +235,34 @@
   color: #ffffff;
 }
 
+.caja-cliente {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-sm);
+}
+.caja-cliente label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.caja-cliente select {
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  font: inherit;
+  font-size: 13.5px;
+}
+.caja-cliente-vacio {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
 .caja-cambio {
   display: flex;
   flex-direction: column;

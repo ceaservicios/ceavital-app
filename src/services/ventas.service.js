@@ -1,7 +1,12 @@
 import db from '../db/connection.js';
 import { ApiError } from '../utils/api-error.js';
+import { existeClienteActivo, registrarAjustePorAnulacion, registrarCargoPorVenta } from './clientes-empresa.service.js';
 
-const MEDIOS_PAGO = ['efectivo', 'tarjeta', 'transferencia_qr', 'mercado_pago', 'fiado'];
+// 'cta_cte' (B2B Fase 1) es distinto de 'fiado' -- 'fiado' sigue siendo la
+// venta fiada informal, sin cliente ni ledger (decisión confirmada con el
+// usuario). 'cta_cte' SIEMPRE requiere un cliente_empresa_id real, ver
+// validarClienteEmpresa más abajo.
+const MEDIOS_PAGO = ['efectivo', 'tarjeta', 'transferencia_qr', 'mercado_pago', 'fiado', 'cta_cte'];
 
 function validarMedioPago(valor) {
   if (!MEDIOS_PAGO.includes(valor)) {
@@ -79,20 +84,34 @@ export function obtenerVenta(id) {
   return obtenerVentaConItems(id);
 }
 
+// 'cta_cte' SIEMPRE necesita un cliente-empresa real y activo -- a diferencia
+// de 'fiado', que nunca lo pidió (decisión confirmada con el usuario, B2B
+// Fase 1: son 2 conceptos separados, no el mismo campo formalizado).
+function validarClienteEmpresa(medioPago, clienteEmpresaId) {
+  if (medioPago !== 'cta_cte') return null;
+  const id = Number(clienteEmpresaId);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new ApiError(400, 'cliente_empresa_id es requerido cuando medio_pago es "cta_cte"');
+  }
+  if (!existeClienteActivo(id)) throw new ApiError(404, `Cliente-empresa ${id} no encontrado`);
+  return id;
+}
+
 // Carrito multi-producto: se registra una sola venta con todos los items al
 // cierre (Docs/Instructivo-Funcional.md > Caja > "Armado de venta"). Un mismo
 // producto puede necesitar tomarse de mas de un lote (venta_items.lote_id es
 // por-lote, no por-producto) -- se reparte en orden FEFO hasta cubrir la
 // cantidad pedida.
-export function registrarVenta({ medio_pago, items }, { usuarioId }) {
+export function registrarVenta({ medio_pago, items, cliente_empresa_id }, { usuarioId }) {
   const medioPago = validarMedioPago(medio_pago);
+  const clienteEmpresaId = validarClienteEmpresa(medioPago, cliente_empresa_id);
   const itemsValidados = validarItems(items);
 
   db.exec('BEGIN');
   try {
     const ventaResult = db
-      .prepare('INSERT INTO ventas (usuario_id, medio_pago, total) VALUES (?, ?, 0)')
-      .run(usuarioId, medioPago);
+      .prepare('INSERT INTO ventas (usuario_id, medio_pago, cliente_empresa_id, total) VALUES (?, ?, ?, 0)')
+      .run(usuarioId, medioPago, clienteEmpresaId);
     const ventaId = ventaResult.lastInsertRowid;
 
     let total = 0;
@@ -125,6 +144,15 @@ export function registrarVenta({ medio_pago, items }, { usuarioId }) {
     }
 
     db.prepare('UPDATE ventas SET total = ? WHERE id = ?').run(total, ventaId);
+
+    // CARGO automático en la cuenta corriente del cliente (B2B Fase 1,
+    // decisión confirmada con el usuario) -- misma transacción que el resto
+    // de la venta: si algo de arriba falla (stock insuficiente), el ROLLBACK
+    // se lleva también este insert, nunca queda un cargo sin venta real.
+    if (clienteEmpresaId) {
+      registrarCargoPorVenta(clienteEmpresaId, { monto: total, ventaId, usuarioId });
+    }
+
     db.exec('COMMIT');
     return obtenerVentaConItems(ventaId);
   } catch (err) {
@@ -136,19 +164,27 @@ export function registrarVenta({ medio_pago, items }, { usuarioId }) {
 // "Ventas -- Editar" (Admin+Encargado, matriz de permisos): alcance acotado a
 // corregir el medio de pago de una venta ya registrada (confirmado con el
 // usuario) -- nunca productos/cantidades/stock, eso es exclusivo de anular.
+// No admite entrar ni salir de 'cta_cte' -- ese cambio movería el cargo real
+// en la cuenta corriente de un cliente a otro (o lo crearía/borraría), y este
+// endpoint nunca tocó nada del ledger. Para corregir un medio_pago='cta_cte'
+// mal cargado, anular la venta (revierte el cargo con un AJUSTE) y volver a
+// registrarla bien.
 export function editarMedioPago(id, { medio_pago }) {
   const medioPago = validarMedioPago(medio_pago);
 
-  const venta = db.prepare('SELECT id, estado FROM ventas WHERE id = ?').get(id);
+  const venta = db.prepare('SELECT id, estado, medio_pago FROM ventas WHERE id = ?').get(id);
   if (!venta) throw new ApiError(404, 'Venta no encontrada');
   if (venta.estado === 'anulada') throw new ApiError(409, 'No se puede editar una venta anulada');
+  if (venta.medio_pago === 'cta_cte' || medioPago === 'cta_cte') {
+    throw new ApiError(409, 'No se puede editar el medio de pago hacia o desde "cta_cte" -- anulá la venta y volvé a registrarla');
+  }
 
   db.prepare('UPDATE ventas SET medio_pago = ? WHERE id = ?').run(medioPago, id);
   return obtenerVentaConItems(id);
 }
 
 export function anularVenta(id, { usuarioId }) {
-  const venta = db.prepare('SELECT id, estado FROM ventas WHERE id = ?').get(id);
+  const venta = db.prepare('SELECT id, estado, medio_pago, cliente_empresa_id, total FROM ventas WHERE id = ?').get(id);
   if (!venta) throw new ApiError(404, 'Venta no encontrada');
   if (venta.estado === 'anulada') throw new ApiError(409, 'La venta ya está anulada');
 
@@ -170,6 +206,18 @@ export function anularVenta(id, { usuarioId }) {
     db.prepare(
       `UPDATE ventas SET estado = 'anulada', anulada_por = ?, anulada_en = CURRENT_TIMESTAMP WHERE id = ?`
     ).run(usuarioId, id);
+
+    // Reversión automática del cargo en la cuenta corriente (B2B Fase 1,
+    // decisión confirmada con el usuario) -- un AJUSTE nuevo que compensa el
+    // CARGO original, nunca se edita/borra el movimiento original (ledger
+    // insert-only).
+    if (venta.medio_pago === 'cta_cte' && venta.cliente_empresa_id) {
+      registrarAjustePorAnulacion(venta.cliente_empresa_id, {
+        monto: -venta.total,
+        ventaId: id,
+        usuarioId,
+      });
+    }
 
     db.exec('COMMIT');
     return obtenerVentaConItems(id);

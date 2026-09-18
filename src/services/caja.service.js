@@ -4,7 +4,7 @@ import { obtenerConfiguracionBackups } from './configuracion.service.js';
 import { ejecutarBackup } from './backups.service.js';
 import { totalGastosDelDia } from './gastos.service.js';
 
-const MEDIOS_PAGO = ['efectivo', 'tarjeta', 'transferencia_qr', 'mercado_pago', 'fiado'];
+const MEDIOS_PAGO = ['efectivo', 'tarjeta', 'transferencia_qr', 'mercado_pago', 'fiado', 'cta_cte'];
 
 function validarFecha(valor) {
   if (valor === undefined || valor === null) return null;
@@ -76,6 +76,7 @@ export function calcularResumenDelDia(fechaParam) {
     total_transferencia_qr: totales.transferencia_qr,
     total_mercado_pago: totales.mercado_pago,
     total_fiado: totales.fiado,
+    total_cta_cte: totales.cta_cte,
     total_general,
   };
 }
@@ -136,9 +137,9 @@ export function registrarCierre({ fecha, total_efectivo_contado, fondo_dejado },
     .prepare(
       `INSERT INTO cierres_caja
          (usuario_id, fecha, total_efectivo_esperado, total_efectivo_contado, diferencia_efectivo,
-          total_tarjeta, total_transferencia_qr, total_mercado_pago, total_fiado, total_general,
+          total_tarjeta, total_transferencia_qr, total_mercado_pago, total_fiado, total_cta_cte, total_general,
           fondo_dejado, fondo_heredado, total_gastos)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       usuarioId,
@@ -150,6 +151,7 @@ export function registrarCierre({ fecha, total_efectivo_contado, fondo_dejado },
       resumen.total_transferencia_qr,
       resumen.total_mercado_pago,
       resumen.total_fiado,
+      resumen.total_cta_cte,
       resumen.total_general,
       fondoDejado,
       resumen.fondo_heredado,

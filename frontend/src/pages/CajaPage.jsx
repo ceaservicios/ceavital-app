@@ -48,11 +48,24 @@ const MEDIOS_PAGO = [
   },
   {
     valor: 'fiado',
-    label: 'Cuenta corriente / Fiado',
+    label: 'Fiado',
     icono: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="9" />
         <path d="M12 7v5l3 3" />
+      </svg>
+    ),
+  },
+  {
+    // B2B Fase 1: venta a la cuenta corriente de un Cliente-Empresa real
+    // (con ledger) -- distinta de 'fiado', que sigue siendo el fiado
+    // informal sin cliente asociado.
+    valor: 'cta_cte',
+    label: 'Cuenta Corriente',
+    icono: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="3" width="16" height="18" rx="2" />
+        <path d="M9 8h6M9 12h6M9 16h3" />
       </svg>
     ),
   },
@@ -72,6 +85,8 @@ export default function CajaPage() {
   const [mostrarResultados, setMostrarResultados] = useState(false);
   const [carrito, setCarrito] = useState([]);
   const [medioPago, setMedioPago] = useState('efectivo');
+  const [clientesEmpresa, setClientesEmpresa] = useState([]);
+  const [clienteEmpresaId, setClienteEmpresaId] = useState('');
   const [montoRecibido, setMontoRecibido] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(null);
@@ -132,6 +147,17 @@ export default function CajaPage() {
         .catch(() => setProveedoresGasto([]));
     }
   }, [usuario?.rol]);
+
+  // Lista de clientes-empresa para el selector de "Cuenta Corriente": los 3
+  // roles la necesitan para cobrar una venta a cuenta corriente (el backend
+  // deja GET /clientes-empresa abierto a todos y al Cajero le devuelve solo
+  // id + datos de contacto, nunca el saldo).
+  useEffect(() => {
+    api
+      .get('/clientes-empresa')
+      .then((data) => setClientesEmpresa(data.clientes))
+      .catch(() => setClientesEmpresa([]));
+  }, []);
 
   async function registrarGasto(e) {
     e.preventDefault();
@@ -247,11 +273,13 @@ export default function CajaPage() {
     try {
       const venta = await api.post('/ventas', {
         medio_pago: medioPago,
+        ...(medioPago === 'cta_cte' ? { cliente_empresa_id: Number(clienteEmpresaId) } : {}),
         items: carrito.map((item) => ({ producto_id: item.producto_id, cantidad: item.cantidad })),
       });
       setExito(`Venta #${venta.id} registrada por ${formatearMonto(venta.total)}.`);
       setCarrito([]);
       setMontoRecibido('');
+      setClienteEmpresaId('');
       cargarResumen();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo registrar la venta. Probá de nuevo.');
@@ -407,7 +435,7 @@ export default function CajaPage() {
                 <button
                   type="button"
                   key={medio.valor}
-                  className={`caja-medio-btn${medioPago === medio.valor ? ' caja-medio-btn-active' : ''}${medio.valor === 'fiado' ? ' caja-medio-btn-full' : ''}`}
+                  className={`caja-medio-btn${medioPago === medio.valor ? ' caja-medio-btn-active' : ''}`}
                   onClick={() => setMedioPago(medio.valor)}
                 >
                   {medio.icono}
@@ -436,6 +464,31 @@ export default function CajaPage() {
             </div>
           )}
 
+          {medioPago === 'cta_cte' && (
+            <div className="caja-cliente">
+              <label htmlFor="caja-cliente-empresa">Cliente-Empresa</label>
+              {clientesEmpresa.length === 0 ? (
+                <span className="caja-cliente-vacio">
+                  No hay clientes-empresa cargados. Pedile a un Encargado o Administrador que cargue uno en "Clientes y Cta. Cte.".
+                </span>
+              ) : (
+                <select
+                  id="caja-cliente-empresa"
+                  value={clienteEmpresaId}
+                  onChange={(e) => setClienteEmpresaId(e.target.value)}
+                >
+                  <option value="">Elegí a quién se le vende…</option>
+                  {clientesEmpresa.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.razon_social}
+                      {c.cuit ? ` · ${c.cuit}` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
           {error && <div className="alert alert-danger">{error}</div>}
           {exito && (
             <div className="alert" style={{ background: 'rgba(14,75,56,0.08)', color: '#0e4b38', border: '1px solid rgba(14,75,56,0.25)' }}>
@@ -452,7 +505,7 @@ export default function CajaPage() {
               type="button"
               className="btn btn-primary"
               style={{ width: '100%', padding: '15px' }}
-              disabled={carrito.length === 0 || enviando}
+              disabled={carrito.length === 0 || enviando || (medioPago === 'cta_cte' && !clienteEmpresaId)}
               onClick={confirmarVenta}
             >
               {enviando ? 'Registrando…' : 'Confirmar y Cobrar Venta'}

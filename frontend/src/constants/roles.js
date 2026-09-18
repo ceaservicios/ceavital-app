@@ -28,6 +28,10 @@ export function iniciales(nombre) {
  */
 export function puedeVerModulo(modulo, rol) {
   if (modulo === 'costos' || modulo === 'usuarios' || modulo === 'configuracion') return rol === 'admin';
-  if (modulo === 'proveedores') return rol === 'admin' || rol === 'encargado';
+  // Clientes-Empresa (B2B Fase 1): mismo criterio que Proveedores -- el
+  // Cajero no tiene acceso al módulo (ni Ver). Igual puede ELEGIR un cliente
+  // al vender en Caja con "Cuenta Corriente": eso usa GET /clientes-empresa,
+  // que el backend deja abierto a los 3 roles solo para armar ese selector.
+  if (modulo === 'proveedores' || modulo === 'clientes-empresa') return rol === 'admin' || rol === 'encargado';
   return true;
 }
