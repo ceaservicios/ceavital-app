@@ -12,7 +12,14 @@ export function errorHandler(err, req, res, next) {
   // ApiError = error que el propio código lanzó a propósito con un mensaje pensado
   // para el usuario (ej. 503 "el envío de mails no está configurado"); esos se
   // exponen aunque sean 5xx. Cualquier otro 5xx (una excepción inesperada) nunca.
-  const mensaje = (status >= 400 && status < 500) || err instanceof ApiError ? err.message : 'Error interno del servidor';
+  // JSON roto: el mensaje de body-parser es técnico ("Unexpected token } in JSON..."),
+  // se reemplaza por uno pensado para el usuario.
+  const mensaje =
+    err.type === 'entity.parse.failed'
+      ? 'El pedido llegó con un formato inválido'
+      : (status >= 400 && status < 500) || err instanceof ApiError
+        ? err.message
+        : 'Error interno del servidor';
 
   res.status(status).json({ error: mensaje || 'Error interno del servidor' });
 }

@@ -34,24 +34,26 @@ export async function login(usuarioLogin, passwordPlano) {
   const passwordOk = await verifyPassword(passwordPlano, usuario.password_hash);
 
   if (!passwordOk) {
-    const intentos = usuario.intentos_fallidos + 1;
+    // Incremento atómico en la propia sentencia (nunca "leer, esperar el hash,
+    // escribir +1": con logins simultáneos se perdían intentos y el bloqueo no
+    // se activaba). Mismo criterio que loginCliente.
+    const { intentos_fallidos: intentos } = db
+      .prepare(
+        `UPDATE usuarios SET intentos_fallidos = intentos_fallidos + 1, actualizado_en = CURRENT_TIMESTAMP
+         WHERE id = ? RETURNING intentos_fallidos`
+      )
+      .get(usuario.id);
 
     if (intentos >= config.login.maxIntentos) {
       db.prepare(
-        `UPDATE usuarios
-         SET intentos_fallidos = ?, bloqueado_hasta = datetime('now', '+' || ? || ' minutes'), actualizado_en = CURRENT_TIMESTAMP
-         WHERE id = ?`
-      ).run(intentos, config.login.bloqueoMinutos, usuario.id);
+        `UPDATE usuarios SET bloqueado_hasta = datetime('now', '+' || ? || ' minutes') WHERE id = ?`
+      ).run(config.login.bloqueoMinutos, usuario.id);
 
       throw new AuthError(
         `Usuario bloqueado por ${config.login.maxIntentos} intentos fallidos. Reintentar en ${config.login.bloqueoMinutos} minutos.`,
         'USUARIO_BLOQUEADO'
       );
     }
-
-    db.prepare(
-      `UPDATE usuarios SET intentos_fallidos = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`
-    ).run(intentos, usuario.id);
 
     throw new AuthError('Usuario o contraseña incorrectos', 'CREDENCIALES_INVALIDAS');
   }
