@@ -7,20 +7,20 @@ function parsearId(valor, campo = 'id') {
   return id;
 }
 
-export function obtenerResumenController(req, res) {
-  res.json(cajaService.calcularResumenDelDia(req.query.fecha));
+export async function obtenerResumenController(req, res) {
+  res.json(await cajaService.calcularResumenDelDia(req.query.fecha));
 }
 
-export function listarCierresController(req, res) {
-  res.json({ cierres: cajaService.listarCierres() });
+export async function listarCierresController(req, res) {
+  res.json({ cierres: await cajaService.listarCierres() });
 }
 
-export function obtenerCierreController(req, res) {
+export async function obtenerCierreController(req, res) {
   const id = parsearId(req.params.id);
-  res.json(cajaService.obtenerCierre(id));
+  res.json(await cajaService.obtenerCierre(id));
 }
 
-export function registrarCierreController(req, res) {
-  const cierre = cajaService.registrarCierre(req.body || {}, { usuarioId: req.sesion.usuario_id });
+export async function registrarCierreController(req, res) {
+  const cierre = await cajaService.registrarCierre(req.body || {}, { usuarioId: req.sesion.usuario_id });
   res.status(201).json(cierre);
 }

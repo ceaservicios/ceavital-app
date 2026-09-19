@@ -7,29 +7,29 @@ function parsearId(valor, campo = 'id') {
   return id;
 }
 
-export function listarVentasController(req, res) {
-  const ventas = ventasService.listarVentas({ fecha: req.query.fecha });
+export async function listarVentasController(req, res) {
+  const ventas = await ventasService.listarVentas({ fecha: req.query.fecha });
   res.json({ ventas });
 }
 
-export function obtenerVentaController(req, res) {
+export async function obtenerVentaController(req, res) {
   const id = parsearId(req.params.id);
-  res.json(ventasService.obtenerVenta(id));
+  res.json(await ventasService.obtenerVenta(id));
 }
 
-export function registrarVentaController(req, res) {
-  const venta = ventasService.registrarVenta(req.body || {}, { usuarioId: req.sesion.usuario_id });
+export async function registrarVentaController(req, res) {
+  const venta = await ventasService.registrarVenta(req.body || {}, { usuarioId: req.sesion.usuario_id });
   res.status(201).json(venta);
 }
 
-export function editarMedioPagoController(req, res) {
+export async function editarMedioPagoController(req, res) {
   const id = parsearId(req.params.id);
-  const venta = ventasService.editarMedioPago(id, req.body || {});
+  const venta = await ventasService.editarMedioPago(id, req.body || {});
   res.json(venta);
 }
 
-export function anularVentaController(req, res) {
+export async function anularVentaController(req, res) {
   const id = parsearId(req.params.id);
-  const venta = ventasService.anularVenta(id, { usuarioId: req.sesion.usuario_id });
+  const venta = await ventasService.anularVenta(id, { usuarioId: req.sesion.usuario_id });
   res.json(venta);
 }

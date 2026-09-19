@@ -5,14 +5,14 @@ import { obtenerSesionActivaValida, marcarActividad } from '../services/session.
  * exige que el rol de la sesion este en esa lista (control de acceso por rol).
  */
 export function requireAuth(rolesPermitidos = null) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const token = req.cookies?.sesion_token;
 
     if (!token) {
       return res.status(401).json({ error: 'No autenticado' });
     }
 
-    const sesion = obtenerSesionActivaValida(token);
+    const sesion = await obtenerSesionActivaValida(token);
 
     if (!sesion) {
       res.clearCookie('sesion_token');
@@ -23,7 +23,7 @@ export function requireAuth(rolesPermitidos = null) {
       return res.status(403).json({ error: 'No autorizado para este rol' });
     }
 
-    marcarActividad(sesion.id);
+    await marcarActividad(sesion.id);
     req.sesion = sesion;
     next();
   };

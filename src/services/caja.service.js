@@ -1,8 +1,6 @@
 import db from '../db/connection.js';
 import { hoyNegocio, sqlDiaNegocio } from '../utils/fecha-negocio.js';
 import { ApiError } from '../utils/api-error.js';
-import { obtenerConfiguracionBackups } from './configuracion.service.js';
-import { ejecutarBackup } from './backups.service.js';
 import { totalGastosDelDia } from './gastos.service.js';
 
 const MEDIOS_PAGO = ['efectivo', 'tarjeta', 'transferencia_qr', 'mercado_pago', 'fiado', 'cta_cte'];
@@ -31,9 +29,9 @@ function fechaHoy() {
 // efectivo esperado del dia siguiente (decision confirmada con el usuario
 // 2026-09-18: "se deja un monto del dia anterior... se suma a las ventas del
 // dia"). Si nunca se dejo fondo, o es el primer cierre del negocio, es 0.
-function fondoHeredado(fecha) {
-  const fila = db
-    .prepare(`SELECT fondo_dejado FROM cierres_caja WHERE fecha < ? ORDER BY fecha DESC, id DESC LIMIT 1`)
+async function fondoHeredado(fecha) {
+  const fila = await db
+    .prepare(`SELECT fondo_dejado FROM cierres_caja WHERE fecha < ?::date ORDER BY fecha DESC, id DESC LIMIT 1`)
     .get(fecha);
   return fila?.fondo_dejado ?? 0;
 }
@@ -49,14 +47,14 @@ function fondoHeredado(fecha) {
 // y resta los gastos/pagos a proveedores del dia (se asumen en efectivo,
 // salen fisicamente del cajon -- ver gastos.service.js) -- si no, el arqueo
 // nunca cuadraria con lo que realmente queda en la caja fisica.
-export function calcularResumenDelDia(fechaParam) {
+export async function calcularResumenDelDia(fechaParam) {
   const fecha = validarFecha(fechaParam) ?? fechaHoy();
 
-  const filas = db
+  const filas = await db
     .prepare(
       `SELECT medio_pago, COALESCE(SUM(total), 0) AS total
        FROM ventas
-       WHERE estado = 'registrada' AND ${sqlDiaNegocio('creado_en')} = ?
+       WHERE estado = 'registrada' AND ${sqlDiaNegocio('creado_en')} = ?::date
        GROUP BY medio_pago`
     )
     .all(fecha);
@@ -65,8 +63,8 @@ export function calcularResumenDelDia(fechaParam) {
   for (const fila of filas) totales[fila.medio_pago] = fila.total;
 
   const total_general = MEDIOS_PAGO.reduce((acc, m) => acc + totales[m], 0);
-  const fondo_heredado = fondoHeredado(fecha);
-  const total_gastos = totalGastosDelDia(fecha);
+  const fondo_heredado = await fondoHeredado(fecha);
+  const total_gastos = await totalGastosDelDia(fecha);
 
   return {
     fecha,
@@ -86,8 +84,8 @@ export function listarCierres() {
   return db.prepare('SELECT * FROM cierres_caja ORDER BY creado_en DESC').all();
 }
 
-export function obtenerCierre(id) {
-  const cierre = db.prepare('SELECT * FROM cierres_caja WHERE id = ?').get(id);
+export async function obtenerCierre(id) {
+  const cierre = await db.prepare('SELECT * FROM cierres_caja WHERE id = ?').get(id);
   if (!cierre) throw new ApiError(404, 'Cierre de caja no encontrado');
   return cierre;
 }
@@ -98,81 +96,71 @@ export function obtenerCierre(id) {
 // despues). Solo efectivo tiene "esperado vs. contado": es el unico medio que
 // se cuenta fisicamente y puede tener diferencia; los demas son registros
 // digitales exactos que ya coinciden con lo esperado.
-export function registrarCierre({ fecha, total_efectivo_contado, fondo_dejado }, { usuarioId }) {
+export async function registrarCierre({ fecha, total_efectivo_contado, fondo_dejado }, { usuarioId }) {
   const contado = validarEnteroNoNegativo(total_efectivo_contado, 'total_efectivo_contado');
   // Fondo que este cierre deja para el turno/dia siguiente (corregido
   // 2026-09-15) -- opcional, default 0 (mismo comportamiento de siempre si no
   // se carga nada).
   const fondoDejado = fondo_dejado != null ? validarEnteroNoNegativo(fondo_dejado, 'fondo_dejado') : 0;
-  const resumen = calcularResumenDelDia(fecha);
-  const diferencia = contado - resumen.total_efectivo_esperado;
 
-  // Guardia de idempotencia (hallazgo Media, verificador-funcional 2026-09-10):
-  // un doble-click en "Confirmar Cierre de Caja" manda 2 POST con exactamente
-  // los mismos totales en el mismo instante -- sin este check, ambos se
-  // insertaban como cierres "distintos" (2 filas idénticas). Si el cierre más
-  // reciente de este mismo usuario/día tiene los mismos totales Y se registró
-  // hace menos de 5 segundos, se lo trata como el mismo submit repetido y se
-  // rechaza -- nunca bloquea un cierre distinto legítimo más tarde (fecha/hora
-  // siempre resuelta en SQL, mismo criterio que el resto del proyecto).
-  const duplicado = db
-    .prepare(
-      `SELECT id FROM cierres_caja
-       WHERE usuario_id = ? AND fecha = ?
-         AND total_efectivo_contado = ? AND total_general = ? AND total_efectivo_esperado = ?
-         AND creado_en >= datetime('now', '-5 seconds')
-       ORDER BY id DESC LIMIT 1`
-    )
-    .get(usuarioId, resumen.fecha, contado, resumen.total_general, resumen.total_efectivo_esperado);
+  // Transaccion: el resumen, la guardia de duplicado y el insert tienen que
+  // ver el mismo estado (con dos cierres simultaneos, uno de los dos reintenta
+  // y encuentra al otro ya registrado).
+  return db.transaction(async () => {
+    const resumen = await calcularResumenDelDia(fecha);
+    const diferencia = contado - resumen.total_efectivo_esperado;
 
-  if (duplicado) {
-    throw new ApiError(409, 'Ya se registró un cierre idéntico hace instantes -- probablemente un doble envío.');
-  }
+    // Guardia de idempotencia (hallazgo Media, verificador-funcional 2026-09-10):
+    // un doble-click en "Confirmar Cierre de Caja" manda 2 POST con exactamente
+    // los mismos totales en el mismo instante -- sin este check, ambos se
+    // insertaban como cierres "distintos" (2 filas idénticas). Si el cierre más
+    // reciente de este mismo usuario/día tiene los mismos totales Y se registró
+    // hace menos de 5 segundos, se lo trata como el mismo submit repetido y se
+    // rechaza -- nunca bloquea un cierre distinto legítimo más tarde (fecha/hora
+    // siempre resuelta en la base, mismo criterio que el resto del proyecto).
+    const duplicado = await db
+      .prepare(
+        `SELECT id FROM cierres_caja
+         WHERE usuario_id = ? AND fecha = ?::date
+           AND total_efectivo_contado = ? AND total_general = ? AND total_efectivo_esperado = ?
+           AND creado_en >= LOCALTIMESTAMP - INTERVAL '5 seconds'
+         ORDER BY id DESC LIMIT 1`
+      )
+      .get(usuarioId, resumen.fecha, contado, resumen.total_general, resumen.total_efectivo_esperado);
 
-  // total_general usa el total esperado/real de ventas (no el contado): es un
-  // total de auditoria de lo que se vendio, separado del desvio de caja
-  // fisica que ya queda aislado en diferencia_efectivo. fondo_heredado/
-  // total_gastos se guardan tal cual estaban en el momento del cierre (misma
-  // logica de "foto" que el resto de la tabla -- nunca se recalculan despues).
-  const resultado = db
-    .prepare(
-      `INSERT INTO cierres_caja
-         (usuario_id, fecha, total_efectivo_esperado, total_efectivo_contado, diferencia_efectivo,
-          total_tarjeta, total_transferencia_qr, total_mercado_pago, total_fiado, total_cta_cte, total_general,
-          fondo_dejado, fondo_heredado, total_gastos)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      usuarioId,
-      resumen.fecha,
-      resumen.total_efectivo_esperado,
-      contado,
-      diferencia,
-      resumen.total_tarjeta,
-      resumen.total_transferencia_qr,
-      resumen.total_mercado_pago,
-      resumen.total_fiado,
-      resumen.total_cta_cte,
-      resumen.total_general,
-      fondoDejado,
-      resumen.fondo_heredado,
-      resumen.total_gastos
-    );
-
-  // "Cuándo hacer backup": una de las 3 opciones es "en cada cierre de caja"
-  // (Docs/Instructivo-Funcional.md > Backups). El backup es un efecto
-  // secundario, nunca bloquea el cierre -- si falla (destino no disponible,
-  // sin configurar, etc.) ya queda registrado por su cuenta en
-  // backups_historial (backups.service.ejecutarBackup), y acá se lo absorbe
-  // para no tumbar la respuesta del cierre por un problema de backup.
-  if (obtenerConfiguracionBackups().frecuencia === 'cierre_caja') {
-    try {
-      ejecutarBackup();
-    } catch {
-      // sin acción: la falla ya quedó auditada por ejecutarBackup() o, si no
-      // hay ningún destino habilitado, simplemente no hay backup que hacer.
+    if (duplicado) {
+      throw new ApiError(409, 'Ya se registró un cierre idéntico hace instantes -- probablemente un doble envío.');
     }
-  }
 
-  return obtenerCierre(resultado.lastInsertRowid);
+    // total_general usa el total esperado/real de ventas (no el contado): es un
+    // total de auditoria de lo que se vendio, separado del desvio de caja
+    // fisica que ya queda aislado en diferencia_efectivo. fondo_heredado/
+    // total_gastos se guardan tal cual estaban en el momento del cierre (misma
+    // logica de "foto" que el resto de la tabla -- nunca se recalculan despues).
+    return db
+      .prepare(
+        `INSERT INTO cierres_caja
+           (usuario_id, fecha, total_efectivo_esperado, total_efectivo_contado, diferencia_efectivo,
+            total_tarjeta, total_transferencia_qr, total_mercado_pago, total_fiado, total_cta_cte, total_general,
+            fondo_dejado, fondo_heredado, total_gastos)
+         VALUES (?, ?::date, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         RETURNING *`
+      )
+      .get(
+        usuarioId,
+        resumen.fecha,
+        resumen.total_efectivo_esperado,
+        contado,
+        diferencia,
+        resumen.total_tarjeta,
+        resumen.total_transferencia_qr,
+        resumen.total_mercado_pago,
+        resumen.total_fiado,
+        resumen.total_cta_cte,
+        resumen.total_general,
+        fondoDejado,
+        resumen.fondo_heredado,
+        resumen.total_gastos
+      );
+  });
 }

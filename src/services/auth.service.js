@@ -13,9 +13,9 @@ export class AuthError extends Error {
 export async function login(usuarioLogin, passwordPlano) {
   // El flag "bloqueado" se calcula en SQL (datetime('now')) para evitar
   // parseo de fechas en JS -- mismo criterio que session.service.
-  const usuario = db
+  const usuario = await db
     .prepare(
-      `SELECT *, (bloqueado_hasta IS NOT NULL AND bloqueado_hasta > datetime('now')) AS bloqueado
+      `SELECT *, (bloqueado_hasta IS NOT NULL AND bloqueado_hasta > LOCALTIMESTAMP) AS bloqueado
        FROM usuarios WHERE usuario = ? AND eliminado_en IS NULL`
     )
     .get(usuarioLogin);
@@ -37,7 +37,7 @@ export async function login(usuarioLogin, passwordPlano) {
     // Incremento atómico en la propia sentencia (nunca "leer, esperar el hash,
     // escribir +1": con logins simultáneos se perdían intentos y el bloqueo no
     // se activaba). Mismo criterio que loginCliente.
-    const { intentos_fallidos: intentos } = db
+    const { intentos_fallidos: intentos } = await db
       .prepare(
         `UPDATE usuarios SET intentos_fallidos = intentos_fallidos + 1, actualizado_en = CURRENT_TIMESTAMP
          WHERE id = ? RETURNING intentos_fallidos`
@@ -45,9 +45,9 @@ export async function login(usuarioLogin, passwordPlano) {
       .get(usuario.id);
 
     if (intentos >= config.login.maxIntentos) {
-      db.prepare(
-        `UPDATE usuarios SET bloqueado_hasta = datetime('now', '+' || ? || ' minutes') WHERE id = ?`
-      ).run(config.login.bloqueoMinutos, usuario.id);
+      await db
+        .prepare(`UPDATE usuarios SET bloqueado_hasta = LOCALTIMESTAMP + (?::int * INTERVAL '1 minute') WHERE id = ?`)
+        .run(config.login.bloqueoMinutos, usuario.id);
 
       throw new AuthError(
         `Usuario bloqueado por ${config.login.maxIntentos} intentos fallidos. Reintentar en ${config.login.bloqueoMinutos} minutos.`,
@@ -58,11 +58,12 @@ export async function login(usuarioLogin, passwordPlano) {
     throw new AuthError('Usuario o contraseña incorrectos', 'CREDENCIALES_INVALIDAS');
   }
 
-  db.prepare(
+  await db
+    .prepare(
     `UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`
   ).run(usuario.id);
 
-  const { token, expulsada } = crearSesion(usuario);
+  const { token, expulsada } = await crearSesion(usuario);
 
   return {
     token,
@@ -71,6 +72,6 @@ export async function login(usuarioLogin, passwordPlano) {
   };
 }
 
-export function logout(sesionId) {
-  cerrarSesion(sesionId, 'logout');
+export async function logout(sesionId) {
+  await cerrarSesion(sesionId, 'logout');
 }

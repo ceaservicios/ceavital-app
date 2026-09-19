@@ -26,9 +26,9 @@ async function main() {
     process.exit(1);
   }
 
-  runMigrations();
+  await runMigrations();
 
-  const usuario = db
+  const usuario = await db
     .prepare('SELECT id, rol FROM usuarios WHERE usuario = ? AND eliminado_en IS NULL')
     .get(usuarioLogin);
 
@@ -48,7 +48,7 @@ async function main() {
   const passwordTemporal = generarPasswordTemporal();
   const passwordHash = await hashPassword(passwordTemporal);
 
-  db.prepare(
+  await db.prepare(
     `UPDATE usuarios
      SET password_hash = ?, intentos_fallidos = 0, bloqueado_hasta = NULL, actualizado_en = CURRENT_TIMESTAMP
      WHERE id = ?`
@@ -58,4 +58,8 @@ async function main() {
   console.log('Recomendado: iniciar sesión con esta contraseña y cambiarla cuanto antes desde Usuarios.');
 }
 
-main();
+try {
+  await main();
+} finally {
+  await db.cerrar();
+}

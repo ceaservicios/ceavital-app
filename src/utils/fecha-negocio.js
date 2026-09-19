@@ -5,11 +5,14 @@
 // que la diferencia es siempre de 3 horas.
 export const ZONA_NEGOCIO = 'America/Argentina/Buenos_Aires';
 
-// Fragmento SQL: el día argentino de una columna guardada en UTC.
+// Fragmento SQL (PostgreSQL): el día argentino de una columna TIMESTAMP guardada en UTC.
 // Ej.: WHERE ${sqlDiaNegocio('creado_en')} = ?
 export function sqlDiaNegocio(columna) {
-  return `date(${columna}, '-3 hours')`;
+  return `((${columna} AT TIME ZONE 'UTC') AT TIME ZONE '${ZONA_NEGOCIO}')::date`;
 }
+
+// Fragmento SQL (PostgreSQL): la fecha de hoy en Argentina, calculada en la base.
+export const SQL_HOY_NEGOCIO = `(NOW() AT TIME ZONE '${ZONA_NEGOCIO}')::date`;
 
 function partes(fecha) {
   return Object.fromEntries(
@@ -39,7 +42,7 @@ export function horaNegocio(ahora = new Date()) {
   return `${p.hour}:${p.minute}`;
 }
 
-// Día argentino de un 'AAAA-MM-DD HH:MM:SS' guardado en UTC por SQLite.
+// Día argentino de un 'AAAA-MM-DD HH:MM:SS' guardado en UTC en la base.
 export function diaNegocioDeUtc(datetimeUtc) {
   return hoyNegocio(new Date(`${datetimeUtc.replace(' ', 'T')}Z`));
 }

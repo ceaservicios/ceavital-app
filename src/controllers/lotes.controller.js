@@ -7,22 +7,22 @@ function parsearId(valor, campo) {
   return id;
 }
 
-export function crearLoteController(req, res) {
+export async function crearLoteController(req, res) {
   const productoId = parsearId(req.params.id, 'producto_id');
-  const lote = stockService.crearLote(productoId, req.body || {});
+  const lote = await stockService.crearLote(productoId, req.body || {});
   res.status(201).json(lote);
 }
 
-export function editarLoteController(req, res) {
+export async function editarLoteController(req, res) {
   const productoId = parsearId(req.params.id, 'producto_id');
   const loteId = parsearId(req.params.loteId, 'lote_id');
-  const lote = stockService.editarLote(productoId, loteId, req.body || {});
+  const lote = await stockService.editarLote(productoId, loteId, req.body || {});
   res.json(lote);
 }
 
-export function eliminarLoteController(req, res) {
+export async function eliminarLoteController(req, res) {
   const productoId = parsearId(req.params.id, 'producto_id');
   const loteId = parsearId(req.params.loteId, 'lote_id');
-  stockService.eliminarLote(productoId, loteId);
+  await stockService.eliminarLote(productoId, loteId);
   res.status(204).send();
 }

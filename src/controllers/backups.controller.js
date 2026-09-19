@@ -1,18 +1,18 @@
 import { ApiError } from '../utils/api-error.js';
 import * as backupsService from '../services/backups.service.js';
 
-export function listarHistorialController(req, res) {
-  res.json({ historial: backupsService.listarHistorial() });
+export async function listarHistorialController(req, res) {
+  res.json({ historial: await backupsService.listarHistorial() });
 }
 
-export function listarArchivosController(req, res) {
+export async function listarArchivosController(req, res) {
   const destino = req.query.destino;
   if (!destino) throw new ApiError(400, 'destino es requerido');
-  res.json({ archivos: backupsService.listarArchivosDestino(destino) });
+  res.json({ archivos: await backupsService.listarArchivosDestino(destino) });
 }
 
-export function ejecutarBackupController(req, res) {
-  const resultados = backupsService.ejecutarBackup();
+export async function ejecutarBackupController(req, res) {
+  const resultados = await backupsService.ejecutarBackup();
   res.status(201).json({ resultados });
 }
 
@@ -20,14 +20,14 @@ export function ejecutarBackupController(req, res) {
 // Restauración): el body tiene que declarar `confirmar: true`, no alcanza con
 // pegarle al endpoint. `requireLocalhost` ya filtró que la request venga de
 // la PC servidor antes de llegar acá (ver routes/configuracion.routes.js).
-export function restaurarController(req, res) {
+export async function restaurarController(req, res) {
   const { destino, nombre_archivo, confirmar } = req.body || {};
 
   if (confirmar !== true) {
     throw new ApiError(400, 'Hace falta confirmar explícitamente la restauración (confirmar: true)');
   }
 
-  const resultado = backupsService.restaurarBackup({ destino, nombre_archivo });
+  const resultado = await backupsService.restaurarBackup({ destino, nombre_archivo });
 
   res.json({
     ...resultado,

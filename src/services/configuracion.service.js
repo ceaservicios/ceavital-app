@@ -19,19 +19,21 @@ const DEFAULTS = {
   backup_destino_nube_ruta: '',
 };
 
-function leerCrudo() {
-  const filas = db.prepare('SELECT clave, valor FROM configuracion').all();
+async function leerCrudo() {
+  const filas = await db.prepare('SELECT clave, valor FROM configuracion').all();
   return { ...DEFAULTS, ...Object.fromEntries(filas.map((f) => [f.clave, f.valor])) };
 }
 
-function escribirClaves(cambios) {
+async function escribirClaves(cambios) {
   const stmt = db.prepare(
     `INSERT INTO configuracion (clave, valor) VALUES (?, ?)
      ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor, actualizado_en = CURRENT_TIMESTAMP`
   );
-  for (const [clave, valor] of Object.entries(cambios)) {
-    stmt.run(clave, valor);
-  }
+  await db.transaction(async () => {
+    for (const [clave, valor] of Object.entries(cambios)) {
+      await stmt.run(clave, valor);
+    }
+  });
 }
 
 function validarFrecuencia(v) {
@@ -61,8 +63,8 @@ function validarRuta(v, campo) {
   return v.trim();
 }
 
-export function obtenerConfiguracionBackups() {
-  const c = leerCrudo();
+export async function obtenerConfiguracionBackups() {
+  const c = await leerCrudo();
   return {
     frecuencia: c.backup_frecuencia,
     horario: c.backup_horario || null,
@@ -83,7 +85,7 @@ export function obtenerConfiguracionBackups() {
 // "Configuración y Seguridad" (contraseñas, HTTPS) ya está resuelto por
 // código fijo (bcryptjs, bloqueo, certificado autofirmado) -- no son opciones
 // que el Admin edite en runtime, según Docs/Instructivo-Funcional.md.
-export function editarConfiguracionBackups(datos) {
+export async function editarConfiguracionBackups(datos) {
   const cambios = {};
 
   if (datos.frecuencia !== undefined) cambios.backup_frecuencia = validarFrecuencia(datos.frecuencia);
@@ -117,7 +119,7 @@ export function editarConfiguracionBackups(datos) {
   // No tiene sentido habilitar un destino sin ruta (ni la que ya tenía, ni una
   // nueva en este mismo request) -- evita un estado de configuración roto que
   // recién se notaría al intentar hacer un backup.
-  const actual = leerCrudo();
+  const actual = await leerCrudo();
   for (const destino of DESTINOS) {
     const claveHabilitado = `backup_destino_${destino}_habilitado`;
     const claveRuta = `backup_destino_${destino}_ruta`;
@@ -131,6 +133,6 @@ export function editarConfiguracionBackups(datos) {
     }
   }
 
-  escribirClaves(cambios);
+  await escribirClaves(cambios);
   return obtenerConfiguracionBackups();
 }

@@ -26,7 +26,15 @@ const config = {
   // Codigo (app) y datos (data) separados desde el dia uno: una actualizacion
   // futura solo reemplaza app/, nunca toca data/ (ver CLAUDE.md > "Actualizaciones en produccion").
   dataDir: path.join(sistemaRoot, 'data'),
-  dbPath: path.join(sistemaRoot, 'data', 'ceavital.db'),
+
+  // Base de datos: PostgreSQL (desde 2026-09; antes SQLite embebida).
+  // Ej.: postgres://usuario:clave@host:5432/ceavital?sslmode=disable
+  databaseUrl: (process.env.DATABASE_URL || '').trim(),
+  db: {
+    poolMax: Number(process.env.DB_POOL_MAX) || 10,
+  },
+  // Ruta de un ceavital.db de SQLite a importar UNA vez al arrancar (ver db/importar-sqlite.js).
+  importarSqlite: (process.env.IMPORTAR_SQLITE || '').trim(),
   certsDir: path.join(appRoot, 'certs'),
 
   allowedOrigins: (process.env.ALLOWED_ORIGINS || '')

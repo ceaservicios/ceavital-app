@@ -44,11 +44,11 @@ function validarMontoConSigno(valor, campo) {
 // Mismo criterio que catalogos.service.js (categorias/unidades_medida): la
 // unicidad real se valida acá, el índice único parcial del esquema es solo
 // backstop. cuit es opcional -- solo se chequea si se manda uno.
-function verificarCuitLibre(cuit, excluirId = null) {
+async function verificarCuitLibre(cuit, excluirId = null) {
   if (!cuit) return;
   // Se compara sin guiones ni espacios: "30-11111111-1" y "30111111111" son el mismo CUIT.
   const soloDigitos = cuit.replace(/[-\s]/g, '');
-  const existente = db
+  const existente = await db
     .prepare(
       `SELECT id FROM clientes_empresa
        WHERE REPLACE(REPLACE(cuit, '-', ''), ' ', '') = ? AND eliminado_en IS NULL AND id != ?`
@@ -57,13 +57,11 @@ function verificarCuitLibre(cuit, excluirId = null) {
   if (existente) throw new ApiError(409, 'Ya existe un cliente-empresa activo con ese CUIT');
 }
 
-// Columnas explícitas (no c.*): la columna de texto vieja
-// clientes_empresa.condicion_pago quedó en el esquema sin uso (migración 023,
-// nunca se borra nada) y chocaría con el nombre resuelto por JOIN contra el
-// catálogo, que es el que la API expone como `condicion_pago` (string, igual
-// que `categoria`/`unidad_medida` en stock.service.js). El JOIN no filtra por
-// cp.eliminado_en a propósito: un cliente cuya condición se dio de baja
-// después sigue mostrando su nombre real.
+// Columnas explícitas (no c.*): la API expone `condicion_pago` como el nombre
+// resuelto por JOIN contra el catálogo (string, igual que `categoria`/
+// `unidad_medida` en stock.service.js). El JOIN no filtra por cp.eliminado_en a
+// propósito: un cliente cuya condición se dio de baja después sigue mostrando
+// su nombre real.
 const SELECT_CLIENTE = `
   SELECT
     c.id, c.razon_social, c.cuit, c.contacto_nombre, c.telefono, c.email, c.direccion,
@@ -73,8 +71,8 @@ const SELECT_CLIENTE = `
   LEFT JOIN condiciones_pago cp ON cp.id = c.condicion_pago_id
 `;
 
-function obtenerClienteActivo(id) {
-  const cliente = db.prepare(`${SELECT_CLIENTE} WHERE c.id = ? AND c.eliminado_en IS NULL`).get(id);
+async function obtenerClienteActivo(id) {
+  const cliente = await db.prepare(`${SELECT_CLIENTE} WHERE c.id = ? AND c.eliminado_en IS NULL`).get(id);
   if (!cliente) throw new ApiError(404, 'Cliente-empresa no encontrado');
   return cliente;
 }
@@ -82,17 +80,17 @@ function obtenerClienteActivo(id) {
 // undefined/null/'' = sin condición de pago (es opcional). Si viene un valor,
 // tiene que ser una fila ACTIVA del catálogo -- no se puede asignar una ya
 // dada de baja (mismo criterio que obtenerCategoriaActiva en stock.service.js).
-function validarCondicionPagoId(valor) {
+async function validarCondicionPagoId(valor) {
   if (valor === undefined || valor === null || valor === '') return null;
   const id = Number(valor);
   if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, 'condicion_pago_id inválido');
-  const fila = db.prepare('SELECT id FROM condiciones_pago WHERE id = ? AND eliminado_en IS NULL').get(id);
+  const fila = await db.prepare('SELECT id FROM condiciones_pago WHERE id = ? AND eliminado_en IS NULL').get(id);
   if (!fila) throw new ApiError(400, 'La condición de pago indicada no existe o está eliminada');
   return id;
 }
 
-function saldoDe(clienteEmpresaId) {
-  const fila = db
+async function saldoDe(clienteEmpresaId) {
+  const fila = await db
     .prepare('SELECT COALESCE(SUM(monto), 0) AS saldo FROM cuenta_corriente_movimientos WHERE cliente_empresa_id = ?')
     .get(clienteEmpresaId);
   return fila.saldo;
@@ -125,77 +123,87 @@ export function listarClientesEmpresa({ buscar, incluirSaldo = false } = {}) {
 
   if (buscar) {
     return db
-      .prepare(`${base} WHERE c.eliminado_en IS NULL AND c.razon_social LIKE ? ORDER BY c.razon_social`)
+      .prepare(`${base} WHERE c.eliminado_en IS NULL AND c.razon_social ILIKE ? ORDER BY LOWER(c.razon_social)`)
       .all(`%${buscar}%`);
   }
-  return db.prepare(`${base} WHERE c.eliminado_en IS NULL ORDER BY c.razon_social`).all();
+  return db.prepare(`${base} WHERE c.eliminado_en IS NULL ORDER BY LOWER(c.razon_social)`).all();
 }
 
-export function obtenerClienteEmpresa(id) {
-  const cliente = obtenerClienteActivo(id);
-  return { ...cliente, saldo: saldoDe(id), movimientos: movimientosDe(id) };
+export async function obtenerClienteEmpresa(id) {
+  const cliente = await obtenerClienteActivo(id);
+  return { ...cliente, saldo: await saldoDe(id), movimientos: await movimientosDe(id) };
 }
 
-export function crearClienteEmpresa(datos) {
+export async function crearClienteEmpresa(datos) {
   const razonSocial = validarString(datos.razon_social, 'razon_social');
   const cuit = validarString(datos.cuit, 'cuit', { requerido: false });
   const contactoNombre = validarString(datos.contacto_nombre, 'contacto_nombre', { requerido: false });
   const telefono = validarString(datos.telefono, 'telefono', { requerido: false });
   const email = validarEmailOpcional(datos.email);
   const direccion = validarString(datos.direccion, 'direccion', { requerido: false, maxLength: MAX_TEXTO_LARGO });
-  const condicionPagoId = validarCondicionPagoId(datos.condicion_pago_id);
 
-  verificarCuitLibre(cuit);
+  const id = await db.transaction(async () => {
+    const condicionPagoId = await validarCondicionPagoId(datos.condicion_pago_id);
+    await verificarCuitLibre(cuit);
 
-  const resultado = db
-    .prepare(
-      `INSERT INTO clientes_empresa (razon_social, cuit, contacto_nombre, telefono, email, direccion, condicion_pago_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(razonSocial, cuit, contactoNombre, telefono, email, direccion, condicionPagoId);
+    const resultado = await db
+      .prepare(
+        `INSERT INTO clientes_empresa (razon_social, cuit, contacto_nombre, telefono, email, direccion, condicion_pago_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         RETURNING id`
+      )
+      .run(razonSocial, cuit, contactoNombre, telefono, email, direccion, condicionPagoId);
+    return resultado.lastInsertRowid;
+  });
 
-  return obtenerClienteEmpresa(resultado.lastInsertRowid);
+  return obtenerClienteEmpresa(id);
 }
 
-export function editarClienteEmpresa(id, datos) {
-  const actual = obtenerClienteActivo(id);
+export async function editarClienteEmpresa(id, datos) {
+  await db.transaction(async () => {
+    const actual = await obtenerClienteActivo(id);
 
-  const actualizaciones = {};
-  if (datos.razon_social !== undefined) actualizaciones.razon_social = validarString(datos.razon_social, 'razon_social');
-  if (datos.cuit !== undefined) {
-    const cuit = validarString(datos.cuit, 'cuit', { requerido: false });
-    verificarCuitLibre(cuit, id);
-    actualizaciones.cuit = cuit;
-  }
-  if (datos.contacto_nombre !== undefined) {
-    actualizaciones.contacto_nombre = validarString(datos.contacto_nombre, 'contacto_nombre', { requerido: false });
-  }
-  if (datos.telefono !== undefined) {
-    actualizaciones.telefono = validarString(datos.telefono, 'telefono', { requerido: false });
-  }
-  if (datos.email !== undefined) actualizaciones.email = validarEmailOpcional(datos.email);
-  if (datos.direccion !== undefined) {
-    actualizaciones.direccion = validarString(datos.direccion, 'direccion', { requerido: false, maxLength: MAX_TEXTO_LARGO });
-  }
-  if (datos.condicion_pago_id !== undefined) {
-    // Reenviar la MISMA condición que ya tiene el cliente siempre se acepta,
-    // aunque esa condición se haya dado de baja en el catálogo: la pantalla
-    // manda el formulario completo al guardar, y si no, un cambio de teléfono
-    // quedaría bloqueado por una condición que el usuario ni tocó. Elegir OTRA
-    // sí exige que esté activa.
-    const pedido =
-      datos.condicion_pago_id === null || datos.condicion_pago_id === '' ? null : Number(datos.condicion_pago_id);
-    actualizaciones.condicion_pago_id =
-      pedido !== null && pedido === actual.condicion_pago_id ? pedido : validarCondicionPagoId(datos.condicion_pago_id);
-  }
+    const actualizaciones = {};
+    if (datos.razon_social !== undefined) actualizaciones.razon_social = validarString(datos.razon_social, 'razon_social');
+    if (datos.cuit !== undefined) {
+      const cuit = validarString(datos.cuit, 'cuit', { requerido: false });
+      await verificarCuitLibre(cuit, id);
+      actualizaciones.cuit = cuit;
+    }
+    if (datos.contacto_nombre !== undefined) {
+      actualizaciones.contacto_nombre = validarString(datos.contacto_nombre, 'contacto_nombre', { requerido: false });
+    }
+    if (datos.telefono !== undefined) {
+      actualizaciones.telefono = validarString(datos.telefono, 'telefono', { requerido: false });
+    }
+    if (datos.email !== undefined) actualizaciones.email = validarEmailOpcional(datos.email);
+    if (datos.direccion !== undefined) {
+      actualizaciones.direccion = validarString(datos.direccion, 'direccion', { requerido: false, maxLength: MAX_TEXTO_LARGO });
+    }
+    if (datos.condicion_pago_id !== undefined) {
+      // Reenviar la MISMA condición que ya tiene el cliente siempre se acepta,
+      // aunque esa condición se haya dado de baja en el catálogo: la pantalla
+      // manda el formulario completo al guardar, y si no, un cambio de teléfono
+      // quedaría bloqueado por una condición que el usuario ni tocó. Elegir OTRA
+      // sí exige que esté activa.
+      const pedido =
+        datos.condicion_pago_id === null || datos.condicion_pago_id === '' ? null : Number(datos.condicion_pago_id);
+      actualizaciones.condicion_pago_id =
+        pedido !== null && pedido === actual.condicion_pago_id
+          ? pedido
+          : await validarCondicionPagoId(datos.condicion_pago_id);
+    }
 
-  const claves = Object.keys(actualizaciones);
-  if (claves.length === 0) throw new ApiError(400, 'No se envió ningún campo para actualizar');
+    const claves = Object.keys(actualizaciones);
+    if (claves.length === 0) throw new ApiError(400, 'No se envió ningún campo para actualizar');
 
-  const set = claves.map((c) => `${c} = ?`).join(', ');
-  const valores = claves.map((c) => actualizaciones[c]);
+    const set = claves.map((c) => `${c} = ?`).join(', ');
+    const valores = claves.map((c) => actualizaciones[c]);
 
-  db.prepare(`UPDATE clientes_empresa SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`).run(...valores, id);
+    await db
+      .prepare(`UPDATE clientes_empresa SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`)
+      .run(...valores, id);
+  });
 
   return obtenerClienteEmpresa(id);
 }
@@ -204,33 +212,30 @@ export function editarClienteEmpresa(id, datos) {
 // seguían apartando stock (reserva) hasta que alguien los rechazara a mano y
 // nadie podía aprobarlos igual (el cliente ya no existe). El stock reservado
 // vuelve a estar disponible en el acto. Todo en una transacción.
-export function eliminarClienteEmpresa(id, { usuarioId } = {}) {
-  obtenerClienteActivo(id);
-  db.exec('BEGIN');
-  try {
-    db.prepare(
-      `UPDATE pedidos_cliente
-       SET estado = 'rechazado', motivo_rechazo = 'El cliente fue dado de baja', resuelto_por = ?,
-           resuelto_en = CURRENT_TIMESTAMP, actualizado_en = CURRENT_TIMESTAMP
-       WHERE cliente_empresa_id = ? AND estado = 'pendiente'`
-    ).run(usuarioId ?? null, id);
-    db.prepare('UPDATE clientes_empresa SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
-    db.exec('COMMIT');
-  } catch (err) {
-    db.exec('ROLLBACK');
-    throw err;
-  }
+export async function eliminarClienteEmpresa(id, { usuarioId } = {}) {
+  await db.transaction(async () => {
+    await obtenerClienteActivo(id);
+    await db
+      .prepare(
+        `UPDATE pedidos_cliente
+         SET estado = 'rechazado', motivo_rechazo = 'El cliente fue dado de baja', resuelto_por = ?,
+             resuelto_en = CURRENT_TIMESTAMP, actualizado_en = CURRENT_TIMESTAMP
+         WHERE cliente_empresa_id = ? AND estado = 'pendiente'`
+      )
+      .run(usuarioId ?? null, id);
+    await db.prepare('UPDATE clientes_empresa SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+  });
 }
 
-export function listarMovimientos(clienteEmpresaId) {
-  obtenerClienteActivo(clienteEmpresaId);
-  return { saldo: saldoDe(clienteEmpresaId), movimientos: movimientosDe(clienteEmpresaId) };
+export async function listarMovimientos(clienteEmpresaId) {
+  await obtenerClienteActivo(clienteEmpresaId);
+  return { saldo: await saldoDe(clienteEmpresaId), movimientos: await movimientosDe(clienteEmpresaId) };
 }
 
-// Zona horaria de negocio para armar el resumen: SQLite guarda CURRENT_TIMESTAMP
-// en UTC, y un rango "del 1 al 30" tiene que respetar el día calendario del
-// cliente (un cargo de las 22:00 no es del día siguiente). Argentina no tiene
-// horario de verano, así que la zona es fija.
+// Zona horaria de negocio para armar el resumen: la base guarda los
+// timestamps en UTC, y un rango "del 1 al 30" tiene que respetar el día
+// calendario del cliente (un cargo de las 22:00 no es del día siguiente).
+// Argentina no tiene horario de verano, así que la zona es fija.
 const ZONA_NEGOCIO = 'America/Argentina/Buenos_Aires';
 const FORMATO_DIA = new Intl.DateTimeFormat('en-CA', {
   timeZone: ZONA_NEGOCIO,
@@ -262,15 +267,15 @@ function validarFechaOpcional(valor, campo) {
 // Datos del resumen de cuenta (PDF). Sin desde/hasta = toda la historia. Con
 // rango: el saldo anterior es todo lo acumulado ANTES de `desde`, y los
 // movimientos son solo los del período, cada uno con su saldo corrido.
-export function armarResumenCuenta(clienteEmpresaId, { desde, hasta } = {}) {
-  const cliente = obtenerClienteActivo(clienteEmpresaId);
+export async function armarResumenCuenta(clienteEmpresaId, { desde, hasta } = {}) {
+  const cliente = await obtenerClienteActivo(clienteEmpresaId);
   const desdeOk = validarFechaOpcional(desde, 'desde');
   const hastaOk = validarFechaOpcional(hasta, 'hasta');
   if (desdeOk && hastaOk && desdeOk > hastaOk) {
     throw new ApiError(400, 'La fecha "desde" no puede ser posterior a "hasta"');
   }
 
-  const todos = movimientosDe(clienteEmpresaId).reverse(); // cronológico: más viejo primero
+  const todos = (await movimientosDe(clienteEmpresaId)).reverse(); // cronológico: más viejo primero
   let saldoAnterior = 0;
   const delPeriodo = [];
   for (const m of todos) {
@@ -312,15 +317,19 @@ export { diaLocal, ZONA_NEGOCIO };
 // Pago manual (abono del cliente) -- se guarda negativo porque monto ya trae
 // el efecto real sobre el saldo (Docs/Modelo-de-Datos.md): un pago siempre
 // reduce lo que el cliente debe.
-export function registrarPago(clienteEmpresaId, { monto, descripcion }, { usuarioId }) {
-  obtenerClienteActivo(clienteEmpresaId);
+export async function registrarPago(clienteEmpresaId, { monto, descripcion }, { usuarioId }) {
   const montoValido = validarMontoPositivo(monto, 'monto');
   const desc = validarString(descripcion, 'descripcion', { requerido: false, maxLength: MAX_TEXTO_LARGO });
 
-  db.prepare(
-    `INSERT INTO cuenta_corriente_movimientos (cliente_empresa_id, tipo, monto, descripcion, usuario_id)
-     VALUES (?, 'PAGO', ?, ?, ?)`
-  ).run(clienteEmpresaId, -montoValido, desc, usuarioId);
+  await db.transaction(async () => {
+    await obtenerClienteActivo(clienteEmpresaId);
+    await db
+      .prepare(
+        `INSERT INTO cuenta_corriente_movimientos (cliente_empresa_id, tipo, monto, descripcion, usuario_id)
+         VALUES (?, 'PAGO', ?, ?, ?)`
+      )
+      .run(clienteEmpresaId, -montoValido, desc, usuarioId);
+  });
 
   return listarMovimientos(clienteEmpresaId);
 }
@@ -328,36 +337,44 @@ export function registrarPago(clienteEmpresaId, { monto, descripcion }, { usuari
 // Ajuste manual (corrección) -- signo libre, a diferencia del pago. Para
 // arreglar un error de carga sin editar ni borrar ningún movimiento anterior
 // (ledger insert-only).
-export function registrarAjuste(clienteEmpresaId, { monto, descripcion }, { usuarioId }) {
-  obtenerClienteActivo(clienteEmpresaId);
+export async function registrarAjuste(clienteEmpresaId, { monto, descripcion }, { usuarioId }) {
   const montoValido = validarMontoConSigno(monto, 'monto');
   const desc = validarString(descripcion, 'descripcion', { maxLength: MAX_TEXTO_LARGO });
 
-  db.prepare(
-    `INSERT INTO cuenta_corriente_movimientos (cliente_empresa_id, tipo, monto, descripcion, usuario_id)
-     VALUES (?, 'AJUSTE', ?, ?, ?)`
-  ).run(clienteEmpresaId, montoValido, desc, usuarioId);
+  await db.transaction(async () => {
+    await obtenerClienteActivo(clienteEmpresaId);
+    await db
+      .prepare(
+        `INSERT INTO cuenta_corriente_movimientos (cliente_empresa_id, tipo, monto, descripcion, usuario_id)
+         VALUES (?, 'AJUSTE', ?, ?, ?)`
+      )
+      .run(clienteEmpresaId, montoValido, desc, usuarioId);
+  });
 
   return listarMovimientos(clienteEmpresaId);
 }
 
 // -- Usadas por ventas.service.js, no exponen ruta propia --
 
-export function existeClienteActivo(id) {
-  const fila = db.prepare('SELECT id FROM clientes_empresa WHERE id = ? AND eliminado_en IS NULL').get(id);
+export async function existeClienteActivo(id) {
+  const fila = await db.prepare('SELECT id FROM clientes_empresa WHERE id = ? AND eliminado_en IS NULL').get(id);
   return Boolean(fila);
 }
 
-export function registrarCargoPorVenta(clienteEmpresaId, { monto, ventaId, usuarioId }) {
-  db.prepare(
-    `INSERT INTO cuenta_corriente_movimientos (cliente_empresa_id, tipo, monto, descripcion, venta_id, usuario_id)
-     VALUES (?, 'CARGO', ?, ?, ?, ?)`
-  ).run(clienteEmpresaId, monto, `Venta #${ventaId}`, ventaId, usuarioId);
+export async function registrarCargoPorVenta(clienteEmpresaId, { monto, ventaId, usuarioId }) {
+  await db
+    .prepare(
+      `INSERT INTO cuenta_corriente_movimientos (cliente_empresa_id, tipo, monto, descripcion, venta_id, usuario_id)
+       VALUES (?, 'CARGO', ?, ?, ?, ?)`
+    )
+    .run(clienteEmpresaId, monto, `Venta #${ventaId}`, ventaId, usuarioId);
 }
 
-export function registrarAjustePorAnulacion(clienteEmpresaId, { monto, ventaId, usuarioId }) {
-  db.prepare(
-    `INSERT INTO cuenta_corriente_movimientos (cliente_empresa_id, tipo, monto, descripcion, venta_id, usuario_id)
-     VALUES (?, 'AJUSTE', ?, ?, ?, ?)`
-  ).run(clienteEmpresaId, monto, `Reversión por anulación de venta #${ventaId}`, ventaId, usuarioId);
+export async function registrarAjustePorAnulacion(clienteEmpresaId, { monto, ventaId, usuarioId }) {
+  await db
+    .prepare(
+      `INSERT INTO cuenta_corriente_movimientos (cliente_empresa_id, tipo, monto, descripcion, venta_id, usuario_id)
+       VALUES (?, 'AJUSTE', ?, ?, ?, ?)`
+    )
+    .run(clienteEmpresaId, monto, `Reversión por anulación de venta #${ventaId}`, ventaId, usuarioId);
 }

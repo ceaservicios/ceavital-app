@@ -1,8 +1,8 @@
 import * as vencimientosService from '../services/vencimientos.service.js';
 
-export function obtenerVencimientosController(req, res) {
+export async function obtenerVencimientosController(req, res) {
   res.json({
-    por_vencer: vencimientosService.listarPorVencer(),
-    vencidos: vencimientosService.listarVencidos(),
+    por_vencer: await vencimientosService.listarPorVencer(),
+    vencidos: await vencimientosService.listarVencidos(),
   });
 }

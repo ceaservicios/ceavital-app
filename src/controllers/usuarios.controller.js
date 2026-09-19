@@ -7,13 +7,13 @@ function parsearId(valor, campo = 'id') {
   return id;
 }
 
-export function listarUsuariosController(req, res) {
-  res.json({ usuarios: usuariosService.listarUsuarios() });
+export async function listarUsuariosController(req, res) {
+  res.json({ usuarios: await usuariosService.listarUsuarios() });
 }
 
-export function obtenerUsuarioController(req, res) {
+export async function obtenerUsuarioController(req, res) {
   const id = parsearId(req.params.id);
-  res.json(usuariosService.obtenerUsuario(id));
+  res.json(await usuariosService.obtenerUsuario(id));
 }
 
 export async function crearUsuarioController(req, res) {
@@ -27,8 +27,8 @@ export async function editarUsuarioController(req, res) {
   res.json(usuario);
 }
 
-export function eliminarUsuarioController(req, res) {
+export async function eliminarUsuarioController(req, res) {
   const id = parsearId(req.params.id);
-  usuariosService.eliminarUsuario(id);
+  await usuariosService.eliminarUsuario(id);
   res.status(204).send();
 }

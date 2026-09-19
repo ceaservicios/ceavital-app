@@ -1,9 +1,9 @@
 import * as configuracionService from '../services/configuracion.service.js';
 
-export function obtenerConfiguracionController(req, res) {
-  res.json(configuracionService.obtenerConfiguracionBackups());
+export async function obtenerConfiguracionController(req, res) {
+  res.json(await configuracionService.obtenerConfiguracionBackups());
 }
 
-export function editarConfiguracionController(req, res) {
-  res.json(configuracionService.editarConfiguracionBackups(req.body || {}));
+export async function editarConfiguracionController(req, res) {
+  res.json(await configuracionService.editarConfiguracionBackups(req.body || {}));
 }

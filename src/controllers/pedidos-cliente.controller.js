@@ -7,18 +7,18 @@ function parsearId(valor) {
   return id;
 }
 
-export function listarPedidosController(req, res) {
-  res.json({ pedidos: pedidosService.listarPedidos({ estado: req.query.estado }) });
+export async function listarPedidosController(req, res) {
+  res.json({ pedidos: await pedidosService.listarPedidos({ estado: req.query.estado }) });
 }
 
-export function obtenerPedidoController(req, res) {
-  res.json(pedidosService.obtenerPedido(parsearId(req.params.id)));
+export async function obtenerPedidoController(req, res) {
+  res.json(await pedidosService.obtenerPedido(parsearId(req.params.id)));
 }
 
-export function aprobarPedidoController(req, res) {
-  res.json(pedidosService.aprobarPedido(parsearId(req.params.id), { usuarioId: req.sesion.usuario_id }));
+export async function aprobarPedidoController(req, res) {
+  res.json(await pedidosService.aprobarPedido(parsearId(req.params.id), { usuarioId: req.sesion.usuario_id }));
 }
 
-export function rechazarPedidoController(req, res) {
-  res.json(pedidosService.rechazarPedido(parsearId(req.params.id), req.body || {}, { usuarioId: req.sesion.usuario_id }));
+export async function rechazarPedidoController(req, res) {
+  res.json(await pedidosService.rechazarPedido(parsearId(req.params.id), req.body || {}, { usuarioId: req.sesion.usuario_id }));
 }

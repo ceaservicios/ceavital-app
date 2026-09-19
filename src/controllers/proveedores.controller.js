@@ -7,59 +7,59 @@ function parsearId(valor, campo = 'id') {
   return id;
 }
 
-export function listarProveedoresController(req, res) {
-  res.json({ proveedores: proveedoresService.listarProveedores({ buscar: req.query.q }) });
+export async function listarProveedoresController(req, res) {
+  res.json({ proveedores: await proveedoresService.listarProveedores({ buscar: req.query.q }) });
 }
 
-export function obtenerProveedorController(req, res) {
+export async function obtenerProveedorController(req, res) {
   const id = parsearId(req.params.id);
-  res.json(proveedoresService.obtenerProveedor(id));
+  res.json(await proveedoresService.obtenerProveedor(id));
 }
 
-export function crearProveedorController(req, res) {
-  const proveedor = proveedoresService.crearProveedor(req.body || {});
+export async function crearProveedorController(req, res) {
+  const proveedor = await proveedoresService.crearProveedor(req.body || {});
   res.status(201).json(proveedor);
 }
 
-export function editarProveedorController(req, res) {
+export async function editarProveedorController(req, res) {
   const id = parsearId(req.params.id);
-  res.json(proveedoresService.editarProveedor(id, req.body || {}));
+  res.json(await proveedoresService.editarProveedor(id, req.body || {}));
 }
 
-export function eliminarProveedorController(req, res) {
+export async function eliminarProveedorController(req, res) {
   const id = parsearId(req.params.id);
-  proveedoresService.eliminarProveedor(id);
+  await proveedoresService.eliminarProveedor(id);
   res.status(204).send();
 }
 
-export function listarPedidosController(req, res) {
+export async function listarPedidosController(req, res) {
   const proveedorId = parsearId(req.params.id, 'proveedor_id');
-  res.json({ pedidos: proveedoresService.listarPedidos(proveedorId) });
+  res.json({ pedidos: await proveedoresService.listarPedidos(proveedorId) });
 }
 
-export function obtenerPedidoController(req, res) {
+export async function obtenerPedidoController(req, res) {
   const proveedorId = parsearId(req.params.id, 'proveedor_id');
   const pedidoId = parsearId(req.params.pedidoId, 'pedido_id');
-  res.json(proveedoresService.obtenerPedido(proveedorId, pedidoId));
+  res.json(await proveedoresService.obtenerPedido(proveedorId, pedidoId));
 }
 
-export function crearPedidoController(req, res) {
+export async function crearPedidoController(req, res) {
   const proveedorId = parsearId(req.params.id, 'proveedor_id');
-  const pedido = proveedoresService.crearPedido(proveedorId, req.body || {}, {
+  const pedido = await proveedoresService.crearPedido(proveedorId, req.body || {}, {
     usuarioId: req.sesion.usuario_id,
   });
   res.status(201).json(pedido);
 }
 
-export function editarPedidoController(req, res) {
+export async function editarPedidoController(req, res) {
   const proveedorId = parsearId(req.params.id, 'proveedor_id');
   const pedidoId = parsearId(req.params.pedidoId, 'pedido_id');
-  res.json(proveedoresService.editarPedido(proveedorId, pedidoId, req.body || {}));
+  res.json(await proveedoresService.editarPedido(proveedorId, pedidoId, req.body || {}));
 }
 
-export function eliminarPedidoController(req, res) {
+export async function eliminarPedidoController(req, res) {
   const proveedorId = parsearId(req.params.id, 'proveedor_id');
   const pedidoId = parsearId(req.params.pedidoId, 'pedido_id');
-  proveedoresService.eliminarPedido(proveedorId, pedidoId);
+  await proveedoresService.eliminarPedido(proveedorId, pedidoId);
   res.status(204).send();
 }

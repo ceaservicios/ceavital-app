@@ -15,23 +15,28 @@ async function main() {
     process.exit(1);
   }
 
-  runMigrations();
+  await runMigrations();
 
-  const existente = db
+  const existente = await db
     .prepare(`SELECT id FROM usuarios WHERE usuario = ? AND eliminado_en IS NULL`)
     .get(usuario);
 
   if (existente) {
     console.error(`Ya existe un usuario activo con login "${usuario}".`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const passwordHash = await hashPassword(password);
-  db.prepare(
-    `INSERT INTO usuarios (nombre, usuario, password_hash, rol) VALUES (?, ?, ?, 'admin')`
-  ).run(nombre, usuario, passwordHash);
+  await db
+    .prepare(`INSERT INTO usuarios (nombre, usuario, password_hash, rol) VALUES (?, ?, ?, 'admin')`)
+    .run(nombre, usuario, passwordHash);
 
   console.log(`Usuario admin "${usuario}" creado correctamente.`);
 }
 
-main();
+try {
+  await main();
+} finally {
+  await db.cerrar();
+}

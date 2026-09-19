@@ -30,13 +30,13 @@ export async function loginController(req, res) {
   }
 }
 
-export function logoutController(req, res) {
-  logoutService(req.sesion.id);
+export async function logoutController(req, res) {
+  await logoutService(req.sesion.id);
   res.clearCookie('sesion_token');
   res.json({ ok: true });
 }
 
-export function meController(req, res) {
+export async function meController(req, res) {
   res.json({
     usuarioId: req.sesion.usuario_id,
     usuario: req.sesion.usuario,

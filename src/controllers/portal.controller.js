@@ -36,8 +36,8 @@ export async function loginPortalController(req, res) {
   }
 }
 
-export function logoutPortalController(req, res) {
-  cerrarSesionCliente(req.cliente.sesionId, 'logout');
+export async function logoutPortalController(req, res) {
+  await cerrarSesionCliente(req.cliente.sesionId, 'logout');
   res.clearCookie('portal_token');
   res.json({ ok: true });
 }
@@ -55,8 +55,8 @@ function soloParaElCliente(movimiento) {
   };
 }
 
-export function cuentaPortalController(req, res) {
-  const completo = obtenerClienteEmpresa(req.cliente.id);
+export async function cuentaPortalController(req, res) {
+  const completo = await obtenerClienteEmpresa(req.cliente.id);
   const movimientos = completo.movimientos.map(soloParaElCliente);
   res.json({
     cliente: {
@@ -72,33 +72,33 @@ export function cuentaPortalController(req, res) {
   });
 }
 
-export function resumenPortalController(req, res) {
-  const resumen = armarResumenCuenta(req.cliente.id, { desde: req.query.desde, hasta: req.query.hasta });
-  enviarResumenCuentaPdf(res, resumen);
+export async function resumenPortalController(req, res) {
+  const resumen = await armarResumenCuenta(req.cliente.id, { desde: req.query.desde, hasta: req.query.hasta });
+  await enviarResumenCuentaPdf(res, resumen);
 }
 
 // Comprar desde el portal (B2B Fase 2). Todo se resuelve contra el cliente de
 // la sesión (req.cliente.id): ninguna de estas rutas acepta el id de un cliente.
-export function catalogoPortalController(req, res) {
-  res.json({ productos: catalogoConDisponibilidad() });
+export async function catalogoPortalController(req, res) {
+  res.json({ productos: await catalogoConDisponibilidad() });
 }
 
-export function listarPedidosPortalController(req, res) {
-  res.json({ pedidos: listarPedidosDelCliente(req.cliente.id) });
+export async function listarPedidosPortalController(req, res) {
+  res.json({ pedidos: await listarPedidosDelCliente(req.cliente.id) });
 }
 
-export function crearPedidoPortalController(req, res) {
-  res.status(201).json(crearPedidoDelCliente(req.cliente.id, req.body || {}));
+export async function crearPedidoPortalController(req, res) {
+  res.status(201).json(await crearPedidoDelCliente(req.cliente.id, req.body || {}));
 }
 
-export function obtenerPedidoPortalController(req, res) {
+export async function obtenerPedidoPortalController(req, res) {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, 'id inválido');
-  res.json(pedidoDelCliente(req.cliente.id, id));
+  res.json(await pedidoDelCliente(req.cliente.id, id));
 }
 
-export function cancelarPedidoPortalController(req, res) {
+export async function cancelarPedidoPortalController(req, res) {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, 'id inválido');
-  res.json(cancelarPedidoDelCliente(req.cliente.id, id));
+  res.json(await cancelarPedidoDelCliente(req.cliente.id, id));
 }

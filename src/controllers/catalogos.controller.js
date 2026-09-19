@@ -9,17 +9,17 @@ function parsearId(valor) {
 
 function crearControladorCatalogo(servicio) {
   return {
-    listar(req, res) {
-      res.json({ items: servicio.listar() });
+    async listar(req, res) {
+      res.json({ items: await servicio.listar() });
     },
-    crear(req, res) {
-      res.status(201).json(servicio.crear(req.body || {}));
+    async crear(req, res) {
+      res.status(201).json(await servicio.crear(req.body || {}));
     },
-    editar(req, res) {
-      res.json(servicio.editar(parsearId(req.params.id), req.body || {}));
+    async editar(req, res) {
+      res.json(await servicio.editar(parsearId(req.params.id), req.body || {}));
     },
-    eliminar(req, res) {
-      servicio.eliminar(parsearId(req.params.id));
+    async eliminar(req, res) {
+      await servicio.eliminar(parsearId(req.params.id));
       res.status(204).send();
     },
   };

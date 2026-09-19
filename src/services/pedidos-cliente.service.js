@@ -75,13 +75,13 @@ const SELECT_PEDIDO = `
   LEFT JOIN usuarios u ON u.id = pc.resuelto_por
 `;
 
-function pedidoConItems(id, { clienteId = null } = {}) {
-  const pedido = db.prepare(`${SELECT_PEDIDO} WHERE pc.id = ?`).get(id);
+async function pedidoConItems(id, { clienteId = null } = {}) {
+  const pedido = await db.prepare(`${SELECT_PEDIDO} WHERE pc.id = ?`).get(id);
   // Un cliente que pide un pedido ajeno recibe el mismo 404 que uno inexistente.
   if (!pedido || (clienteId !== null && pedido.cliente_empresa_id !== clienteId)) {
     throw new ApiError(404, 'Pedido no encontrado');
   }
-  return { ...pedido, items: itemsDe(id) };
+  return { ...pedido, items: await itemsDe(id) };
 }
 
 // -- Lado del negocio (Admin + Encargado) --
@@ -92,28 +92,26 @@ export function listarPedidos({ estado } = {}) {
   if (estado !== undefined && !ESTADOS.includes(estado)) {
     throw new ApiError(400, `estado tiene que ser uno de: ${ESTADOS.join(', ')}`);
   }
-  const filas = estado
+  return estado
     ? db.prepare(`${SELECT_PEDIDO} WHERE pc.estado = ? ORDER BY pc.id DESC`).all(estado)
     : db.prepare(`${SELECT_PEDIDO} ORDER BY pc.id DESC`).all();
-  return filas;
 }
 
 export function obtenerPedido(id) {
   return pedidoConItems(id);
 }
 
-export function aprobarPedido(id, { usuarioId }) {
-  db.exec('BEGIN');
-  try {
-    const pedido = db.prepare('SELECT id, estado, cliente_empresa_id FROM pedidos_cliente WHERE id = ?').get(id);
+export async function aprobarPedido(id, { usuarioId }) {
+  const ventaId = await db.transaction(async () => {
+    const pedido = await db.prepare('SELECT id, estado, cliente_empresa_id FROM pedidos_cliente WHERE id = ?').get(id);
     if (!pedido) throw new ApiError(404, 'Pedido no encontrado');
     if (pedido.estado !== 'pendiente') throw new ApiError(409, `El pedido ya está ${pedido.estado}`);
-    if (!existeClienteActivo(pedido.cliente_empresa_id)) {
+    if (!(await existeClienteActivo(pedido.cliente_empresa_id))) {
       throw new ApiError(409, 'El cliente fue dado de baja: no se puede aprobar el pedido');
     }
 
-    const items = itemsDe(id);
-    const ventaId = registrarVentaEnTransaccion(
+    const items = await itemsDe(id);
+    const idVenta = await registrarVentaEnTransaccion(
       {
         medio_pago: 'cta_cte',
         cliente_empresa_id: pedido.cliente_empresa_id,
@@ -127,49 +125,53 @@ export function aprobarPedido(id, { usuarioId }) {
       }
     );
 
-    db.prepare(
-      `UPDATE pedidos_cliente
-       SET estado = 'aprobado', venta_id = ?, resuelto_por = ?, resuelto_en = CURRENT_TIMESTAMP,
-           actualizado_en = CURRENT_TIMESTAMP
-       WHERE id = ?`
-    ).run(ventaId, usuarioId, id);
+    await db
+      .prepare(
+        `UPDATE pedidos_cliente
+         SET estado = 'aprobado', venta_id = ?, resuelto_por = ?, resuelto_en = CURRENT_TIMESTAMP,
+             actualizado_en = CURRENT_TIMESTAMP
+         WHERE id = ?`
+      )
+      .run(idVenta, usuarioId, id);
 
-    db.exec('COMMIT');
-    return { pedido: pedidoConItems(id), venta: obtenerVentaConItems(ventaId) };
-  } catch (err) {
-    db.exec('ROLLBACK');
-    throw err;
-  }
+    return idVenta;
+  });
+
+  return { pedido: await pedidoConItems(id), venta: await obtenerVentaConItems(ventaId) };
 }
 
-export function rechazarPedido(id, { motivo }, { usuarioId }) {
+export async function rechazarPedido(id, { motivo }, { usuarioId }) {
   const motivoLimpio = textoOpcional(motivo, 'motivo');
   if (!motivoLimpio) throw new ApiError(400, 'El motivo del rechazo es requerido (lo ve el cliente)');
 
-  const pedido = db.prepare('SELECT id, estado FROM pedidos_cliente WHERE id = ?').get(id);
-  if (!pedido) throw new ApiError(404, 'Pedido no encontrado');
-  if (pedido.estado !== 'pendiente') throw new ApiError(409, `El pedido ya está ${pedido.estado}`);
+  await db.transaction(async () => {
+    const pedido = await db.prepare('SELECT id, estado FROM pedidos_cliente WHERE id = ?').get(id);
+    if (!pedido) throw new ApiError(404, 'Pedido no encontrado');
+    if (pedido.estado !== 'pendiente') throw new ApiError(409, `El pedido ya está ${pedido.estado}`);
 
-  db.prepare(
-    `UPDATE pedidos_cliente
-     SET estado = 'rechazado', motivo_rechazo = ?, resuelto_por = ?, resuelto_en = CURRENT_TIMESTAMP,
-         actualizado_en = CURRENT_TIMESTAMP
-     WHERE id = ?`
-  ).run(motivoLimpio, usuarioId, id);
+    await db
+      .prepare(
+        `UPDATE pedidos_cliente
+         SET estado = 'rechazado', motivo_rechazo = ?, resuelto_por = ?, resuelto_en = CURRENT_TIMESTAMP,
+             actualizado_en = CURRENT_TIMESTAMP
+         WHERE id = ?`
+      )
+      .run(motivoLimpio, usuarioId, id);
+  });
+
   return pedidoConItems(id);
 }
 
 // -- Lado del cliente (portal). Todo se resuelve contra el cliente de la
 // sesión, nunca contra un id que venga del pedido.
 
-export function crearPedidoDelCliente(clienteId, { items, observaciones }) {
+export async function crearPedidoDelCliente(clienteId, { items, observaciones }) {
   const lineas = validarItems(items);
   const obs = textoOpcional(observaciones, 'observaciones');
 
-  db.exec('BEGIN');
-  try {
+  const pedidoId = await db.transaction(async () => {
     // Sin esto, un cliente podría apartar todo el stock con pedidos sin resolver.
-    const { pendientes } = db
+    const { pendientes } = await db
       .prepare(`SELECT COUNT(*) AS pendientes FROM pedidos_cliente WHERE cliente_empresa_id = ? AND estado = 'pendiente'`)
       .get(clienteId);
     if (pendientes >= MAX_PENDIENTES_POR_CLIENTE) {
@@ -180,38 +182,39 @@ export function crearPedidoDelCliente(clienteId, { items, observaciones }) {
     }
 
     let total = 0;
-    const armadas = lineas.map(({ producto_id, cantidad }) => {
-      const producto = db
+    const armadas = [];
+    for (const { producto_id, cantidad } of lineas) {
+      const producto = await db
         .prepare('SELECT id, nombre, precio_venta FROM productos WHERE id = ? AND eliminado_en IS NULL')
         .get(producto_id);
       if (!producto) throw new ApiError(404, `El producto ${producto_id} ya no está disponible`);
 
-      const disponible = stockDisponible(producto_id);
+      const disponible = await stockDisponible(producto_id);
       if (cantidad > disponible) {
         throw new ApiError(409, `No hay stock suficiente de "${producto.nombre}" (disponible: ${disponible})`);
       }
 
       const subtotal = cantidad * producto.precio_venta;
       total += subtotal;
-      return { producto_id, cantidad, precio_unitario: producto.precio_venta, subtotal };
-    });
+      armadas.push({ producto_id, cantidad, precio_unitario: producto.precio_venta, subtotal });
+    }
 
-    const { lastInsertRowid: pedidoId } = db
-      .prepare('INSERT INTO pedidos_cliente (cliente_empresa_id, total, observaciones) VALUES (?, ?, ?)')
+    const { lastInsertRowid } = await db
+      .prepare('INSERT INTO pedidos_cliente (cliente_empresa_id, total, observaciones) VALUES (?, ?, ?) RETURNING id')
       .run(clienteId, total, obs);
 
     const insertarItem = db.prepare(
       `INSERT INTO pedido_cliente_items (pedido_id, producto_id, cantidad, precio_unitario, subtotal)
        VALUES (?, ?, ?, ?, ?)`
     );
-    for (const l of armadas) insertarItem.run(pedidoId, l.producto_id, l.cantidad, l.precio_unitario, l.subtotal);
+    for (const l of armadas) {
+      await insertarItem.run(lastInsertRowid, l.producto_id, l.cantidad, l.precio_unitario, l.subtotal);
+    }
 
-    db.exec('COMMIT');
-    return pedidoDelCliente(clienteId, pedidoId);
-  } catch (err) {
-    db.exec('ROLLBACK');
-    throw err;
-  }
+    return lastInsertRowid;
+  });
+
+  return pedidoDelCliente(clienteId, pedidoId);
 }
 
 // Lo que ve el cliente de un pedido: sin datos internos (quién lo resolvió, id de venta).
@@ -236,26 +239,29 @@ function soloParaElCliente(pedido) {
   };
 }
 
-export function listarPedidosDelCliente(clienteId) {
-  return db
-    .prepare(`${SELECT_PEDIDO} WHERE pc.cliente_empresa_id = ? ORDER BY pc.id DESC`)
-    .all(clienteId)
-    .map(soloParaElCliente);
+export async function listarPedidosDelCliente(clienteId) {
+  const filas = await db.prepare(`${SELECT_PEDIDO} WHERE pc.cliente_empresa_id = ? ORDER BY pc.id DESC`).all(clienteId);
+  return filas.map(soloParaElCliente);
 }
 
-export function pedidoDelCliente(clienteId, id) {
-  return soloParaElCliente(pedidoConItems(id, { clienteId }));
+export async function pedidoDelCliente(clienteId, id) {
+  return soloParaElCliente(await pedidoConItems(id, { clienteId }));
 }
 
-export function cancelarPedidoDelCliente(clienteId, id) {
-  const pedido = db.prepare('SELECT id, estado, cliente_empresa_id FROM pedidos_cliente WHERE id = ?').get(id);
-  if (!pedido || pedido.cliente_empresa_id !== clienteId) throw new ApiError(404, 'Pedido no encontrado');
-  if (pedido.estado !== 'pendiente') throw new ApiError(409, `El pedido ya está ${pedido.estado}: no se puede cancelar`);
+export async function cancelarPedidoDelCliente(clienteId, id) {
+  await db.transaction(async () => {
+    const pedido = await db.prepare('SELECT id, estado, cliente_empresa_id FROM pedidos_cliente WHERE id = ?').get(id);
+    if (!pedido || pedido.cliente_empresa_id !== clienteId) throw new ApiError(404, 'Pedido no encontrado');
+    if (pedido.estado !== 'pendiente') throw new ApiError(409, `El pedido ya está ${pedido.estado}: no se puede cancelar`);
 
-  db.prepare(
-    `UPDATE pedidos_cliente
-     SET estado = 'cancelado', resuelto_en = CURRENT_TIMESTAMP, actualizado_en = CURRENT_TIMESTAMP
-     WHERE id = ?`
-  ).run(id);
+    await db
+      .prepare(
+        `UPDATE pedidos_cliente
+         SET estado = 'cancelado', resuelto_en = CURRENT_TIMESTAMP, actualizado_en = CURRENT_TIMESTAMP
+         WHERE id = ?`
+      )
+      .run(id);
+  });
+
   return pedidoDelCliente(clienteId, id);
 }

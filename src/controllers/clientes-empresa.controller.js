@@ -10,8 +10,8 @@ function parsearId(valor, campo = 'id') {
   return id;
 }
 
-export function listarClientesEmpresaController(req, res) {
-  const clientes = clientesEmpresaService.listarClientesEmpresa({
+export async function listarClientesEmpresaController(req, res) {
+  const clientes = await clientesEmpresaService.listarClientesEmpresa({
     buscar: req.query.q,
     incluirSaldo: req.sesion.rol !== 'cajero',
   });
@@ -24,43 +24,43 @@ export function listarClientesEmpresaController(req, res) {
   res.json({ clientes });
 }
 
-export function obtenerClienteEmpresaController(req, res) {
+export async function obtenerClienteEmpresaController(req, res) {
   const id = parsearId(req.params.id);
-  res.json(clientesEmpresaService.obtenerClienteEmpresa(id));
+  res.json(await clientesEmpresaService.obtenerClienteEmpresa(id));
 }
 
-export function crearClienteEmpresaController(req, res) {
-  const cliente = clientesEmpresaService.crearClienteEmpresa(req.body || {});
+export async function crearClienteEmpresaController(req, res) {
+  const cliente = await clientesEmpresaService.crearClienteEmpresa(req.body || {});
   res.status(201).json(cliente);
 }
 
-export function editarClienteEmpresaController(req, res) {
+export async function editarClienteEmpresaController(req, res) {
   const id = parsearId(req.params.id);
-  res.json(clientesEmpresaService.editarClienteEmpresa(id, req.body || {}));
+  res.json(await clientesEmpresaService.editarClienteEmpresa(id, req.body || {}));
 }
 
-export function eliminarClienteEmpresaController(req, res) {
+export async function eliminarClienteEmpresaController(req, res) {
   const id = parsearId(req.params.id);
-  clientesEmpresaService.eliminarClienteEmpresa(id, { usuarioId: req.sesion.usuario_id });
+  await clientesEmpresaService.eliminarClienteEmpresa(id, { usuarioId: req.sesion.usuario_id });
   res.status(204).send();
 }
 
-export function listarMovimientosController(req, res) {
+export async function listarMovimientosController(req, res) {
   const id = parsearId(req.params.id, 'cliente_empresa_id');
-  res.json(clientesEmpresaService.listarMovimientos(id));
+  res.json(await clientesEmpresaService.listarMovimientos(id));
 }
 
-export function descargarResumenCuentaController(req, res) {
+export async function descargarResumenCuentaController(req, res) {
   const id = parsearId(req.params.id, 'cliente_empresa_id');
   // armarResumenCuenta valida las fechas y lanza ApiError(400) antes de que se
   // escriba nada en la respuesta.
-  const resumen = clientesEmpresaService.armarResumenCuenta(id, { desde: req.query.desde, hasta: req.query.hasta });
-  enviarResumenCuentaPdf(res, resumen);
+  const resumen = await clientesEmpresaService.armarResumenCuenta(id, { desde: req.query.desde, hasta: req.query.hasta });
+  await enviarResumenCuentaPdf(res, resumen);
 }
 
-export function obtenerAccesoController(req, res) {
+export async function obtenerAccesoController(req, res) {
   const id = parsearId(req.params.id, 'cliente_empresa_id');
-  res.json(portalService.obtenerAcceso(id));
+  res.json(await portalService.obtenerAcceso(id));
 }
 
 // async (hashea la contraseña): se registra con asyncHandler en las rutas.
@@ -86,14 +86,14 @@ export async function enviarAccesoController(req, res) {
   res.json(resultado);
 }
 
-export function registrarPagoController(req, res) {
+export async function registrarPagoController(req, res) {
   const id = parsearId(req.params.id, 'cliente_empresa_id');
-  const resultado = clientesEmpresaService.registrarPago(id, req.body || {}, { usuarioId: req.sesion.usuario_id });
+  const resultado = await clientesEmpresaService.registrarPago(id, req.body || {}, { usuarioId: req.sesion.usuario_id });
   res.status(201).json(resultado);
 }
 
-export function registrarAjusteController(req, res) {
+export async function registrarAjusteController(req, res) {
   const id = parsearId(req.params.id, 'cliente_empresa_id');
-  const resultado = clientesEmpresaService.registrarAjuste(id, req.body || {}, { usuarioId: req.sesion.usuario_id });
+  const resultado = await clientesEmpresaService.registrarAjuste(id, req.body || {}, { usuarioId: req.sesion.usuario_id });
   res.status(201).json(resultado);
 }

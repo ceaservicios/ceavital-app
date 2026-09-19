@@ -35,16 +35,16 @@ function validarPassword(valor) {
   return valor;
 }
 
-function obtenerUsuarioActivo(id) {
-  const usuario = db
+async function obtenerUsuarioActivo(id) {
+  const usuario = await db
     .prepare(`SELECT ${COLUMNAS_SEGURAS} FROM usuarios WHERE id = ? AND eliminado_en IS NULL`)
     .get(id);
   if (!usuario) throw new ApiError(404, 'Usuario no encontrado');
   return usuario;
 }
 
-function verificarLoginLibre(login, excluirId = null) {
-  const existente = db
+async function verificarLoginLibre(login, excluirId = null) {
+  const existente = await db
     .prepare(`SELECT id FROM usuarios WHERE usuario = ? AND eliminado_en IS NULL AND id != ?`)
     .get(login, excluirId ?? -1);
   if (existente) throw new ApiError(409, 'Ya existe un usuario activo con ese login');
@@ -56,20 +56,21 @@ function verificarLoginLibre(login, excluirId = null) {
 // y la recuperación de contraseña del Admin exige acceso físico a la PC
 // servidor -- si además no queda ninguna fila con rol admin, no hay forma de
 // recuperar el acceso administrativo sin tocar la base a mano).
-function contarAdminsActivos(excluirId = null) {
-  return db
+async function contarAdminsActivos(excluirId = null) {
+  const fila = await db
     .prepare(`SELECT COUNT(*) AS c FROM usuarios WHERE rol = 'admin' AND eliminado_en IS NULL AND id != ?`)
-    .get(excluirId ?? -1).c;
+    .get(excluirId ?? -1);
+  return fila.c;
 }
 
 // Cambiar el rol o la contraseña de un usuario es seguridad-sensible: si tiene
 // una sesión activa, cerrarla para que el cambio rija de inmediato (si no,
 // podría seguir operando con el rol/contraseña viejos hasta 30 min de timeout).
-function cerrarSesionActivaDelUsuario(usuarioId) {
-  const sesion = db
+async function cerrarSesionActivaDelUsuario(usuarioId) {
+  const sesion = await db
     .prepare(`SELECT id FROM sesiones_activas WHERE usuario_id = ? AND estado = 'activa'`)
     .get(usuarioId);
-  if (sesion) cerrarSesion(sesion.id, 'expulsada');
+  if (sesion) await cerrarSesion(sesion.id, 'expulsada');
 }
 
 export function listarUsuarios() {
@@ -86,62 +87,71 @@ export async function crearUsuario(datos) {
   const rol = validarRol(datos.rol);
   validarPassword(datos.password);
 
-  verificarLoginLibre(login);
-
   const passwordHash = await hashPassword(datos.password);
-  const resultado = db
-    .prepare('INSERT INTO usuarios (nombre, usuario, password_hash, rol) VALUES (?, ?, ?, ?)')
-    .run(nombre, login, passwordHash, rol);
 
-  return obtenerUsuario(resultado.lastInsertRowid);
-}
-
-export async function editarUsuario(id, datos) {
-  const actual = obtenerUsuarioActivo(id);
-
-  const actualizaciones = {};
-
-  if (datos.nombre !== undefined) actualizaciones.nombre = validarString(datos.nombre, 'nombre');
-
-  if (datos.usuario !== undefined) {
-    actualizaciones.usuario = validarString(datos.usuario, 'usuario');
-    verificarLoginLibre(actualizaciones.usuario, id);
-  }
-
-  if (datos.rol !== undefined) {
-    actualizaciones.rol = validarRol(datos.rol);
-    if (actual.rol === 'admin' && actualizaciones.rol !== 'admin' && contarAdminsActivos(id) === 0) {
-      throw new ApiError(409, 'No se le puede quitar el rol Admin al único usuario Admin activo');
-    }
-  }
-
-  if (datos.password !== undefined) {
-    validarPassword(datos.password);
-    actualizaciones.password_hash = await hashPassword(datos.password);
-  }
-
-  const claves = Object.keys(actualizaciones);
-  if (claves.length === 0) throw new ApiError(400, 'No se envió ningún campo para actualizar');
-
-  const set = claves.map((c) => `${c} = ?`).join(', ');
-  const valores = claves.map((c) => actualizaciones[c]);
-
-  db.prepare(`UPDATE usuarios SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`).run(...valores, id);
-
-  if (datos.rol !== undefined || datos.password !== undefined) {
-    cerrarSesionActivaDelUsuario(id);
-  }
+  const id = await db.transaction(async () => {
+    await verificarLoginLibre(login);
+    const resultado = await db
+      .prepare('INSERT INTO usuarios (nombre, usuario, password_hash, rol) VALUES (?, ?, ?, ?) RETURNING id')
+      .run(nombre, login, passwordHash, rol);
+    return resultado.lastInsertRowid;
+  });
 
   return obtenerUsuario(id);
 }
 
-export function eliminarUsuario(id) {
-  const usuario = obtenerUsuarioActivo(id);
+export async function editarUsuario(id, datos) {
+  await db.transaction(async () => {
+    const actual = await obtenerUsuarioActivo(id);
 
-  if (usuario.rol === 'admin' && contarAdminsActivos(id) === 0) {
-    throw new ApiError(409, 'No se puede eliminar el único usuario Admin activo');
-  }
+    const actualizaciones = {};
 
-  db.prepare('UPDATE usuarios SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
-  cerrarSesionActivaDelUsuario(id);
+    if (datos.nombre !== undefined) actualizaciones.nombre = validarString(datos.nombre, 'nombre');
+
+    if (datos.usuario !== undefined) {
+      actualizaciones.usuario = validarString(datos.usuario, 'usuario');
+      await verificarLoginLibre(actualizaciones.usuario, id);
+    }
+
+    if (datos.rol !== undefined) {
+      actualizaciones.rol = validarRol(datos.rol);
+      if (actual.rol === 'admin' && actualizaciones.rol !== 'admin' && (await contarAdminsActivos(id)) === 0) {
+        throw new ApiError(409, 'No se le puede quitar el rol Admin al único usuario Admin activo');
+      }
+    }
+
+    if (datos.password !== undefined) {
+      validarPassword(datos.password);
+      actualizaciones.password_hash = await hashPassword(datos.password);
+    }
+
+    const claves = Object.keys(actualizaciones);
+    if (claves.length === 0) throw new ApiError(400, 'No se envió ningún campo para actualizar');
+
+    const set = claves.map((c) => `${c} = ?`).join(', ');
+    const valores = claves.map((c) => actualizaciones[c]);
+
+    await db
+      .prepare(`UPDATE usuarios SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`)
+      .run(...valores, id);
+
+    if (datos.rol !== undefined || datos.password !== undefined) {
+      await cerrarSesionActivaDelUsuario(id);
+    }
+  });
+
+  return obtenerUsuario(id);
+}
+
+export async function eliminarUsuario(id) {
+  await db.transaction(async () => {
+    const usuario = await obtenerUsuarioActivo(id);
+
+    if (usuario.rol === 'admin' && (await contarAdminsActivos(id)) === 0) {
+      throw new ApiError(409, 'No se puede eliminar el único usuario Admin activo');
+    }
+
+    await db.prepare('UPDATE usuarios SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+    await cerrarSesionActivaDelUsuario(id);
+  });
 }

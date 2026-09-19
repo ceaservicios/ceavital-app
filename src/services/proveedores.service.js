@@ -34,8 +34,8 @@ function validarEstado(valor) {
   return valor;
 }
 
-function obtenerProveedorActivo(id) {
-  const proveedor = db.prepare('SELECT * FROM proveedores WHERE id = ? AND eliminado_en IS NULL').get(id);
+async function obtenerProveedorActivo(id) {
+  const proveedor = await db.prepare('SELECT * FROM proveedores WHERE id = ? AND eliminado_en IS NULL').get(id);
   if (!proveedor) throw new ApiError(404, 'Proveedor no encontrado');
   return proveedor;
 }
@@ -48,7 +48,7 @@ function productosDelProveedor(proveedorId) {
   return db
     .prepare(
       `SELECT id, nombre, codigo_barras, precio_venta
-       FROM productos WHERE proveedor_id = ? AND eliminado_en IS NULL ORDER BY nombre`
+       FROM productos WHERE proveedor_id = ? AND eliminado_en IS NULL ORDER BY LOWER(nombre)`
     )
     .all(proveedorId);
 }
@@ -56,32 +56,32 @@ function productosDelProveedor(proveedorId) {
 export function listarProveedores({ buscar } = {}) {
   if (buscar) {
     return db
-      .prepare('SELECT * FROM proveedores WHERE eliminado_en IS NULL AND nombre LIKE ? ORDER BY nombre')
+      .prepare('SELECT * FROM proveedores WHERE eliminado_en IS NULL AND nombre ILIKE ? ORDER BY LOWER(nombre)')
       .all(`%${buscar}%`);
   }
-  return db.prepare('SELECT * FROM proveedores WHERE eliminado_en IS NULL ORDER BY nombre').all();
+  return db.prepare('SELECT * FROM proveedores WHERE eliminado_en IS NULL ORDER BY LOWER(nombre)').all();
 }
 
-export function obtenerProveedor(id) {
-  const proveedor = obtenerProveedorActivo(id);
-  return { ...proveedor, productos: productosDelProveedor(id) };
+export async function obtenerProveedor(id) {
+  const proveedor = await obtenerProveedorActivo(id);
+  return { ...proveedor, productos: await productosDelProveedor(id) };
 }
 
-export function crearProveedor(datos) {
+export async function crearProveedor(datos) {
   const nombre = validarString(datos.nombre, 'nombre');
   const telefono = validarString(datos.telefono, 'telefono', { requerido: false });
   const email = validarString(datos.email, 'email', { requerido: false });
   const condicionPago = validarString(datos.condicion_pago, 'condicion_pago', { requerido: false });
 
-  const resultado = db
-    .prepare('INSERT INTO proveedores (nombre, telefono, email, condicion_pago) VALUES (?, ?, ?, ?)')
+  const resultado = await db
+    .prepare('INSERT INTO proveedores (nombre, telefono, email, condicion_pago) VALUES (?, ?, ?, ?) RETURNING id')
     .run(nombre, telefono, email, condicionPago);
 
   return obtenerProveedor(resultado.lastInsertRowid);
 }
 
-export function editarProveedor(id, datos) {
-  obtenerProveedorActivo(id);
+export async function editarProveedor(id, datos) {
+  await obtenerProveedorActivo(id);
 
   const actualizaciones = {};
   if (datos.nombre !== undefined) actualizaciones.nombre = validarString(datos.nombre, 'nombre');
@@ -101,29 +101,31 @@ export function editarProveedor(id, datos) {
   const set = claves.map((c) => `${c} = ?`).join(', ');
   const valores = claves.map((c) => actualizaciones[c]);
 
-  db.prepare(`UPDATE proveedores SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`).run(...valores, id);
+  await db
+    .prepare(`UPDATE proveedores SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`)
+    .run(...valores, id);
 
   return obtenerProveedor(id);
 }
 
-export function eliminarProveedor(id) {
-  obtenerProveedorActivo(id);
-  db.prepare('UPDATE proveedores SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+export async function eliminarProveedor(id) {
+  await obtenerProveedorActivo(id);
+  await db.prepare('UPDATE proveedores SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
 }
 
 // -- Pedidos a proveedor --
 
-function obtenerPedidoActivo(proveedorId, pedidoId) {
-  const pedido = db
+async function obtenerPedidoActivo(proveedorId, pedidoId) {
+  const pedido = await db
     .prepare('SELECT * FROM pedidos_proveedor WHERE id = ? AND proveedor_id = ? AND eliminado_en IS NULL')
     .get(pedidoId, proveedorId);
   if (!pedido) throw new ApiError(404, 'Pedido no encontrado');
   return pedido;
 }
 
-function obtenerPedidoConItems(pedidoId) {
-  const pedido = db.prepare('SELECT * FROM pedidos_proveedor WHERE id = ?').get(pedidoId);
-  const items = db
+async function obtenerPedidoConItems(pedidoId) {
+  const pedido = await db.prepare('SELECT * FROM pedidos_proveedor WHERE id = ?').get(pedidoId);
+  const items = await db
     .prepare(
       `SELECT pi.*, p.nombre AS producto_nombre
        FROM pedido_items pi JOIN productos p ON p.id = pi.producto_id
@@ -143,8 +145,8 @@ function validarItemsPedido(items) {
   }));
 }
 
-export function listarPedidos(proveedorId) {
-  obtenerProveedorActivo(proveedorId);
+export async function listarPedidos(proveedorId) {
+  await obtenerProveedorActivo(proveedorId);
   return db
     .prepare(
       'SELECT * FROM pedidos_proveedor WHERE proveedor_id = ? AND eliminado_en IS NULL ORDER BY fecha DESC, id DESC'
@@ -152,54 +154,52 @@ export function listarPedidos(proveedorId) {
     .all(proveedorId);
 }
 
-export function obtenerPedido(proveedorId, pedidoId) {
-  obtenerPedidoActivo(proveedorId, pedidoId);
+export async function obtenerPedido(proveedorId, pedidoId) {
+  await obtenerPedidoActivo(proveedorId, pedidoId);
   return obtenerPedidoConItems(pedidoId);
 }
 
 // "Recepción: marcar un pedido como recibido es un registro administrativo --
 // NO genera automáticamente un lote nuevo en Stock" (Docs/Instructivo-Funcional.md).
 // Por eso crear/editar un pedido acá nunca toca productos/lotes.
-export function crearPedido(proveedorId, datos, { usuarioId }) {
-  obtenerProveedorActivo(proveedorId);
-
+export async function crearPedido(proveedorId, datos, { usuarioId }) {
   const items = validarItemsPedido(datos.items);
   const fecha = datos.fecha != null ? validarFecha(datos.fecha, 'fecha') : hoyNegocio();
   const estado = datos.estado != null ? validarEstado(datos.estado) : 'realizado';
 
-  for (const { producto_id } of items) {
-    const producto = db.prepare('SELECT id FROM productos WHERE id = ? AND eliminado_en IS NULL').get(producto_id);
-    if (!producto) throw new ApiError(400, `El producto ${producto_id} no existe o está eliminado`);
-  }
+  const pedidoId = await db.transaction(async () => {
+    await obtenerProveedorActivo(proveedorId);
 
-  db.exec('BEGIN');
-  try {
-    const resultado = db
-      .prepare('INSERT INTO pedidos_proveedor (proveedor_id, usuario_id, estado, fecha) VALUES (?, ?, ?, ?)')
-      .run(proveedorId, usuarioId, estado, fecha);
-    const pedidoId = resultado.lastInsertRowid;
-
-    for (const { producto_id, cantidad } of items) {
-      db.prepare('INSERT INTO pedido_items (pedido_id, producto_id, cantidad) VALUES (?, ?, ?)').run(
-        pedidoId,
-        producto_id,
-        cantidad
-      );
+    for (const { producto_id } of items) {
+      const producto = await db
+        .prepare('SELECT id FROM productos WHERE id = ? AND eliminado_en IS NULL')
+        .get(producto_id);
+      if (!producto) throw new ApiError(400, `El producto ${producto_id} no existe o está eliminado`);
     }
 
-    db.exec('COMMIT');
-    return obtenerPedidoConItems(pedidoId);
-  } catch (err) {
-    db.exec('ROLLBACK');
-    throw err;
-  }
+    const resultado = await db
+      .prepare(
+        'INSERT INTO pedidos_proveedor (proveedor_id, usuario_id, estado, fecha) VALUES (?, ?, ?, ?) RETURNING id'
+      )
+      .run(proveedorId, usuarioId, estado, fecha);
+
+    for (const { producto_id, cantidad } of items) {
+      await db
+        .prepare('INSERT INTO pedido_items (pedido_id, producto_id, cantidad) VALUES (?, ?, ?)')
+        .run(resultado.lastInsertRowid, producto_id, cantidad);
+    }
+
+    return resultado.lastInsertRowid;
+  });
+
+  return obtenerPedidoConItems(pedidoId);
 }
 
 // Alcance acotado a estado/fecha (lo único que el instructivo describe como
 // editable de un pedido ya creado) -- no reabre productos/cantidades, eso
 // requiere cancelar y crear un pedido nuevo.
-export function editarPedido(proveedorId, pedidoId, datos) {
-  obtenerPedidoActivo(proveedorId, pedidoId);
+export async function editarPedido(proveedorId, pedidoId, datos) {
+  await obtenerPedidoActivo(proveedorId, pedidoId);
 
   const actualizaciones = {};
   if (datos.estado !== undefined) actualizaciones.estado = validarEstado(datos.estado);
@@ -211,10 +211,9 @@ export function editarPedido(proveedorId, pedidoId, datos) {
   const set = claves.map((c) => `${c} = ?`).join(', ');
   const valores = claves.map((c) => actualizaciones[c]);
 
-  db.prepare(`UPDATE pedidos_proveedor SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`).run(
-    ...valores,
-    pedidoId
-  );
+  await db
+    .prepare(`UPDATE pedidos_proveedor SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`)
+    .run(...valores, pedidoId);
 
   return obtenerPedidoConItems(pedidoId);
 }
@@ -222,7 +221,7 @@ export function editarPedido(proveedorId, pedidoId, datos) {
 // Soft delete = corrección de un pedido mal cargado (dato erróneo), distinto
 // de estado='cancelado' (acción de negocio real: el pedido no se concretó).
 // Mismo criterio que lotes.eliminado_en (Docs/Modelo-de-Datos.md > lotes).
-export function eliminarPedido(proveedorId, pedidoId) {
-  obtenerPedidoActivo(proveedorId, pedidoId);
-  db.prepare('UPDATE pedidos_proveedor SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(pedidoId);
+export async function eliminarPedido(proveedorId, pedidoId) {
+  await obtenerPedidoActivo(proveedorId, pedidoId);
+  await db.prepare('UPDATE pedidos_proveedor SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(pedidoId);
 }

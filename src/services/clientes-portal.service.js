@@ -35,22 +35,22 @@ function validarPassword(valor) {
   return valor;
 }
 
-function verificarUsuarioLibre(usuario, excluirId) {
-  const existente = db
+async function verificarUsuarioLibre(usuario, excluirId) {
+  const existente = await db
     .prepare(
       `SELECT id FROM clientes_empresa
-       WHERE portal_usuario = ? COLLATE NOCASE AND eliminado_en IS NULL AND id != ?`
+       WHERE LOWER(portal_usuario) = LOWER(?) AND eliminado_en IS NULL AND id != ?`
     )
     .get(usuario, excluirId);
   if (existente) throw new ApiError(409, 'Ese usuario de acceso ya lo usa otro cliente');
 }
 
-function obtenerClienteActivoParaAcceso(id) {
+async function obtenerClienteActivoParaAcceso(id) {
   // Columnas explícitas: nunca se lee portal_password_hash fuera del login.
-  const fila = db
+  const fila = await db
     .prepare(
       `SELECT id, razon_social, email, portal_usuario, portal_habilitado, portal_ultimo_acceso,
-              (portal_bloqueado_hasta IS NOT NULL AND portal_bloqueado_hasta > datetime('now')) AS bloqueado,
+              (portal_bloqueado_hasta IS NOT NULL AND portal_bloqueado_hasta > LOCALTIMESTAMP) AS bloqueado,
               (portal_password_hash IS NOT NULL) AS tiene_password
        FROM clientes_empresa WHERE id = ? AND eliminado_en IS NULL`
     )
@@ -82,7 +82,7 @@ const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // mail, se comprueba que sea la vigente (así no se manda una que ya cambió) y
 // no se guarda en ningún lado.
 export async function enviarAccesoPorCorreo(clienteEmpresaId, { password, enlace }) {
-  const cliente = obtenerClienteActivoParaAcceso(clienteEmpresaId);
+  const cliente = await obtenerClienteActivoParaAcceso(clienteEmpresaId);
   if (!cliente.portal_usuario || !cliente.tiene_password) {
     throw new ApiError(409, 'Este cliente todavía no tiene acceso configurado');
   }
@@ -93,7 +93,7 @@ export async function enviarAccesoPorCorreo(clienteEmpresaId, { password, enlace
   if (typeof password !== 'string' || !password) throw new ApiError(400, 'La contraseña es requerida');
   if (typeof enlace !== 'string' || !/^https?:\/\//.test(enlace)) throw new ApiError(400, 'El enlace del portal no es válido');
 
-  const { password_hash: hash } = db
+  const { password_hash: hash } = await db
     .prepare('SELECT portal_password_hash AS password_hash FROM clientes_empresa WHERE id = ?')
     .get(clienteEmpresaId);
   if (!(await verifyPassword(password, hash))) {
@@ -110,8 +110,8 @@ export async function enviarAccesoPorCorreo(clienteEmpresaId, { password, enlace
   return { enviado_a: cliente.email };
 }
 
-export function obtenerAcceso(clienteEmpresaId) {
-  return aAcceso(obtenerClienteActivoParaAcceso(clienteEmpresaId));
+export async function obtenerAcceso(clienteEmpresaId) {
+  return aAcceso(await obtenerClienteActivoParaAcceso(clienteEmpresaId));
 }
 
 // Alta o cambio del acceso del cliente. Alta: usuario y contraseña son
@@ -120,48 +120,49 @@ export function obtenerAcceso(clienteEmpresaId) {
 // usuario o la contraseña, o deshabilitar, cierra las sesiones abiertas del
 // cliente (si no, seguiría entrando con las credenciales viejas hasta 30 min).
 export async function configurarAcceso(clienteEmpresaId, { usuario, password, habilitado } = {}) {
-  const actual = obtenerClienteActivoParaAcceso(clienteEmpresaId);
-  const yaConfigurado = Boolean(actual.portal_usuario && actual.tiene_password);
+  await db.transaction(async () => {
+    const actual = await obtenerClienteActivoParaAcceso(clienteEmpresaId);
+    const yaConfigurado = Boolean(actual.portal_usuario && actual.tiene_password);
 
-  const cambios = {};
-  let cerrarSesiones = false;
+    const cambios = {};
+    let cerrarSesiones = false;
 
-  if (usuario !== undefined && usuario !== null && usuario !== '') {
-    const nuevo = validarUsuario(usuario);
-    verificarUsuarioLibre(nuevo, clienteEmpresaId);
-    if (nuevo.toLowerCase() !== (actual.portal_usuario ?? '').toLowerCase()) cerrarSesiones = true;
-    cambios.portal_usuario = nuevo;
-  } else if (!yaConfigurado) {
-    throw new ApiError(400, 'El usuario de acceso es requerido');
-  }
+    if (usuario !== undefined && usuario !== null && usuario !== '') {
+      const nuevo = validarUsuario(usuario);
+      await verificarUsuarioLibre(nuevo, clienteEmpresaId);
+      if (nuevo.toLowerCase() !== (actual.portal_usuario ?? '').toLowerCase()) cerrarSesiones = true;
+      cambios.portal_usuario = nuevo;
+    } else if (!yaConfigurado) {
+      throw new ApiError(400, 'El usuario de acceso es requerido');
+    }
 
-  if (password !== undefined && password !== null && password !== '') {
-    cambios.portal_password_hash = await hashPassword(validarPassword(password));
-    cambios.portal_intentos_fallidos = 0;
-    cambios.portal_bloqueado_hasta = null;
-    cerrarSesiones = true;
-  } else if (!yaConfigurado) {
-    throw new ApiError(400, 'La contraseña es requerida');
-  }
+    if (password !== undefined && password !== null && password !== '') {
+      cambios.portal_password_hash = await hashPassword(validarPassword(password));
+      cambios.portal_intentos_fallidos = 0;
+      cambios.portal_bloqueado_hasta = null;
+      cerrarSesiones = true;
+    } else if (!yaConfigurado) {
+      throw new ApiError(400, 'La contraseña es requerida');
+    }
 
-  if (habilitado !== undefined && habilitado !== null) {
-    if (typeof habilitado !== 'boolean') throw new ApiError(400, 'habilitado tiene que ser verdadero o falso');
-    cambios.portal_habilitado = habilitado ? 1 : 0;
-    if (!habilitado) cerrarSesiones = true;
-  } else if (!yaConfigurado) {
-    cambios.portal_habilitado = 1;
-  }
+    if (habilitado !== undefined && habilitado !== null) {
+      if (typeof habilitado !== 'boolean') throw new ApiError(400, 'habilitado tiene que ser verdadero o falso');
+      cambios.portal_habilitado = habilitado ? 1 : 0;
+      if (!habilitado) cerrarSesiones = true;
+    } else if (!yaConfigurado) {
+      cambios.portal_habilitado = 1;
+    }
 
-  const claves = Object.keys(cambios);
-  if (claves.length === 0) throw new ApiError(400, 'No se envió ningún cambio');
+    const claves = Object.keys(cambios);
+    if (claves.length === 0) throw new ApiError(400, 'No se envió ningún cambio');
 
-  const set = claves.map((c) => `${c} = ?`).join(', ');
-  db.prepare(`UPDATE clientes_empresa SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`).run(
-    ...claves.map((c) => cambios[c]),
-    clienteEmpresaId
-  );
+    const set = claves.map((c) => `${c} = ?`).join(', ');
+    await db
+      .prepare(`UPDATE clientes_empresa SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`)
+      .run(...claves.map((c) => cambios[c]), clienteEmpresaId);
 
-  if (cerrarSesiones) cerrarSesionesDeCliente(clienteEmpresaId, 'credenciales_cambiadas');
+    if (cerrarSesiones) await cerrarSesionesDeCliente(clienteEmpresaId, 'credenciales_cambiadas');
+  });
 
   return obtenerAcceso(clienteEmpresaId);
 }
@@ -171,12 +172,12 @@ export async function configurarAcceso(clienteEmpresaId, { usuario, password, ha
 let hashDeRelleno = null;
 
 export async function loginCliente(usuarioLogin, passwordPlano) {
-  const cliente = db
+  const cliente = await db
     .prepare(
       `SELECT id, razon_social, portal_password_hash, portal_intentos_fallidos,
-              (portal_bloqueado_hasta IS NOT NULL AND portal_bloqueado_hasta > datetime('now')) AS bloqueado
+              (portal_bloqueado_hasta IS NOT NULL AND portal_bloqueado_hasta > LOCALTIMESTAMP) AS bloqueado
        FROM clientes_empresa
-       WHERE portal_usuario = ? COLLATE NOCASE AND eliminado_en IS NULL AND portal_habilitado = 1
+       WHERE LOWER(portal_usuario) = LOWER(?) AND eliminado_en IS NULL AND portal_habilitado = 1
          AND portal_password_hash IS NOT NULL`
     )
     .get(usuarioLogin);
@@ -203,16 +204,18 @@ export async function loginCliente(usuarioLogin, passwordPlano) {
     // Incremento atómico en la propia sentencia (nunca "leer, esperar el hash,
     // escribir +1": con logins simultáneos se perdían intentos y el bloqueo no
     // se activaba). Y el bloqueo se decide con el valor ya incrementado.
-    const { portal_intentos_fallidos: intentos } = db
+    const { portal_intentos_fallidos: intentos } = await db
       .prepare(
         `UPDATE clientes_empresa SET portal_intentos_fallidos = portal_intentos_fallidos + 1
          WHERE id = ? RETURNING portal_intentos_fallidos`
       )
       .get(cliente.id);
     if (intentos >= config.login.maxIntentos) {
-      db.prepare(
-        `UPDATE clientes_empresa SET portal_bloqueado_hasta = datetime('now', '+' || ? || ' minutes') WHERE id = ?`
-      ).run(config.login.bloqueoMinutos, cliente.id);
+      await db
+        .prepare(
+          `UPDATE clientes_empresa SET portal_bloqueado_hasta = LOCALTIMESTAMP + (?::int * INTERVAL '1 minute') WHERE id = ?`
+        )
+        .run(config.login.bloqueoMinutos, cliente.id);
       throw new AuthError(
         `Acceso bloqueado por ${config.login.maxIntentos} intentos fallidos. Reintentá en ${config.login.bloqueoMinutos} minutos.`,
         'USUARIO_BLOQUEADO'
@@ -221,21 +224,23 @@ export async function loginCliente(usuarioLogin, passwordPlano) {
     throw new AuthError('Usuario o contraseña incorrectos', 'CREDENCIALES_INVALIDAS');
   }
 
-  db.prepare(
-    `UPDATE clientes_empresa
-     SET portal_intentos_fallidos = 0, portal_bloqueado_hasta = NULL, portal_ultimo_acceso = CURRENT_TIMESTAMP
-     WHERE id = ?`
-  ).run(cliente.id);
+  await db
+    .prepare(
+      `UPDATE clientes_empresa
+       SET portal_intentos_fallidos = 0, portal_bloqueado_hasta = NULL, portal_ultimo_acceso = CURRENT_TIMESTAMP
+       WHERE id = ?`
+    )
+    .run(cliente.id);
 
   const token = crypto.randomBytes(32).toString('hex');
-  db.prepare('INSERT INTO sesiones_cliente (cliente_empresa_id, token) VALUES (?, ?)').run(cliente.id, token);
+  await db.prepare('INSERT INTO sesiones_cliente (cliente_empresa_id, token) VALUES (?, ?)').run(cliente.id, token);
 
   return { token, cliente: { id: cliente.id, razon_social: cliente.razon_social } };
 }
 
 // Sesión válida = activa, sin vencer por inactividad, y el cliente sigue
 // existiendo y habilitado (dar de baja o deshabilitar corta el acceso en el
-// acto, sin esperar a que venza la sesión). Fechas comparadas en SQL, igual
+// acto, sin esperar a que venza la sesión). Fechas comparadas en la base, igual
 // que session.service.
 export function obtenerSesionClienteValida(token) {
   return db
@@ -244,37 +249,42 @@ export function obtenerSesionClienteValida(token) {
        FROM sesiones_cliente sc
        JOIN clientes_empresa c ON c.id = sc.cliente_empresa_id
        WHERE sc.token = ? AND sc.estado = 'activa'
-         AND sc.ultima_actividad >= datetime('now', '-' || ? || ' minutes')
+         AND sc.ultima_actividad >= LOCALTIMESTAMP - (?::int * INTERVAL '1 minute')
          AND c.eliminado_en IS NULL AND c.portal_habilitado = 1`
     )
     .get(token, config.session.timeoutMinutes);
 }
 
-export function marcarActividadCliente(sesionId) {
-  db.prepare('UPDATE sesiones_cliente SET ultima_actividad = CURRENT_TIMESTAMP WHERE id = ?').run(sesionId);
+export async function marcarActividadCliente(sesionId) {
+  await db.prepare('UPDATE sesiones_cliente SET ultima_actividad = CURRENT_TIMESTAMP WHERE id = ?').run(sesionId);
 }
 
-export function cerrarSesionCliente(sesionId, motivo = 'logout') {
-  db.prepare(
-    `UPDATE sesiones_cliente SET estado = 'cerrada', motivo_cierre = ?, cerrada_en = CURRENT_TIMESTAMP
-     WHERE id = ? AND estado = 'activa'`
-  ).run(motivo, sesionId);
+export async function cerrarSesionCliente(sesionId, motivo = 'logout') {
+  await db
+    .prepare(
+      `UPDATE sesiones_cliente SET estado = 'cerrada', motivo_cierre = ?, cerrada_en = CURRENT_TIMESTAMP
+       WHERE id = ? AND estado = 'activa'`
+    )
+    .run(motivo, sesionId);
 }
 
-export function cerrarSesionesDeCliente(clienteEmpresaId, motivo) {
-  db.prepare(
-    `UPDATE sesiones_cliente SET estado = 'cerrada', motivo_cierre = ?, cerrada_en = CURRENT_TIMESTAMP
-     WHERE cliente_empresa_id = ? AND estado = 'activa'`
-  ).run(motivo, clienteEmpresaId);
+export async function cerrarSesionesDeCliente(clienteEmpresaId, motivo) {
+  await db
+    .prepare(
+      `UPDATE sesiones_cliente SET estado = 'cerrada', motivo_cierre = ?, cerrada_en = CURRENT_TIMESTAMP
+       WHERE cliente_empresa_id = ? AND estado = 'activa'`
+    )
+    .run(motivo, clienteEmpresaId);
 }
 
 // Housekeeping: deja prolijo el historial (motivo 'timeout'); no es lo que
 // bloquea el acceso, eso ya lo hace obtenerSesionClienteValida en cada request.
-export function cerrarSesionesClienteInactivas() {
-  return db
+export async function cerrarSesionesClienteInactivas() {
+  const resultado = await db
     .prepare(
       `UPDATE sesiones_cliente SET estado = 'cerrada', motivo_cierre = 'timeout', cerrada_en = CURRENT_TIMESTAMP
-       WHERE estado = 'activa' AND ultima_actividad < datetime('now', '-' || ? || ' minutes')`
+       WHERE estado = 'activa' AND ultima_actividad < LOCALTIMESTAMP - (?::int * INTERVAL '1 minute')`
     )
-    .run(config.session.timeoutMinutes).changes;
+    .run(config.session.timeoutMinutes);
+  return resultado.changes;
 }

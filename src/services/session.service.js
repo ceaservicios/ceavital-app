@@ -11,48 +11,39 @@ function generarToken() {
  * cualquier sesion activa previa del mismo rol (regla de concurrencia:
  * nunca dos sesiones activas del mismo rol a la vez).
  */
-export function crearSesion(usuario) {
+export async function crearSesion(usuario) {
   const token = generarToken();
 
-  // node:sqlite no tiene un helper .transaction() como better-sqlite3 -- se
-  // envuelve a mano con BEGIN/COMMIT/ROLLBACK.
-  db.exec('BEGIN');
-  let id;
-  let expulsada;
-  try {
-    const activaPrevia = db
+  return db.transaction(async () => {
+    const activaPrevia = await db
       .prepare(`SELECT id FROM sesiones_activas WHERE rol = ? AND estado = 'activa'`)
       .get(usuario.rol);
 
     if (activaPrevia) {
-      db.prepare(
-        `UPDATE sesiones_activas
-         SET estado = 'cerrada', motivo_cierre = 'expulsada', cerrada_en = CURRENT_TIMESTAMP
-         WHERE id = ?`
-      ).run(activaPrevia.id);
+      await db
+        .prepare(
+          `UPDATE sesiones_activas
+           SET estado = 'cerrada', motivo_cierre = 'expulsada', cerrada_en = CURRENT_TIMESTAMP
+           WHERE id = ?`
+        )
+        .run(activaPrevia.id);
     }
 
-    const resultado = db
+    const resultado = await db
       .prepare(
         `INSERT INTO sesiones_activas (usuario_id, rol, token, estado, iniciada_en, ultima_actividad)
-         VALUES (?, ?, ?, 'activa', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+         VALUES (?, ?, ?, 'activa', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         RETURNING id`
       )
       .run(usuario.id, usuario.rol, token);
 
-    id = resultado.lastInsertRowid;
-    expulsada = Boolean(activaPrevia);
-    db.exec('COMMIT');
-  } catch (err) {
-    db.exec('ROLLBACK');
-    throw err;
-  }
-
-  return { sesionId: id, token, expulsada };
+    return { sesionId: resultado.lastInsertRowid, token, expulsada: Boolean(activaPrevia) };
+  });
 }
 
 /**
  * Devuelve la sesion solo si esta activa Y no vencio por inactividad (30 min).
- * La comparacion de fechas se hace en SQLite (datetime('now', ...)) para no
+ * La comparacion de fechas se hace en la base (LOCALTIMESTAMP, en UTC) para no
  * depender de parseo de fechas en JS, que es una fuente tipica de bugs de huso horario.
  */
 export function obtenerSesionActivaValida(token) {
@@ -65,23 +56,25 @@ export function obtenerSesionActivaValida(token) {
        FROM sesiones_activas sa
        JOIN usuarios u ON u.id = sa.usuario_id
        WHERE sa.token = ? AND sa.estado = 'activa'
-         AND sa.ultima_actividad >= datetime('now', '-' || ? || ' minutes')`
+         AND sa.ultima_actividad >= LOCALTIMESTAMP - (?::int * INTERVAL '1 minute')`
     )
     .get(token, config.session.timeoutMinutes);
 }
 
-export function marcarActividad(sesionId) {
-  db.prepare(`UPDATE sesiones_activas SET ultima_actividad = CURRENT_TIMESTAMP WHERE id = ?`).run(
-    sesionId
-  );
+export async function marcarActividad(sesionId) {
+  await db
+    .prepare(`UPDATE sesiones_activas SET ultima_actividad = CURRENT_TIMESTAMP WHERE id = ?`)
+    .run(sesionId);
 }
 
-export function cerrarSesion(sesionId, motivo = 'logout') {
-  db.prepare(
-    `UPDATE sesiones_activas
-     SET estado = 'cerrada', motivo_cierre = ?, cerrada_en = CURRENT_TIMESTAMP
-     WHERE id = ? AND estado = 'activa'`
-  ).run(motivo, sesionId);
+export async function cerrarSesion(sesionId, motivo = 'logout') {
+  await db
+    .prepare(
+      `UPDATE sesiones_activas
+       SET estado = 'cerrada', motivo_cierre = ?, cerrada_en = CURRENT_TIMESTAMP
+       WHERE id = ? AND estado = 'activa'`
+    )
+    .run(motivo, sesionId);
 }
 
 /**
@@ -91,13 +84,13 @@ export function cerrarSesion(sesionId, motivo = 'logout') {
  * obtenerSesionActivaValida en cada request) -- es para que el historial de
  * sesiones quede prolijo y auditable.
  */
-export function cerrarSesionesInactivas() {
-  const resultado = db
+export async function cerrarSesionesInactivas() {
+  const resultado = await db
     .prepare(
       `UPDATE sesiones_activas
        SET estado = 'cerrada', motivo_cierre = 'timeout', cerrada_en = CURRENT_TIMESTAMP
        WHERE estado = 'activa'
-         AND ultima_actividad < datetime('now', '-' || ? || ' minutes')`
+         AND ultima_actividad < LOCALTIMESTAMP - (?::int * INTERVAL '1 minute')`
     )
     .run(config.session.timeoutMinutes);
 

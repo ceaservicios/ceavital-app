@@ -1,5 +1,5 @@
+import 'express-async-errors';
 import fs from 'node:fs';
-import { diaNegocioDeUtc, horaNegocio, hoyNegocio } from './utils/fecha-negocio.js';
 import http from 'node:http';
 import https from 'node:https';
 import path from 'node:path';
@@ -9,13 +9,12 @@ import selfsigned from 'selfsigned';
 
 import config from './config/env.js';
 import { runMigrations } from './db/migrate.js';
+import { importarDesdeSqlite } from './db/importar-sqlite.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { buildCorsMiddleware, helmetMiddleware } from './middleware/security.middleware.js';
 import routes from './routes/index.js';
 import { cerrarSesionesInactivas } from './services/session.service.js';
 import { cerrarSesionesClienteInactivas } from './services/clientes-portal.service.js';
-import { obtenerConfiguracionBackups } from './services/configuracion.service.js';
-import { ejecutarBackup, listarHistorial } from './services/backups.service.js';
 
 function asegurarCertificado() {
   const certPath = path.join(config.certsDir, 'cert.pem');
@@ -41,7 +40,22 @@ function asegurarCertificado() {
   return { cert: pems.cert, key: pems.private };
 }
 
-runMigrations();
+// Un rechazo de promesa sin capturar no tiene que tumbar el servidor entero:
+// se registra y el proceso sigue atendiendo (los errores de un request ya
+// llegan a errorHandler por express-async-errors).
+process.on('unhandledRejection', (motivo) => {
+  console.error('[server] promesa rechazada sin capturar:', motivo);
+});
+
+await runMigrations();
+
+// Pase a produccion desde SQLite: una sola vez, solo si PostgreSQL esta vacio.
+// Si falla, el servidor NO arranca (no se sirve una base vacia con datos sin migrar).
+if (config.importarSqlite) {
+  const resultado = await importarDesdeSqlite(config.importarSqlite);
+  if (resultado.importado) console.log('[importar] datos importados desde SQLite:', resultado.filas);
+  else console.log(`[importar] omitido: ${resultado.motivo}`);
+}
 
 const app = express();
 
@@ -60,9 +74,8 @@ app.use(cookieParser());
 app.use('/api', routes);
 
 // Build de produccion del frontend (`npm run build` en frontend/), servido
-// por el mismo Express -- mismo origen, sin CORS. Si no existe (instalacion
-// LAN corriendo en modo desarrollo, con el frontend en su propio Vite dev
-// server), se omite sin romper nada.
+// por el mismo Express -- mismo origen, sin CORS. Si no existe (desarrollo,
+// con el frontend en su propio Vite dev server), se omite sin romper nada.
 const frontendDistDir = path.join(config.appRoot, 'frontend', 'dist');
 if (fs.existsSync(frontendDistDir)) {
   app.use(express.static(frontendDistDir));
@@ -88,41 +101,17 @@ if (config.httpsMode === 'proxy') {
 // Housekeeping de sesiones vencidas por inactividad (30 min) -- ver
 // session.service.cerrarSesionesInactivas para el porque de este barrido
 // ademas del chequeo en tiempo real que ya hace el middleware de auth.
-setInterval(() => {
-  const cerradas = cerrarSesionesInactivas();
-  if (cerradas > 0) {
-    console.log(`[sesiones] ${cerradas} sesión(es) cerrada(s) por timeout`);
-  }
-  const cerradasCliente = cerrarSesionesClienteInactivas();
-  if (cerradasCliente > 0) {
-    console.log(`[sesiones] ${cerradasCliente} sesión(es) de cliente cerrada(s) por timeout`);
+setInterval(async () => {
+  try {
+    const cerradas = await cerrarSesionesInactivas();
+    if (cerradas > 0) {
+      console.log(`[sesiones] ${cerradas} sesión(es) cerrada(s) por timeout`);
+    }
+    const cerradasCliente = await cerrarSesionesClienteInactivas();
+    if (cerradasCliente > 0) {
+      console.log(`[sesiones] ${cerradasCliente} sesión(es) de cliente cerrada(s) por timeout`);
+    }
+  } catch (err) {
+    console.error('[sesiones] no se pudo cerrar sesiones inactivas:', err.message);
   }
 }, 5 * 60 * 1000);
-
-// Backup diario programado (Docs/Instructivo-Funcional.md > Backups > "Diario,
-// en un horario configurable"). Se revisa cada minuto si ya es la hora
-// configurada; el guard "ya hubo backup hoy" evita disparar de nuevo dentro
-// de la misma ventana de 1 minuto y sobrevive a un reinicio del proceso
-// (se consulta backups_historial en vez de una bandera en memoria).
-function yaHuboBackupHoy() {
-  return listarHistorial().some((b) => diaNegocioDeUtc(b.creado_en) === hoyNegocio());
-}
-
-setInterval(() => {
-  const cfg = obtenerConfiguracionBackups();
-  if (cfg.frecuencia !== 'diario' || !cfg.horario) return;
-
-  // Hora argentina siempre (la VPS corre en UTC): el horario configurado es el del negocio.
-  if (horaNegocio() !== cfg.horario) return;
-  if (yaHuboBackupHoy()) return;
-
-  console.log('[backups] disparando backup diario programado');
-  try {
-    ejecutarBackup();
-  } catch (err) {
-    // Un throw sin capturar acá (ej. "sin destinos habilitados") tumbaría el
-    // proceso entero -- este setInterval corre fuera del pipeline de Express,
-    // errorHandler no lo alcanza.
-    console.error('[backups] no se pudo ejecutar el backup diario:', err.message);
-  }
-}, 60 * 1000);
