@@ -26,11 +26,30 @@ function esRutaDelPortal(path) {
   return path.startsWith('/portal');
 }
 
+// Lo mismo para el panel del superadmin (/sa): sesión y cookie propias; su pantalla
+// decide qué hacer con un 401. Además toda petición que modifica algo lleva el token
+// CSRF de esa sesión (lo entrega el servidor en /sa/login y /sa/me), solo en memoria.
+function esRutaDelSuperadmin(path) {
+  return path === '/sa' || path.startsWith('/sa/');
+}
+
+let csrfSuperadmin = null;
+export function setCsrfSuperadmin(token) {
+  csrfSuperadmin = token;
+}
+
+function encabezados(path, method, conCuerpo) {
+  const h = {};
+  if (conCuerpo) h['Content-Type'] = 'application/json';
+  if (esRutaDelSuperadmin(path) && method !== 'GET' && csrfSuperadmin) h['X-CSRF-Token'] = csrfSuperadmin;
+  return Object.keys(h).length ? h : undefined;
+}
+
 async function request(path, { method = 'GET', body } = {}) {
   const res = await fetch(`${BASE}${path}`, {
     method,
     credentials: 'include', // manda/recibe la cookie httpOnly de sesion
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    headers: encabezados(path, method, Boolean(body)),
     body: body ? JSON.stringify(body) : undefined,
   });
 
@@ -38,7 +57,7 @@ async function request(path, { method = 'GET', body } = {}) {
   const data = isJson ? await res.json() : null;
 
   if (!res.ok) {
-    if (res.status === 401 && path !== '/auth/login' && !esRutaDelPortal(path)) {
+    if (res.status === 401 && path !== '/auth/login' && !esRutaDelPortal(path) && !esRutaDelSuperadmin(path)) {
       onUnauthorized?.();
     }
     throw new ApiError(data?.error || 'Ocurrió un error inesperado', res.status);

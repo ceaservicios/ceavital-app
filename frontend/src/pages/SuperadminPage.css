@@ -1,0 +1,204 @@
+.sa-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sa-cargando {
+  color: var(--text-tertiary);
+}
+
+.sa-encabezado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sa-h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--color-primary);
+}
+.sa-subtitulo {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.sa-grilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.sa-card {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.sa-card p {
+  margin: 0;
+}
+.sa-h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+.sa-detalle {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.sa-ayuda {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  line-height: 1.45;
+}
+
+.sa-alert-ok {
+  background: rgba(14, 75, 56, 0.08);
+  color: var(--color-primary);
+  border: 1px solid rgba(14, 75, 56, 0.25);
+}
+
+/* Píldoras de estado: Coral solo para lo urgente (suspendida, cuota vencida),
+   Dorado solo para el aviso (cuota por vencer), como pide marca.md. */
+.sa-chip {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.sa-chip-ok {
+  background: rgba(14, 75, 56, 0.1);
+  color: var(--color-primary);
+}
+.sa-chip-neutro {
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+}
+.sa-chip-aviso {
+  background: rgba(243, 192, 67, 0.25);
+  color: #7a5b00;
+}
+.sa-chip-alerta {
+  background: rgba(224, 90, 101, 0.12);
+  color: #a13640;
+}
+
+.sa-btn-peligro {
+  border-color: var(--color-danger);
+  color: #a13640;
+}
+.sa-btn-peligro:hover {
+  border-color: #a13640;
+}
+
+/* Confirmación en dos pasos, en el mismo lugar del botón. */
+.sa-confirmar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.sa-confirmar > span {
+  flex-basis: 100%;
+  line-height: 1.4;
+}
+
+.sa-planes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sa-plan {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.sa-plan input {
+  margin-top: 3px;
+}
+.sa-plan-elegido {
+  border-color: var(--color-primary);
+  background: rgba(14, 75, 56, 0.04);
+}
+.sa-plan-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.sa-plan-nombre {
+  font-size: 14.5px;
+  font-weight: 800;
+}
+.sa-plan-modulos {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
+.sa-form-cuota {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: end;
+}
+.sa-form-cuota .btn {
+  grid-column: 1 / -1;
+}
+
+.sa-tabla-scroll {
+  overflow-x: auto;
+}
+.sa-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  min-width: 560px;
+}
+.sa-tabla th,
+.sa-tabla td {
+  padding: 9px 12px 9px 0;
+  text-align: left;
+  border-bottom: 1px solid var(--border-default);
+  vertical-align: top;
+}
+.sa-tabla th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.sa-tabla td:first-child {
+  white-space: nowrap;
+}
+.sa-tabla td:nth-child(3) {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .sa-page {
+    padding-top: 16px;
+  }
+  .sa-form-cuota {
+    grid-template-columns: 1fr;
+  }
+}

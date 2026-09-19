@@ -2,6 +2,7 @@ import db from '../db/connection.js';
 import config from '../config/env.js';
 import { verifyPassword } from '../utils/password.js';
 import { crearSesion, cerrarSesion } from './session.service.js';
+import { asegurarInstanciaActiva } from './instancia.service.js';
 
 export class AuthError extends Error {
   constructor(mensaje, codigo) {
@@ -11,6 +12,8 @@ export class AuthError extends Error {
 }
 
 export async function login(usuarioLogin, passwordPlano) {
+  await asegurarInstanciaActiva();
+
   // El flag "bloqueado" se calcula en SQL (datetime('now')) para evitar
   // parseo de fechas en JS -- mismo criterio que session.service.
   const usuario = await db

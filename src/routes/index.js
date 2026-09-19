@@ -11,6 +11,7 @@ import catalogosRoutes from './catalogos.routes.js';
 import clientesEmpresaRoutes from './clientes-empresa.routes.js';
 import pedidosClienteRoutes from './pedidos-cliente.routes.js';
 import portalRoutes from './portal.routes.js';
+import superadminRoutes from './superadmin.routes.js';
 import { requireModulo } from '../middleware/modulo.middleware.js';
 import { asyncHandler } from '../utils/async-handler.js';
 import { modulosActivos } from '../services/modulos.service.js';
@@ -29,6 +30,8 @@ router.get(
 );
 
 router.use('/auth', authRoutes);
+// Superadmin de la instalación (CEA): cuenta, sesión y cookie propias, aparte del negocio.
+router.use('/sa', superadminRoutes);
 router.use('/productos', productosRoutes);
 router.use('/vencimientos', vencimientosRoutes);
 router.use('/ventas', ventasRoutes);

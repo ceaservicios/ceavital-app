@@ -5,6 +5,7 @@ import { ApiError } from '../utils/api-error.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
 import { AuthError } from './auth.service.js';
 import { armarCorreoAcceso, correoDisponible, enviarCorreo } from './mail.service.js';
+import { asegurarInstanciaActiva } from './instancia.service.js';
 import { moduloActivo } from './modulos.service.js';
 
 // Portal del cliente-empresa: credenciales que carga el Admin/Encargado desde
@@ -173,6 +174,8 @@ export async function configurarAcceso(clienteEmpresaId, { usuario, password, ha
 let hashDeRelleno = null;
 
 export async function loginCliente(usuarioLogin, passwordPlano) {
+  await asegurarInstanciaActiva();
+
   const cliente = await db
     .prepare(
       `SELECT id, razon_social, portal_password_hash, portal_intentos_fallidos,

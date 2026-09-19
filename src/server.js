@@ -15,6 +15,7 @@ import { buildCorsMiddleware, helmetMiddleware } from './middleware/security.mid
 import routes from './routes/index.js';
 import { cerrarSesionesInactivas } from './services/session.service.js';
 import { cerrarSesionesClienteInactivas } from './services/clientes-portal.service.js';
+import { asegurarSuperadmin, cerrarSesionesSuperadminInactivas } from './services/superadmin.service.js';
 
 function asegurarCertificado() {
   const certPath = path.join(config.certsDir, 'cert.pem');
@@ -48,6 +49,7 @@ process.on('unhandledRejection', (motivo) => {
 });
 
 await runMigrations();
+await asegurarSuperadmin();
 
 // Pase a produccion desde SQLite: una sola vez, solo si PostgreSQL esta vacio.
 // Si falla, el servidor NO arranca (no se sirve una base vacia con datos sin migrar).
@@ -111,6 +113,7 @@ setInterval(async () => {
     if (cerradasCliente > 0) {
       console.log(`[sesiones] ${cerradasCliente} sesión(es) de cliente cerrada(s) por timeout`);
     }
+    await cerrarSesionesSuperadminInactivas();
   } catch (err) {
     console.error('[sesiones] no se pudo cerrar sesiones inactivas:', err.message);
   }

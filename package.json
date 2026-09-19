@@ -14,6 +14,7 @@
     "seed:admin": "node src/db/seed-admin.js",
     "set-plan": "node src/db/set-plan.js",
     "reset-admin-password": "node src/db/reset-admin-password.js",
+    "reset-superadmin-password": "node src/db/reset-superadmin-password.js",
     "importar:sqlite": "node src/db/importar-sqlite.js"
   },
   "dependencies": {

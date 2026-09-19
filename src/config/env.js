@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -10,7 +11,12 @@ const appRoot = path.resolve(__dirname, '../..');
 // app -> Sistema
 const sistemaRoot = path.resolve(appRoot, '..');
 
+// Versión instalada: APP_VERSION (la etiqueta de la rama `stable`, si el deploy la fija)
+// o, si no, la del package.json.
+const versionPaquete = JSON.parse(fs.readFileSync(path.join(appRoot, 'package.json'), 'utf8')).version;
+
 const config = {
+  version: (process.env.APP_VERSION || '').trim() || versionPaquete,
   port: Number(process.env.PORT) || 8443,
   nodeEnv: process.env.NODE_ENV || 'development',
   appRoot,
@@ -64,6 +70,14 @@ const config = {
     user: (process.env.SMTP_USER || '').trim(),
     pass: process.env.SMTP_PASS || '',
     from: (process.env.SMTP_FROM || process.env.SMTP_USER || '').trim(),
+  },
+
+  // Cuenta del superadmin (CEA) de esta instalación. Solo se usa para CREARLA la primera
+  // vez, si todavía no existe (ver superadmin.service.js > asegurarSuperadmin): después
+  // manda la contraseña guardada, no esta variable. Nunca por argumento de línea de comandos.
+  superadmin: {
+    usuario: (process.env.SUPERADMIN_USUARIO || 'superadmin').trim(),
+    password: process.env.SUPERADMIN_PASSWORD || '',
   },
 
   session: {

@@ -18,6 +18,8 @@ import UsuariosPage from './pages/UsuariosPage.jsx';
 import ConfiguracionPage from './pages/ConfiguracionPage.jsx';
 import PortalLoginPage from './pages/PortalLoginPage.jsx';
 import PortalPage from './pages/PortalPage.jsx';
+import SuperadminLoginPage from './pages/SuperadminLoginPage.jsx';
+import SuperadminPage from './pages/SuperadminPage.jsx';
 
 export default function App() {
   return (
@@ -28,6 +30,10 @@ export default function App() {
         {/* Portal del cliente-empresa: sesión propia, sin el menú ni las rutas internas. */}
         <Route path="/portal/login" element={<PortalLoginPage />} />
         <Route path="/portal" element={<PortalPage />} />
+
+        {/* Administración de CEA sobre esta instalación: cuenta y sesión propias, sin el menú del negocio. */}
+        <Route path="/sa/login" element={<SuperadminLoginPage />} />
+        <Route path="/sa" element={<SuperadminPage />} />
 
         <Route
           path="/"
