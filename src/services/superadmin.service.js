@@ -19,10 +19,29 @@ const generarToken = () => crypto.randomBytes(32).toString('hex');
 // no hay cuenta ni variable, la instalación queda sin superadmin: la ruta /sa no deja
 // entrar a nadie (mejor eso que una clave por defecto).
 export async function asegurarSuperadmin() {
-  const existente = await db.prepare('SELECT id FROM superadmin LIMIT 1').get();
-  if (existente) return;
+  const existente = await db.prepare('SELECT id, usuario FROM superadmin ORDER BY id LIMIT 1').get();
+  if (existente) {
+    // SUPERADMIN_USUARIO manda sobre el nombre de usuario en cada arranque (la contraseña
+    // no: esa es la guardada). Cambiarlo corta las sesiones abiertas y queda registrado.
+    const fijado = config.superadmin.usuario;
+    if (fijado && fijado !== existente.usuario) {
+      await db.transaction(async () => {
+        await db.prepare('UPDATE superadmin SET usuario = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?').run(fijado, existente.id);
+        await db
+          .prepare(
+            `UPDATE sesiones_superadmin SET estado = 'cerrada', motivo_cierre = 'usuario_cambiado', cerrada_en = CURRENT_TIMESTAMP
+             WHERE estado = 'activa'`
+          )
+          .run();
+        await registrarAccion(existente.id, 'usuario_cambiado', `${existente.usuario} -> ${fijado}`, null);
+      });
+      console.log(`[superadmin] usuario cambiado a "${fijado}"`);
+    }
+    return;
+  }
 
-  const { usuario, password } = config.superadmin;
+  const { password } = config.superadmin;
+  const usuario = config.superadmin.usuario || 'superadmin';
   if (!password) {
     console.warn('[superadmin] no hay cuenta ni SUPERADMIN_PASSWORD: el panel /sa no admite ingresos');
     return;

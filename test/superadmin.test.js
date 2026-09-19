@@ -22,6 +22,7 @@ const nombreBase = `ceavital_test_sa_${randomBytes(4).toString('hex')}`;
 const CLAVE_SA = 'ClaveSuperadmin-2026';
 
 let servidor;
+let servidor2; // segundo servidor (contador de ingresos por IP propio)
 let urlBase;
 let entorno;
 const admin = ADMIN_URL ? new pg.Client({ connectionString: ADMIN_URL }) : null;
@@ -60,6 +61,17 @@ async function consultar(texto, params = []) {
   } finally {
     await c.end();
   }
+}
+
+// Ingreso al segundo servidor (puerto PUERTO + 1), que tiene su propio contador por IP.
+async function loginServidor2(nav, cuerpo) {
+  const res = await fetch(`http://127.0.0.1:${PUERTO + 1}/api/sa/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+  });
+  for (const c of res.headers.getSetCookie()) nav.cookies.set(c.split(';')[0].split('=')[0], 'x');
+  return { status: res.status };
 }
 
 describe('superadmin', { skip: !ADMIN_URL && 'falta TEST_DATABASE_URL' }, () => {
@@ -103,6 +115,7 @@ describe('superadmin', { skip: !ADMIN_URL && 'falta TEST_DATABASE_URL' }, () => 
 
   after(async () => {
     servidor?.kill();
+    servidor2?.kill();
     if (admin) {
       await admin.query(`DROP DATABASE IF EXISTS ${nombreBase} WITH (FORCE)`);
       await admin.end();
@@ -295,14 +308,41 @@ describe('superadmin', { skip: !ADMIN_URL && 'falta TEST_DATABASE_URL' }, () => 
     assert.equal((await api(sa, 'GET', '/sa/panel')).status, 401, 'la sesión abierta quedó cortada');
   });
 
+  it('SUPERADMIN_USUARIO cambia el nombre de usuario al arrancar (con un email), corta sesiones y deja registro', async () => {
+    const puerto2 = PUERTO + 1;
+    const proc = spawn(process.execPath, ['src/server.js'], {
+      cwd: RAIZ,
+      env: { ...entorno, PORT: String(puerto2), SUPERADMIN_USUARIO: 'admin@ceavital.net' },
+      stdio: 'ignore',
+    });
+    servidor2 = proc;
+    {
+      for (let i = 0; i < 60; i++) {
+        try {
+          if ((await fetch(`http://127.0.0.1:${puerto2}/api/health`)).ok) break;
+        } catch {
+          /* todavía arrancando */
+        }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      assert.equal((await consultar('SELECT usuario FROM superadmin'))[0].usuario, 'admin@ceavital.net');
+      const registro = await consultar(`SELECT detalle FROM superadmin_acciones WHERE accion = 'usuario_cambiado'`);
+      assert.equal(registro[0].detalle, 'cea -> admin@ceavital.net');
+      // La contraseña guardada no cambia; el usuario viejo ya no entra y el nuevo sí (sin distinguir mayúsculas).
+      const otro = nuevoNavegador();
+      assert.equal((await api(otro, 'POST', '/sa/login', { usuario: 'cea', password: 'OtraClaveSuperadmin-2027' })).status, 401);
+      assert.equal((await api(otro, 'POST', '/sa/login', { usuario: 'Admin@CEAvital.net', password: 'OtraClaveSuperadmin-2027' })).status, 200);
+    }
+  });
+
   it('bloqueo: a los 5 intentos fallidos la cuenta se bloquea, incluso para la contraseña correcta', async () => {
     const intruso = nuevoNavegador();
     const estados = [];
     for (let i = 0; i < 5; i++) {
-      estados.push((await api(intruso, 'POST', '/sa/login', { usuario: 'cea', password: 'incorrecta-incorrecta' })).status);
+      estados.push((await loginServidor2(intruso, { usuario: 'admin@ceavital.net', password: 'incorrecta-incorrecta' })).status);
     }
     assert.deepEqual(estados, [401, 401, 401, 401, 423]);
-    const conLaBuena = await api(intruso, 'POST', '/sa/login', { usuario: 'cea', password: 'OtraClaveSuperadmin-2027' });
+    const conLaBuena = await loginServidor2(intruso, { usuario: 'admin@ceavital.net', password: 'OtraClaveSuperadmin-2027' });
     assert.equal(conLaBuena.status, 423);
     assert.ok(!intruso.cookies.has('sa_token'));
   });

@@ -76,7 +76,8 @@ const config = {
   // vez, si todavía no existe (ver superadmin.service.js > asegurarSuperadmin): después
   // manda la contraseña guardada, no esta variable. Nunca por argumento de línea de comandos.
   superadmin: {
-    usuario: (process.env.SUPERADMIN_USUARIO || 'superadmin').trim(),
+    // Vacío = no fijado: al crear la cuenta se usa 'superadmin' y una cuenta existente no se renombra.
+    usuario: (process.env.SUPERADMIN_USUARIO || '').trim(),
     password: process.env.SUPERADMIN_PASSWORD || '',
   },
 
