@@ -15,6 +15,7 @@ import { buildCorsMiddleware, helmetMiddleware } from './middleware/security.mid
 import routes from './routes/index.js';
 import { cerrarSesionesInactivas } from './services/session.service.js';
 import { cerrarSesionesClienteInactivas } from './services/clientes-portal.service.js';
+import { defensaCuerpoIp, defensaIp, iniciarDefensa, rutaApiInexistente } from './services/defensa-ip.service.js';
 import { revisarAvisosCuota } from './services/avisos-cuota.service.js';
 import { asegurarSuperadmin, cerrarSesionesSuperadminInactivas } from './services/superadmin.service.js';
 
@@ -51,6 +52,7 @@ process.on('unhandledRejection', (motivo) => {
 
 await runMigrations();
 await asegurarSuperadmin();
+await iniciarDefensa();
 
 // Pase a produccion desde SQLite: una sola vez, solo si PostgreSQL esta vacio.
 // Si falla, el servidor NO arranca (no se sirve una base vacia con datos sin migrar).
@@ -70,11 +72,15 @@ if (config.httpsMode === 'proxy') {
   app.set('trust proxy', 1);
 }
 
+// Primero de todo: una IP bloqueada o un ataque evidente no llega a ninguna otra lógica.
+app.use(defensaIp);
 app.use(helmetMiddleware);
 app.use(buildCorsMiddleware());
 app.use(express.json());
+app.use(defensaCuerpoIp);
 app.use(cookieParser());
 app.use('/api', routes);
+app.use('/api', rutaApiInexistente);
 
 // Build de produccion del frontend (`npm run build` en frontend/), servido
 // por el mismo Express -- mismo origen, sin CORS. Si no existe (desarrollo,

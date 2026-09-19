@@ -95,6 +95,22 @@ const config = {
     from: (process.env.SA_SMTP_FROM || process.env.SA_SMTP_USER || '').trim(),
   },
 
+  // Defensa activa por IP (services/defensa-ip.service.js): detecta sondeos de archivos, inyecciones,
+  // herramientas de hacking, enumeración de rutas y fuerza bruta, y bloquea la IP.
+  //  DEFENSA_IP=off               apaga todo (solo para diagnóstico)
+  //  DEFENSA_IP_ALERTA_EMAIL      a dónde llega el mail de cada bloqueo (por el correo de CEA, SA_SMTP_*)
+  //  DEFENSA_IP_PERMITIDAS        IPs que nunca se bloquean, separadas por coma (ej. la de la oficina de CEA)
+  //  DEFENSA_IP_LOOPBACK=on       bloquea también 127.0.0.1 (lo usan los tests; en producción no hace falta)
+  defensa: {
+    activa: process.env.DEFENSA_IP !== 'off',
+    alertaEmail: (process.env.DEFENSA_IP_ALERTA_EMAIL || '').trim(),
+    permitidas: (process.env.DEFENSA_IP_PERMITIDAS || '')
+      .split(',')
+      .map((ip) => ip.trim())
+      .filter(Boolean),
+    bloquearLoopback: process.env.DEFENSA_IP_LOOPBACK === 'on',
+  },
+
   session: {
     // Sesion inactiva se cierra sola a los 30 min (Instructivo-Funcional > Requisitos transversales).
     timeoutMinutes: 30,

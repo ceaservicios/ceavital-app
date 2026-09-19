@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError, setCsrfSuperadmin } from '../api/client.js';
 import { formatearFecha, formatearFechaHora } from '../utils/format.js';
+import SuperadminBackup from './SuperadminBackup.jsx';
+import SuperadminSeguridad from './SuperadminSeguridad.jsx';
 import './SuperadminPage.css';
 
 // Panel de CEA sobre esta instalación (/sa): plan y módulos, suspensión, cuota,
@@ -384,6 +386,10 @@ export default function SuperadminPage() {
           </div>
         )}
       </section>
+
+      {/* Defensa por IP y backup completo: cada uno maneja su propio estado */}
+      <SuperadminSeguridad irAlLogin={irAlLogin} />
+      <SuperadminBackup irAlLogin={irAlLogin} />
     </div>
   );
 }

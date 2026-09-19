@@ -204,6 +204,60 @@
   overflow-wrap: anywhere;
 }
 
+.sa-h3 {
+  margin: 22px 0 10px;
+  font-size: 15px;
+}
+.sa-mono {
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.sa-corta {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 340px;
+}
+.sa-detalle-fila {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.sa-tabla-seg {
+  min-width: 620px;
+  margin-bottom: 12px;
+}
+.sa-tabla-seg td:nth-child(3) {
+  overflow-wrap: normal;
+}
+.sa-campo-corto {
+  flex: 0 1 160px !important;
+}
+.sa-eventos {
+  margin-top: 18px;
+}
+.sa-eventos > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 6px 0;
+}
+.sa-problema {
+  color: var(--danger, #b3261e);
+}
+.sa-pasos {
+  padding-left: 20px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.sa-codigo {
+  background: var(--bg-subtle, #f1f3f4);
+  border-radius: 6px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-size: 12.5px;
+}
+
 @media (max-width: 600px) {
   .sa-page {
     padding-top: 16px;

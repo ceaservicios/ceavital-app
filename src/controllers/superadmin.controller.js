@@ -15,6 +15,9 @@ import { planActual } from '../services/modulos.service.js';
 import { cerrarSesionSuperadmin, loginSuperadmin } from '../services/superadmin.service.js';
 import { origenPermitido } from '../middleware/superadmin-auth.middleware.js';
 import { ApiError } from '../utils/api-error.js';
+import fs from 'node:fs';
+import { generarBackup } from '../services/backup-completo.service.js';
+import { bloquearManual, desbloquearIp, desbloquearTodas, estadoDefensa } from '../services/defensa-ip.service.js';
 
 // La cookie solo viaja a /api/sa (Path) y nunca en pedidos que vienen de otro sitio
 // (SameSite=Strict): el resto de la app ni siquiera la recibe.
@@ -90,4 +93,36 @@ export async function empresaEmailSuperadminController(req, res) {
 
 export async function correoPruebaSuperadminController(req, res) {
   res.json(await enviarCorreoDePrueba());
+}
+
+// ---- Backup completo de la base (descarga cifrada) ----
+// POST y no GET: lleva la contraseña en el cuerpo (no en la URL) y queda protegido por el token CSRF.
+export async function backupSuperadminController(req, res) {
+  const { ruta, nombre } = await generarBackup(req.body?.password);
+  console.log('[backup] el superadmin descargó un backup completo de la base');
+  res.set('Cache-Control', 'no-store');
+  res.download(ruta, nombre, () => {
+    fs.promises.rm(ruta, { force: true }).catch(() => {});
+  });
+}
+
+// ---- Defensa activa por IP ----
+export async function defensaSuperadminController(req, res) {
+  res.json(await estadoDefensa());
+}
+
+export async function desbloquearSuperadminController(req, res) {
+  const id = Number(req.body?.id);
+  if (!Number.isInteger(id) || id < 1) throw new ApiError(400, 'id es requerido');
+  res.json(await desbloquearIp(id));
+}
+
+export async function desbloquearTodasSuperadminController(req, res) {
+  res.json(await desbloquearTodas());
+}
+
+export async function bloquearSuperadminController(req, res) {
+  const { ip, minutos, detalle } = req.body || {};
+  if (typeof ip !== 'string') throw new ApiError(400, 'ip es requerida');
+  res.json(await bloquearManual(ip, minutos, detalle));
 }

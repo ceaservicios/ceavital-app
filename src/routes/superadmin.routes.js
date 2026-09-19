@@ -1,7 +1,12 @@
 import { Router } from 'express';
 import {
+  backupSuperadminController,
+  bloquearSuperadminController,
   cambiarPlanSuperadminController,
   correoPruebaSuperadminController,
+  defensaSuperadminController,
+  desbloquearSuperadminController,
+  desbloquearTodasSuperadminController,
   empresaEmailSuperadminController,
   fijarCuotaSuperadminController,
   logoutSuperadminController,
@@ -31,5 +36,10 @@ router.put('/empresa-email', empresaEmailSuperadminController);
 router.post('/correo-prueba', correoPruebaSuperadminController);
 router.post('/suspender', suspenderSuperadminController);
 router.post('/reactivar', reactivarSuperadminController);
+router.post('/backup', backupSuperadminController);
+router.get('/defensa', defensaSuperadminController);
+router.post('/defensa/desbloquear', desbloquearSuperadminController);
+router.post('/defensa/desbloquear-todas', desbloquearTodasSuperadminController);
+router.post('/defensa/bloquear', bloquearSuperadminController);
 
 export default router;
