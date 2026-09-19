@@ -1,6 +1,7 @@
 import db from '../db/connection.js';
 import { ApiError } from '../utils/api-error.js';
 import { existeClienteActivo, registrarAjustePorAnulacion, registrarCargoPorVenta } from './clientes-empresa.service.js';
+import { stockDisponible } from './reservas.service.js';
 
 // 'cta_cte' (B2B Fase 1) es distinto de 'fiado' -- 'fiado' sigue siendo la
 // venta fiada informal, sin cliente ni ledger (decisión confirmada con el
@@ -102,57 +103,81 @@ function validarClienteEmpresa(medioPago, clienteEmpresaId) {
 // producto puede necesitar tomarse de mas de un lote (venta_items.lote_id es
 // por-lote, no por-producto) -- se reparte en orden FEFO hasta cubrir la
 // cantidad pedida.
-export function registrarVenta({ medio_pago, items, cliente_empresa_id }, { usuarioId }) {
+//
+// Solo se puede vender el stock DISPONIBLE: lo vendible menos lo reservado por
+// pedidos de clientes-empresa pendientes (B2B Fase 2). Al aprobar un pedido se
+// llama a registrarVentaEnTransaccion con su pedidoId (su propia reserva no
+// cuenta contra sí misma) y los precios que quedaron congelados al pedir.
+//
+// registrarVentaEnTransaccion NO abre ni cierra la transacción: la maneja quien
+// la llama (registrarVenta, o la aprobación de un pedido, que además de la venta
+// tiene que actualizar el pedido en la misma transacción).
+export function registrarVentaEnTransaccion(
+  { medio_pago, items, cliente_empresa_id },
+  { usuarioId, pedidoId = null, preciosCongelados = null }
+) {
   const medioPago = validarMedioPago(medio_pago);
   const clienteEmpresaId = validarClienteEmpresa(medioPago, cliente_empresa_id);
   const itemsValidados = validarItems(items);
 
+  const ventaResult = db
+    .prepare('INSERT INTO ventas (usuario_id, medio_pago, cliente_empresa_id, total) VALUES (?, ?, ?, 0)')
+    .run(usuarioId, medioPago, clienteEmpresaId);
+  const ventaId = ventaResult.lastInsertRowid;
+
+  let total = 0;
+
+  for (const { producto_id, cantidad } of itemsValidados) {
+    const producto = obtenerProductoActivo(producto_id);
+    const precio = preciosCongelados?.get(producto_id) ?? producto.precio_venta;
+
+    const disponible = stockDisponible(producto_id, { excluirPedidoId: pedidoId });
+    if (cantidad > disponible) {
+      throw new ApiError(409, `Stock insuficiente para "${producto.nombre}" (faltan ${cantidad - disponible} unidad/es)`);
+    }
+
+    let restante = cantidad;
+
+    for (const lote of lotesVendiblesFefo(producto_id)) {
+      if (restante <= 0) break;
+      const tomar = Math.min(lote.cantidad, restante);
+
+      db.prepare(
+        'UPDATE lotes SET cantidad = cantidad - ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?'
+      ).run(tomar, lote.id);
+
+      const subtotal = tomar * precio;
+      db.prepare(
+        `INSERT INTO venta_items (venta_id, producto_id, lote_id, cantidad, precio_unitario, subtotal)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(ventaId, producto_id, lote.id, tomar, precio, subtotal);
+
+      total += subtotal;
+      restante -= tomar;
+    }
+
+    if (restante > 0) {
+      throw new ApiError(409, `Stock insuficiente para "${producto.nombre}" (faltan ${restante} unidad/es)`);
+    }
+  }
+
+  db.prepare('UPDATE ventas SET total = ? WHERE id = ?').run(total, ventaId);
+
+  // CARGO automático en la cuenta corriente del cliente (B2B Fase 1,
+  // decisión confirmada con el usuario) -- misma transacción que el resto
+  // de la venta: si algo de arriba falla (stock insuficiente), el ROLLBACK
+  // se lleva también este insert, nunca queda un cargo sin venta real.
+  if (clienteEmpresaId) {
+    registrarCargoPorVenta(clienteEmpresaId, { monto: total, ventaId, usuarioId });
+  }
+
+  return ventaId;
+}
+
+export function registrarVenta(datos, { usuarioId }) {
   db.exec('BEGIN');
   try {
-    const ventaResult = db
-      .prepare('INSERT INTO ventas (usuario_id, medio_pago, cliente_empresa_id, total) VALUES (?, ?, ?, 0)')
-      .run(usuarioId, medioPago, clienteEmpresaId);
-    const ventaId = ventaResult.lastInsertRowid;
-
-    let total = 0;
-
-    for (const { producto_id, cantidad } of itemsValidados) {
-      const producto = obtenerProductoActivo(producto_id);
-      let restante = cantidad;
-
-      for (const lote of lotesVendiblesFefo(producto_id)) {
-        if (restante <= 0) break;
-        const tomar = Math.min(lote.cantidad, restante);
-
-        db.prepare(
-          'UPDATE lotes SET cantidad = cantidad - ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?'
-        ).run(tomar, lote.id);
-
-        const subtotal = tomar * producto.precio_venta;
-        db.prepare(
-          `INSERT INTO venta_items (venta_id, producto_id, lote_id, cantidad, precio_unitario, subtotal)
-           VALUES (?, ?, ?, ?, ?, ?)`
-        ).run(ventaId, producto_id, lote.id, tomar, producto.precio_venta, subtotal);
-
-        total += subtotal;
-        restante -= tomar;
-      }
-
-      if (restante > 0) {
-        throw new ApiError(409, `Stock insuficiente para "${producto.nombre}" (faltan ${restante} unidad/es)`);
-      }
-    }
-
-    db.prepare('UPDATE ventas SET total = ? WHERE id = ?').run(total, ventaId);
-
-    // CARGO automático en la cuenta corriente del cliente (B2B Fase 1,
-    // decisión confirmada con el usuario) -- misma transacción que el resto
-    // de la venta: si algo de arriba falla (stock insuficiente), el ROLLBACK
-    // se lleva también este insert, nunca queda un cargo sin venta real.
-    if (clienteEmpresaId) {
-      registrarCargoPorVenta(clienteEmpresaId, { monto: total, ventaId, usuarioId });
-    }
-
+    const ventaId = registrarVentaEnTransaccion(datos, { usuarioId });
     db.exec('COMMIT');
     return obtenerVentaConItems(ventaId);
   } catch (err) {
@@ -160,6 +185,8 @@ export function registrarVenta({ medio_pago, items, cliente_empresa_id }, { usua
     throw err;
   }
 }
+
+export { obtenerVentaConItems };
 
 // "Ventas -- Editar" (Admin+Encargado, matriz de permisos): alcance acotado a
 // corregir el medio de pago de una venta ya registrada (confirmado con el

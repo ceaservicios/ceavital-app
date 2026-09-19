@@ -15,6 +15,12 @@ export function listarClientesEmpresaController(req, res) {
     buscar: req.query.q,
     incluirSaldo: req.sesion.rol !== 'cajero',
   });
+  // Mínimo privilegio: el Cajero solo necesita id y razón social para elegir a quién
+  // le cobra a cuenta corriente; CUIT, teléfono, email y condición de pago son datos
+  // del módulo Clientes, al que no tiene acceso (matriz de permisos).
+  if (req.sesion.rol === 'cajero') {
+    return res.json({ clientes: clientes.map(({ id, razon_social }) => ({ id, razon_social })) });
+  }
   res.json({ clientes });
 }
 

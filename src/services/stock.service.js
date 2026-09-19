@@ -27,6 +27,11 @@ function validarFecha(valor, campo) {
   if (typeof valor !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
     throw new ApiError(400, `${campo} tiene que tener formato YYYY-MM-DD`);
   }
+  // El formato solo no alcanza: "2026-99-99" lo cumple. Se comprueba que el día exista.
+  const fecha = new Date(`${valor}T00:00:00Z`);
+  if (Number.isNaN(fecha.getTime()) || fecha.toISOString().slice(0, 10) !== valor) {
+    throw new ApiError(400, `${campo} no es una fecha válida`);
+  }
   return valor;
 }
 
@@ -39,8 +44,15 @@ function ocultarCosto(producto, rol) {
   return resto;
 }
 
+// stock_reservado: unidades apartadas por pedidos de clientes-empresa pendientes
+// (B2B Fase 2). stock_vendible sigue siendo lo físico no vencido; lo que Caja
+// puede vender de verdad es stock_disponible = vendible - reservado.
 function conAlerta(producto) {
-  return { ...producto, alerta_stock_bajo: producto.stock_total <= producto.stock_minimo };
+  return {
+    ...producto,
+    stock_disponible: Math.max(0, producto.stock_vendible - producto.stock_reservado),
+    alerta_stock_bajo: producto.stock_total <= producto.stock_minimo,
+  };
 }
 
 function verificarProveedorActivo(proveedorId) {
@@ -117,7 +129,12 @@ const SELECT_PRODUCTOS_CON_STOCK = `
     p.categoria_id, c.nombre AS categoria,
     p.unidad_medida_id, u.nombre AS unidad_medida,
     COALESCE(SUM(l.cantidad), 0) AS stock_total,
-    COALESCE(SUM(CASE WHEN l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= date('now') THEN l.cantidad ELSE 0 END), 0) AS stock_vendible
+    COALESCE(SUM(CASE WHEN l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= date('now') THEN l.cantidad ELSE 0 END), 0) AS stock_vendible,
+    COALESCE((
+      SELECT SUM(i.cantidad) FROM pedido_cliente_items i
+      JOIN pedidos_cliente pc ON pc.id = i.pedido_id
+      WHERE i.producto_id = p.id AND pc.estado = 'pendiente'
+    ), 0) AS stock_reservado
   FROM productos p
   LEFT JOIN lotes l ON l.producto_id = p.id AND l.eliminado_en IS NULL
   LEFT JOIN categorias c ON c.id = p.categoria_id
@@ -198,7 +215,11 @@ export function crearProducto(datos, { rol }) {
     if (typeof datos.lote_inicial !== 'object') throw new ApiError(400, 'lote_inicial tiene que ser un objeto');
     // Cantidad vacía/0: se interpreta como "sin lote inicial todavía", no
     // como un error -- catálogo cargado antes de que llegue la mercadería.
-    if (Number(datos.lote_inicial.cantidad) > 0) {
+    // Un valor no numérico (ej. "abc") ya no se ignora en silencio: cae en
+    // validarEntero y responde 400. Solo vacío/0 significa "sin lote todavía".
+    const cantidadCargada = datos.lote_inicial.cantidad;
+    const sinLote = cantidadCargada == null || cantidadCargada === '' || Number(cantidadCargada) === 0;
+    if (!sinLote) {
       loteInicial = {
         cantidad: validarEntero(datos.lote_inicial.cantidad, 'lote_inicial.cantidad', { minimo: 1 }),
         fecha_ingreso:

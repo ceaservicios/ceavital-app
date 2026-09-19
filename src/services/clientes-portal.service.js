@@ -200,19 +200,24 @@ export async function loginCliente(usuarioLogin, passwordPlano) {
   const passwordOk = await verifyPassword(passwordPlano, cliente.portal_password_hash);
 
   if (!passwordOk) {
-    const intentos = cliente.portal_intentos_fallidos + 1;
+    // Incremento atómico en la propia sentencia (nunca "leer, esperar el hash,
+    // escribir +1": con logins simultáneos se perdían intentos y el bloqueo no
+    // se activaba). Y el bloqueo se decide con el valor ya incrementado.
+    const { portal_intentos_fallidos: intentos } = db
+      .prepare(
+        `UPDATE clientes_empresa SET portal_intentos_fallidos = portal_intentos_fallidos + 1
+         WHERE id = ? RETURNING portal_intentos_fallidos`
+      )
+      .get(cliente.id);
     if (intentos >= config.login.maxIntentos) {
       db.prepare(
-        `UPDATE clientes_empresa
-         SET portal_intentos_fallidos = ?, portal_bloqueado_hasta = datetime('now', '+' || ? || ' minutes')
-         WHERE id = ?`
-      ).run(intentos, config.login.bloqueoMinutos, cliente.id);
+        `UPDATE clientes_empresa SET portal_bloqueado_hasta = datetime('now', '+' || ? || ' minutes') WHERE id = ?`
+      ).run(config.login.bloqueoMinutos, cliente.id);
       throw new AuthError(
         `Acceso bloqueado por ${config.login.maxIntentos} intentos fallidos. Reintentá en ${config.login.bloqueoMinutos} minutos.`,
         'USUARIO_BLOQUEADO'
       );
     }
-    db.prepare('UPDATE clientes_empresa SET portal_intentos_fallidos = ? WHERE id = ?').run(intentos, cliente.id);
     throw new AuthError('Usuario o contraseña incorrectos', 'CREDENCIALES_INVALIDAS');
   }
 

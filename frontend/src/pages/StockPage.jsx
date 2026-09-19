@@ -55,6 +55,9 @@ export default function StockPage() {
   // verificador-funcional 2026-09-10) -- ref mutado sincrónicamente, no
   // depende de que React ya haya re-renderizado con `guardando=true`.
   const eliminandoRef = useRef(false);
+  // Guardia sincrónica compartida por crear producto, guardar cambios y agregar lote: `disabled={guardando}`
+  // no alcanza contra dos clicks en el mismo tick (duplicaba el producto o el lote).
+  const guardandoRef = useRef(false);
 
   const mapaProveedores = useMemo(() => new Map(proveedores.map((p) => [p.id, p.nombre])), [proveedores]);
 
@@ -159,6 +162,8 @@ export default function StockPage() {
   }
 
   async function guardarProducto() {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
     setGuardando(true);
     setPanelError(null);
     try {
@@ -186,6 +191,7 @@ export default function StockPage() {
     } catch (err) {
       setPanelError(err instanceof ApiError ? err.message : 'No se pudieron guardar los cambios.');
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   }
@@ -210,6 +216,8 @@ export default function StockPage() {
 
   async function crearProducto(e) {
     e.preventDefault();
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
     setGuardando(true);
     setPanelError(null);
     try {
@@ -238,12 +246,15 @@ export default function StockPage() {
     } catch (err) {
       setPanelError(err instanceof ApiError ? err.message : 'No se pudo crear el producto.');
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   }
 
   async function agregarLote(e) {
     e.preventDefault();
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
     setGuardando(true);
     setPanelError(null);
     try {
@@ -259,6 +270,7 @@ export default function StockPage() {
     } catch (err) {
       setPanelError(err instanceof ApiError ? err.message : 'No se pudo registrar el lote.');
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   }

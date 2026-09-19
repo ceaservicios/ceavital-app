@@ -14,7 +14,9 @@ function crearServicioCatalogo(tabla, etiqueta) {
     if (typeof valor !== 'string' || valor.trim() === '') {
       throw new ApiError(400, 'nombre es requerido');
     }
-    return valor.trim();
+    const limpio = valor.trim();
+    if (limpio.length > 100) throw new ApiError(400, 'nombre no puede superar 100 caracteres');
+    return limpio;
   }
 
   function verificarNombreLibre(nombre, excluirId = null) {

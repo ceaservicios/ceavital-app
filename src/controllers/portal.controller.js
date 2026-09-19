@@ -1,6 +1,14 @@
 import config from '../config/env.js';
 import { armarResumenCuenta, obtenerClienteEmpresa } from '../services/clientes-empresa.service.js';
 import { cerrarSesionCliente, loginCliente } from '../services/clientes-portal.service.js';
+import { catalogoConDisponibilidad } from '../services/reservas.service.js';
+import {
+  cancelarPedidoDelCliente,
+  crearPedidoDelCliente,
+  listarPedidosDelCliente,
+  pedidoDelCliente,
+} from '../services/pedidos-cliente.service.js';
+import { ApiError } from '../utils/api-error.js';
 import { enviarResumenCuentaPdf } from '../services/resumen-cuenta-pdf.service.js';
 
 export async function loginPortalController(req, res) {
@@ -67,4 +75,30 @@ export function cuentaPortalController(req, res) {
 export function resumenPortalController(req, res) {
   const resumen = armarResumenCuenta(req.cliente.id, { desde: req.query.desde, hasta: req.query.hasta });
   enviarResumenCuentaPdf(res, resumen);
+}
+
+// Comprar desde el portal (B2B Fase 2). Todo se resuelve contra el cliente de
+// la sesión (req.cliente.id): ninguna de estas rutas acepta el id de un cliente.
+export function catalogoPortalController(req, res) {
+  res.json({ productos: catalogoConDisponibilidad() });
+}
+
+export function listarPedidosPortalController(req, res) {
+  res.json({ pedidos: listarPedidosDelCliente(req.cliente.id) });
+}
+
+export function crearPedidoPortalController(req, res) {
+  res.status(201).json(crearPedidoDelCliente(req.cliente.id, req.body || {}));
+}
+
+export function obtenerPedidoPortalController(req, res) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, 'id inválido');
+  res.json(pedidoDelCliente(req.cliente.id, id));
+}
+
+export function cancelarPedidoPortalController(req, res) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, 'id inválido');
+  res.json(cancelarPedidoDelCliente(req.cliente.id, id));
 }

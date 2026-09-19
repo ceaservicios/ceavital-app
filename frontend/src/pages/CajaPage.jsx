@@ -112,6 +112,11 @@ export default function CajaPage() {
   // re-render del `disabled` -- un doble-click muy rápido puede disparar el
   // 2do click antes de que ese re-render se complete.
   const anulandoRef = useRef(false);
+  // Guardias sincrónicas: `disabled` no alcanza contra dos clicks en el mismo tick
+  // (duplicaba la venta, el gasto o la baja).
+  const confirmandoVentaRef = useRef(false);
+  const registrandoGastoRef = useRef(false);
+  const eliminandoGastoRef = useRef(false);
 
   const puedeAnular = PUEDE_ANULAR.has(usuario?.rol);
   const puedeEliminarGasto = PUEDE_ELIMINAR_GASTO.has(usuario?.rol);
@@ -151,7 +156,7 @@ export default function CajaPage() {
   // Lista de clientes-empresa para el selector de "Cuenta Corriente": los 3
   // roles la necesitan para cobrar una venta a cuenta corriente (el backend
   // deja GET /clientes-empresa abierto a todos y al Cajero le devuelve solo
-  // id + datos de contacto, nunca el saldo).
+  // id + razón social, nunca el saldo ni datos de contacto).
   useEffect(() => {
     api
       .get('/clientes-empresa')
@@ -161,6 +166,8 @@ export default function CajaPage() {
 
   async function registrarGasto(e) {
     e.preventDefault();
+    if (registrandoGastoRef.current) return;
+    registrandoGastoRef.current = true;
     setRegistrandoGasto(true);
     setErrorGasto(null);
     try {
@@ -175,11 +182,14 @@ export default function CajaPage() {
     } catch (err) {
       setErrorGasto(err instanceof ApiError ? err.message : 'No se pudo registrar el gasto.');
     } finally {
+      registrandoGastoRef.current = false;
       setRegistrandoGasto(false);
     }
   }
 
   async function eliminarGasto(id) {
+    if (eliminandoGastoRef.current) return;
+    eliminandoGastoRef.current = true;
     setEliminandoGastoId(id);
     try {
       await api.delete(`/caja/gastos/${id}`);
@@ -187,6 +197,7 @@ export default function CajaPage() {
     } catch (err) {
       setErrorGasto(err instanceof ApiError ? err.message : 'No se pudo eliminar el gasto.');
     } finally {
+      eliminandoGastoRef.current = false;
       setEliminandoGastoId(null);
     }
   }
@@ -230,7 +241,7 @@ export default function CajaPage() {
           producto_id: producto.id,
           nombre: producto.nombre,
           precio_venta: producto.precio_venta,
-          stock_vendible: producto.stock_vendible,
+          stock_vendible: producto.stock_disponible, // lo que Caja puede vender: vendible menos lo reservado por pedidos de clientes
           cantidad: 1,
         },
       ];
@@ -267,6 +278,8 @@ export default function CajaPage() {
   const vuelto = recibidoNumerico - total;
 
   async function confirmarVenta() {
+    if (confirmandoVentaRef.current) return;
+    confirmandoVentaRef.current = true;
     setError(null);
     setExito(null);
     setEnviando(true);
@@ -284,6 +297,7 @@ export default function CajaPage() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo registrar la venta. Probá de nuevo.');
     } finally {
+      confirmandoVentaRef.current = false;
       setEnviando(false);
     }
   }
@@ -390,7 +404,7 @@ export default function CajaPage() {
                     <span style={{ flex: 2.4 }} className="caja-cart-nombre">
                       {item.nombre}
                       {item.cantidad > item.stock_vendible && (
-                        <span className="caja-cart-warning">Solo hay {item.stock_vendible} en stock</span>
+                        <span className="caja-cart-warning">Solo hay {item.stock_vendible} disponible</span>
                       )}
                     </span>
                     <span style={{ flex: 1.2 }} className="caja-cart-cantidad">

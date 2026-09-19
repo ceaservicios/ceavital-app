@@ -32,6 +32,6 @@ export function puedeVerModulo(modulo, rol) {
   // Cajero no tiene acceso al módulo (ni Ver). Igual puede ELEGIR un cliente
   // al vender en Caja con "Cuenta Corriente": eso usa GET /clientes-empresa,
   // que el backend deja abierto a los 3 roles solo para armar ese selector.
-  if (modulo === 'proveedores' || modulo === 'clientes-empresa') return rol === 'admin' || rol === 'encargado';
+  if (modulo === 'proveedores' || modulo === 'clientes-empresa' || modulo === 'pedidos-cliente') return rol === 'admin' || rol === 'encargado';
   return true;
 }

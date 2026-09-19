@@ -13,6 +13,7 @@ const TITULOS = {
   '/usuarios': 'Usuarios y Roles',
   '/configuracion': 'Configuración',
   '/clientes-empresa': 'Clientes y Cuenta Corriente',
+  '/pedidos-cliente': 'Pedidos de Clientes',
 };
 
 function tituloDe(pathname) {

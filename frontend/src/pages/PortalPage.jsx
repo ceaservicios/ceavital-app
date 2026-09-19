@@ -1,36 +1,65 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client.js';
 import { formatearFechaHora, formatearMonto } from '../utils/format.js';
 import { estadoSaldo } from './clientesEmpresaComun.jsx';
+import PortalComprar from './PortalComprar.jsx';
+import PortalPedidos from './PortalPedidos.jsx';
 import ResumenCuentaDescarga from './ResumenCuentaDescarga.jsx';
 import './ClientesEmpresaPage.css';
 import './PortalPage.css';
 
+const TABS = [
+  { clave: 'comprar', texto: 'Comprar' },
+  { clave: 'pedidos', texto: 'Mis pedidos' },
+  { clave: 'cuenta', texto: 'Cuenta corriente' },
+];
+
 const ETIQUETA_TIPO = { CARGO: 'Compra', PAGO: 'Pago', AJUSTE: 'Ajuste' };
 
-// Lo que ve el cliente-empresa al entrar: el saldo de SU cuenta, sus
-// movimientos y la descarga de su resumen. Solo lectura.
+// Lo que ve el cliente-empresa al entrar: puede comprar (armar un pedido que el
+// negocio aprueba), seguir sus pedidos y ver el saldo y los movimientos de SU
+// cuenta con la descarga de su resumen.
 export default function PortalPage() {
   const navigate = useNavigate();
   const [cuenta, setCuenta] = useState(null);
   const [error, setError] = useState(null);
   const [cargando, setCargando] = useState(true);
+  const [tab, setTab] = useState('comprar');
+  const [avisoPedido, setAvisoPedido] = useState(null);
   const saliendoRef = useRef(false);
 
-  useEffect(() => {
-    api
+  const volverAlIngreso = useCallback(() => navigate('/portal/login', { replace: true }), [navigate]);
+
+  const cargarCuenta = useCallback(() => {
+    return api
       .get('/portal/cuenta')
-      .then(setCuenta)
+      .then((data) => {
+        setCuenta(data);
+        setError(null);
+      })
       .catch((err) => {
-        if (err instanceof ApiError && err.status === 401) {
-          navigate('/portal/login', { replace: true });
-          return;
-        }
+        if (err instanceof ApiError && err.status === 401) return volverAlIngreso();
         setError(err instanceof ApiError ? err.message : 'No se pudo cargar tu cuenta.');
       })
       .finally(() => setCargando(false));
-  }, [navigate]);
+  }, [volverAlIngreso]);
+
+  useEffect(() => {
+    cargarCuenta();
+  }, [cargarCuenta]);
+
+  function cambiarTab(clave) {
+    setTab(clave);
+    if (clave !== 'pedidos') setAvisoPedido(null);
+    // Un pedido aprobado cambia el saldo: se vuelve a pedir la cuenta al abrir esa pestaña.
+    if (clave === 'cuenta') cargarCuenta();
+  }
+
+  function pedidoEnviado(pedido) {
+    setAvisoPedido(`Enviaste el pedido #${pedido.id} por ${formatearMonto(pedido.total)}. El negocio lo va a revisar.`);
+    setTab('pedidos');
+  }
 
   async function salir() {
     if (saliendoRef.current) return;
@@ -40,7 +69,7 @@ export default function PortalPage() {
     } catch {
       // Si la sesión ya venció igual se sale: el objetivo es volver al ingreso.
     }
-    navigate('/portal/login', { replace: true });
+    volverAlIngreso();
   }
 
   const estado = cuenta ? estadoSaldo(cuenta.saldo) : null;
@@ -61,10 +90,28 @@ export default function PortalPage() {
       </header>
 
       <main className="portal-contenido">
-        {cargando && <div className="cliente-vacio">Cargando…</div>}
-        {error && <div className="alert alert-danger">{error}</div>}
+        <div className="cliente-tabs portal-tabs" role="tablist">
+          {TABS.map((t) => (
+            <button
+              key={t.clave}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.clave}
+              className={`cliente-tab${tab === t.clave ? ' cliente-tab-activa' : ''}`}
+              onClick={() => cambiarTab(t.clave)}
+            >
+              {t.texto}
+            </button>
+          ))}
+        </div>
 
-        {cuenta && (
+        {tab === 'comprar' && <PortalComprar onSesionVencida={volverAlIngreso} onPedidoEnviado={pedidoEnviado} />}
+        {tab === 'pedidos' && <PortalPedidos onSesionVencida={volverAlIngreso} avisoInicial={avisoPedido} />}
+
+        {tab === 'cuenta' && cargando && <div className="cliente-vacio">Cargando…</div>}
+        {tab === 'cuenta' && error && <div className="alert alert-danger">{error}</div>}
+
+        {tab === 'cuenta' && cuenta && (
           <>
             <div className="portal-titulo">
               <h1 className="cliente-h1">Tu cuenta corriente</h1>

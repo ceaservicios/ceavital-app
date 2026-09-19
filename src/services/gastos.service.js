@@ -1,14 +1,22 @@
 import db from '../db/connection.js';
 import { ApiError } from '../utils/api-error.js';
 
+const MAX_CONCEPTO = 200;
+// Tope de un monto en pesos (Number.isInteger(1e21) es true): sin él un gasto
+// absurdo corrompía el efectivo esperado del día.
+const MAX_MONTO = 1_000_000_000;
+
 function validarConcepto(valor) {
   if (typeof valor !== 'string' || valor.trim() === '') throw new ApiError(400, 'concepto es requerido');
-  return valor.trim();
+  const limpio = valor.trim();
+  if (limpio.length > MAX_CONCEPTO) throw new ApiError(400, `concepto no puede superar ${MAX_CONCEPTO} caracteres`);
+  return limpio;
 }
 
 function validarMonto(valor) {
   const n = Number(valor);
   if (!Number.isInteger(n) || n <= 0) throw new ApiError(400, 'monto tiene que ser un número entero mayor a 0');
+  if (n > MAX_MONTO) throw new ApiError(400, `monto no puede superar ${MAX_MONTO.toLocaleString('es-AR')}`);
   return n;
 }
 

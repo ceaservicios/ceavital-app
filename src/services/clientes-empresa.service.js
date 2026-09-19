@@ -1,24 +1,43 @@
 import db from '../db/connection.js';
 import { ApiError } from '../utils/api-error.js';
 
-function validarString(valor, campo, { requerido = true } = {}) {
+// Todo texto libre tiene tope de longitud: sin él, un texto de 100.000
+// caracteres en un movimiento colgaba el servidor al armar el PDF de resumen
+// (síncrono), y los datos de ficha podían crecer sin límite.
+const MAX_TEXTO = 200;
+const MAX_TEXTO_LARGO = 500;
+// Tope de un monto en pesos: Number.isInteger(1e21) es true, así que sin tope un
+// pago o ajuste absurdo dejaba el saldo del cliente en un número inservible.
+const MAX_MONTO = 1_000_000_000;
+
+function validarString(valor, campo, { requerido = true, maxLength = MAX_TEXTO } = {}) {
   if (valor === undefined || valor === null || valor === '') {
     if (requerido) throw new ApiError(400, `${campo} es requerido`);
     return null;
   }
   if (typeof valor !== 'string') throw new ApiError(400, `${campo} tiene que ser texto`);
-  return valor.trim();
+  const limpio = valor.trim();
+  if (limpio.length > maxLength) throw new ApiError(400, `${campo} no puede superar ${maxLength} caracteres`);
+  return limpio;
+}
+
+function validarEmailOpcional(valor) {
+  const email = validarString(valor, 'email', { requerido: false });
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiError(400, 'email no tiene un formato válido');
+  return email;
 }
 
 function validarMontoPositivo(valor, campo) {
   const n = Number(valor);
   if (!Number.isInteger(n) || n <= 0) throw new ApiError(400, `${campo} tiene que ser un número entero mayor a 0`);
+  if (n > MAX_MONTO) throw new ApiError(400, `${campo} no puede superar ${MAX_MONTO.toLocaleString('es-AR')}`);
   return n;
 }
 
 function validarMontoConSigno(valor, campo) {
   const n = Number(valor);
   if (!Number.isInteger(n) || n === 0) throw new ApiError(400, `${campo} tiene que ser un número entero distinto de 0`);
+  if (Math.abs(n) > MAX_MONTO) throw new ApiError(400, `${campo} no puede superar ${MAX_MONTO.toLocaleString('es-AR')} (en valor absoluto)`);
   return n;
 }
 
@@ -27,9 +46,14 @@ function validarMontoConSigno(valor, campo) {
 // backstop. cuit es opcional -- solo se chequea si se manda uno.
 function verificarCuitLibre(cuit, excluirId = null) {
   if (!cuit) return;
+  // Se compara sin guiones ni espacios: "30-11111111-1" y "30111111111" son el mismo CUIT.
+  const soloDigitos = cuit.replace(/[-\s]/g, '');
   const existente = db
-    .prepare('SELECT id FROM clientes_empresa WHERE cuit = ? AND eliminado_en IS NULL AND id != ?')
-    .get(cuit, excluirId ?? -1);
+    .prepare(
+      `SELECT id FROM clientes_empresa
+       WHERE REPLACE(REPLACE(cuit, '-', ''), ' ', '') = ? AND eliminado_en IS NULL AND id != ?`
+    )
+    .get(soloDigitos, excluirId ?? -1);
   if (existente) throw new ApiError(409, 'Ya existe un cliente-empresa activo con ese CUIT');
 }
 
@@ -117,8 +141,8 @@ export function crearClienteEmpresa(datos) {
   const cuit = validarString(datos.cuit, 'cuit', { requerido: false });
   const contactoNombre = validarString(datos.contacto_nombre, 'contacto_nombre', { requerido: false });
   const telefono = validarString(datos.telefono, 'telefono', { requerido: false });
-  const email = validarString(datos.email, 'email', { requerido: false });
-  const direccion = validarString(datos.direccion, 'direccion', { requerido: false });
+  const email = validarEmailOpcional(datos.email);
+  const direccion = validarString(datos.direccion, 'direccion', { requerido: false, maxLength: MAX_TEXTO_LARGO });
   const condicionPagoId = validarCondicionPagoId(datos.condicion_pago_id);
 
   verificarCuitLibre(cuit);
@@ -149,9 +173,9 @@ export function editarClienteEmpresa(id, datos) {
   if (datos.telefono !== undefined) {
     actualizaciones.telefono = validarString(datos.telefono, 'telefono', { requerido: false });
   }
-  if (datos.email !== undefined) actualizaciones.email = validarString(datos.email, 'email', { requerido: false });
+  if (datos.email !== undefined) actualizaciones.email = validarEmailOpcional(datos.email);
   if (datos.direccion !== undefined) {
-    actualizaciones.direccion = validarString(datos.direccion, 'direccion', { requerido: false });
+    actualizaciones.direccion = validarString(datos.direccion, 'direccion', { requerido: false, maxLength: MAX_TEXTO_LARGO });
   }
   if (datos.condicion_pago_id !== undefined) {
     // Reenviar la MISMA condición que ya tiene el cliente siempre se acepta,
@@ -274,7 +298,7 @@ export { diaLocal, ZONA_NEGOCIO };
 export function registrarPago(clienteEmpresaId, { monto, descripcion }, { usuarioId }) {
   obtenerClienteActivo(clienteEmpresaId);
   const montoValido = validarMontoPositivo(monto, 'monto');
-  const desc = validarString(descripcion, 'descripcion', { requerido: false });
+  const desc = validarString(descripcion, 'descripcion', { requerido: false, maxLength: MAX_TEXTO_LARGO });
 
   db.prepare(
     `INSERT INTO cuenta_corriente_movimientos (cliente_empresa_id, tipo, monto, descripcion, usuario_id)
@@ -290,7 +314,7 @@ export function registrarPago(clienteEmpresaId, { monto, descripcion }, { usuari
 export function registrarAjuste(clienteEmpresaId, { monto, descripcion }, { usuarioId }) {
   obtenerClienteActivo(clienteEmpresaId);
   const montoValido = validarMontoConSigno(monto, 'monto');
-  const desc = validarString(descripcion, 'descripcion');
+  const desc = validarString(descripcion, 'descripcion', { maxLength: MAX_TEXTO_LARGO });
 
   db.prepare(
     `INSERT INTO cuenta_corriente_movimientos (cliente_empresa_id, tipo, monto, descripcion, usuario_id)

@@ -11,6 +11,7 @@ import ProveedoresPage from './pages/ProveedoresPage.jsx';
 import ClientesEmpresaPage from './pages/ClientesEmpresaPage.jsx';
 import ClienteEmpresaNuevoPage from './pages/ClienteEmpresaNuevoPage.jsx';
 import ClienteEmpresaDetallePage from './pages/ClienteEmpresaDetallePage.jsx';
+import PedidosClientePage from './pages/PedidosClientePage.jsx';
 import CierreCajaPage from './pages/CierreCajaPage.jsx';
 import CostosPage from './pages/CostosPage.jsx';
 import UsuariosPage from './pages/UsuariosPage.jsx';
@@ -53,6 +54,14 @@ export default function App() {
             <Route path="nuevo" element={<ClienteEmpresaNuevoPage />} />
             <Route path=":id" element={<ClienteEmpresaDetallePage />} />
           </Route>
+          <Route
+            path="pedidos-cliente"
+            element={
+              <RequireRole modulo="pedidos-cliente">
+                <PedidosClientePage />
+              </RequireRole>
+            }
+          />
           <Route path="cierre-caja" element={<CierreCajaPage />} />
           <Route
             path="costos"
