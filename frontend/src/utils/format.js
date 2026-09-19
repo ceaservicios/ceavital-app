@@ -22,6 +22,9 @@ export function formatearFechaHora(datetimeUtc) {
   return fecha.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
+// Hoy en hora argentina (el negocio funciona siempre en esa zona, esté donde esté
+// el navegador o el servidor). toISOString() daba el día UTC: desde las 21:00
+// argentinas ya devolvía el día siguiente.
 export function fechaHoyISO() {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 }

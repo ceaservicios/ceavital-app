@@ -1,5 +1,6 @@
 import db from '../db/connection.js';
 import { ApiError } from '../utils/api-error.js';
+import { sqlDiaNegocio } from '../utils/fecha-negocio.js';
 
 const MAX_CONCEPTO = 200;
 // Tope de un monto en pesos (Number.isInteger(1e21) es true): sin él un gasto
@@ -35,7 +36,7 @@ export function listarGastos({ fecha } = {}) {
   const condiciones = ['eliminado_en IS NULL'];
   const params = [];
   if (fecha) {
-    condiciones.push('date(creado_en) = ?');
+    condiciones.push(`${sqlDiaNegocio('creado_en')} = ?`);
     params.push(fecha);
   }
   return db.prepare(`SELECT * FROM gastos_caja WHERE ${condiciones.join(' AND ')} ORDER BY creado_en DESC`).all(...params);
@@ -68,7 +69,7 @@ export function eliminarGasto(id) {
 
 export function totalGastosDelDia(fecha) {
   const fila = db
-    .prepare(`SELECT COALESCE(SUM(monto), 0) AS total FROM gastos_caja WHERE eliminado_en IS NULL AND date(creado_en) = ?`)
+    .prepare(`SELECT COALESCE(SUM(monto), 0) AS total FROM gastos_caja WHERE eliminado_en IS NULL AND ${sqlDiaNegocio('creado_en')} = ?`)
     .get(fecha);
   return fila.total;
 }

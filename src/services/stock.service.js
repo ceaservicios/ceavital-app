@@ -1,4 +1,5 @@
 import db from '../db/connection.js';
+import { hoyNegocio } from '../utils/fecha-negocio.js';
 import { ApiError } from '../utils/api-error.js';
 
 const CAMPOS_PRECIO = ['precio_costo', 'precio_venta'];
@@ -13,7 +14,9 @@ function validarString(valor, campo, { requerido = true } = {}) {
 }
 
 function validarEntero(valor, campo, { requerido = true, minimo = null } = {}) {
-  if (valor === undefined || valor === null) {
+  // Un campo vacío ("" o solo espacios) es "no cargado", no 0: Number('') vale 0 y un
+  // precio en blanco terminaba guardado como $0.
+  if (valor === undefined || valor === null || (typeof valor === 'string' && valor.trim() === '')) {
     if (requerido) throw new ApiError(400, `${campo} es requerido`);
     return null;
   }
@@ -225,7 +228,7 @@ export function crearProducto(datos, { rol }) {
         fecha_ingreso:
           datos.lote_inicial.fecha_ingreso != null
             ? validarFecha(datos.lote_inicial.fecha_ingreso, 'lote_inicial.fecha_ingreso')
-            : new Date().toISOString().slice(0, 10),
+            : hoyNegocio(),
         fecha_vencimiento:
           datos.lote_inicial.fecha_vencimiento != null
             ? validarFecha(datos.lote_inicial.fecha_vencimiento, 'lote_inicial.fecha_vencimiento')
@@ -346,7 +349,7 @@ export function crearLote(productoId, datos) {
   const fechaIngreso =
     datos.fecha_ingreso !== undefined && datos.fecha_ingreso !== null
       ? validarFecha(datos.fecha_ingreso, 'fecha_ingreso')
-      : new Date().toISOString().slice(0, 10);
+      : hoyNegocio();
   const fechaVencimiento = datos.fecha_vencimiento != null ? validarFecha(datos.fecha_vencimiento, 'fecha_vencimiento') : null;
 
   const resultado = db

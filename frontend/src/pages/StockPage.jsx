@@ -166,6 +166,12 @@ export default function StockPage() {
     guardandoRef.current = true;
     setGuardando(true);
     setPanelError(null);
+    if (esAdmin && (edicion.precio_costo === '' || edicion.precio_venta === '')) {
+      setPanelError('Completá el precio de costo y el de venta.');
+      guardandoRef.current = false;
+      setGuardando(false);
+      return;
+    }
     try {
       const payload = {
         nombre: edicion.nombre,
@@ -220,6 +226,13 @@ export default function StockPage() {
     guardandoRef.current = true;
     setGuardando(true);
     setPanelError(null);
+    // Un precio en blanco no se manda (Number('') es 0 y quedaba guardado como $0).
+    if (nuevoProducto.precio_costo === '' || nuevoProducto.precio_venta === '') {
+      setPanelError('Completá el precio de costo y el de venta.');
+      guardandoRef.current = false;
+      setGuardando(false);
+      return;
+    }
     try {
       const payload = {
         nombre: nuevoProducto.nombre,

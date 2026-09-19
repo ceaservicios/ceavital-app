@@ -200,9 +200,26 @@ export function editarClienteEmpresa(id, datos) {
   return obtenerClienteEmpresa(id);
 }
 
-export function eliminarClienteEmpresa(id) {
+// Al dar de baja un cliente, sus pedidos pendientes se rechazan solos: si no,
+// seguían apartando stock (reserva) hasta que alguien los rechazara a mano y
+// nadie podía aprobarlos igual (el cliente ya no existe). El stock reservado
+// vuelve a estar disponible en el acto. Todo en una transacción.
+export function eliminarClienteEmpresa(id, { usuarioId } = {}) {
   obtenerClienteActivo(id);
-  db.prepare('UPDATE clientes_empresa SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+  db.exec('BEGIN');
+  try {
+    db.prepare(
+      `UPDATE pedidos_cliente
+       SET estado = 'rechazado', motivo_rechazo = 'El cliente fue dado de baja', resuelto_por = ?,
+           resuelto_en = CURRENT_TIMESTAMP, actualizado_en = CURRENT_TIMESTAMP
+       WHERE cliente_empresa_id = ? AND estado = 'pendiente'`
+    ).run(usuarioId ?? null, id);
+    db.prepare('UPDATE clientes_empresa SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
 }
 
 export function listarMovimientos(clienteEmpresaId) {

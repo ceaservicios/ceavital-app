@@ -1,4 +1,5 @@
 import db from '../db/connection.js';
+import { hoyNegocio, sqlDiaNegocio } from '../utils/fecha-negocio.js';
 import { ApiError } from '../utils/api-error.js';
 import { obtenerConfiguracionBackups } from './configuracion.service.js';
 import { ejecutarBackup } from './backups.service.js';
@@ -23,7 +24,7 @@ function validarEnteroNoNegativo(valor, campo) {
 }
 
 function fechaHoy() {
-  return db.prepare(`SELECT date('now') AS hoy`).get().hoy;
+  return hoyNegocio();
 }
 
 // Fondo dejado en el cierre mas reciente ANTERIOR a esta fecha -- se suma al
@@ -55,7 +56,7 @@ export function calcularResumenDelDia(fechaParam) {
     .prepare(
       `SELECT medio_pago, COALESCE(SUM(total), 0) AS total
        FROM ventas
-       WHERE estado = 'registrada' AND date(creado_en) = ?
+       WHERE estado = 'registrada' AND ${sqlDiaNegocio('creado_en')} = ?
        GROUP BY medio_pago`
     )
     .all(fecha);

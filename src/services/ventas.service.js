@@ -2,6 +2,7 @@ import db from '../db/connection.js';
 import { ApiError } from '../utils/api-error.js';
 import { existeClienteActivo, registrarAjustePorAnulacion, registrarCargoPorVenta } from './clientes-empresa.service.js';
 import { stockDisponible } from './reservas.service.js';
+import { sqlDiaNegocio } from '../utils/fecha-negocio.js';
 
 // 'cta_cte' (B2B Fase 1) es distinto de 'fiado' -- 'fiado' sigue siendo la
 // venta fiada informal, sin cliente ni ledger (decisión confirmada con el
@@ -75,7 +76,7 @@ function obtenerVentaConItems(ventaId) {
 export function listarVentas({ fecha } = {}) {
   if (fecha) {
     return db
-      .prepare(`SELECT * FROM ventas WHERE date(creado_en) = ? ORDER BY creado_en DESC`)
+      .prepare(`SELECT * FROM ventas WHERE ${sqlDiaNegocio('creado_en')} = ? ORDER BY creado_en DESC`)
       .all(fecha);
   }
   return db.prepare('SELECT * FROM ventas ORDER BY creado_en DESC').all();

@@ -1,4 +1,5 @@
 import db from '../db/connection.js';
+import { hoyNegocio } from '../utils/fecha-negocio.js';
 import { ApiError } from '../utils/api-error.js';
 
 const ESTADOS_PEDIDO = ['realizado', 'pendiente', 'recibido', 'cancelado'];
@@ -163,7 +164,7 @@ export function crearPedido(proveedorId, datos, { usuarioId }) {
   obtenerProveedorActivo(proveedorId);
 
   const items = validarItemsPedido(datos.items);
-  const fecha = datos.fecha != null ? validarFecha(datos.fecha, 'fecha') : new Date().toISOString().slice(0, 10);
+  const fecha = datos.fecha != null ? validarFecha(datos.fecha, 'fecha') : hoyNegocio();
   const estado = datos.estado != null ? validarEstado(datos.estado) : 'realizado';
 
   for (const { producto_id } of items) {

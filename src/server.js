@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { diaNegocioDeUtc, horaNegocio, hoyNegocio } from './utils/fecha-negocio.js';
 import http from 'node:http';
 import https from 'node:https';
 import path from 'node:path';
@@ -104,16 +105,15 @@ setInterval(() => {
 // de la misma ventana de 1 minuto y sobrevive a un reinicio del proceso
 // (se consulta backups_historial en vez de una bandera en memoria).
 function yaHuboBackupHoy() {
-  return listarHistorial().some((b) => b.creado_en.slice(0, 10) === new Date().toISOString().slice(0, 10));
+  return listarHistorial().some((b) => diaNegocioDeUtc(b.creado_en) === hoyNegocio());
 }
 
 setInterval(() => {
   const cfg = obtenerConfiguracionBackups();
   if (cfg.frecuencia !== 'diario' || !cfg.horario) return;
 
-  const ahora = new Date();
-  const horaActual = `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
-  if (horaActual !== cfg.horario) return;
+  // Hora argentina siempre (la VPS corre en UTC): el horario configurado es el del negocio.
+  if (horaNegocio() !== cfg.horario) return;
   if (yaHuboBackupHoy()) return;
 
   console.log('[backups] disparando backup diario programado');

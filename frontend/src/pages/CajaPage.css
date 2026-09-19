@@ -445,3 +445,9 @@
 .caja-gasto-eliminar:hover {
   color: var(--color-danger);
 }
+
+/* Celular: el mensaje de carrito vacío no lleva el ancho mínimo de las filas del
+   carrito (esa regla global lo dejaba cortado, con scroll de costado). */
+.caja-cart-list > .caja-cart-empty {
+  min-width: 0;
+}

@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { hoyNegocio } from '../utils/fecha-negocio.js';
 import { ZONA_NEGOCIO } from './clientes-empresa.service.js';
 
 // Colores de marca (marca.md): Verde Esmeralda Oscuro para acentos. Rosa Coral y
@@ -215,7 +216,7 @@ function nombreArchivoSeguro(texto) {
 // Admin/Encargado desde la ficha y el que baja el propio cliente desde su
 // portal (mismo documento, distinto control de acceso).
 export function enviarResumenCuentaPdf(res, resumen) {
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyNegocio();
   const nombre = `Resumen-cuenta-${nombreArchivoSeguro(resumen.cliente.razon_social) || 'cliente'}-${hoy}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${nombre}"`);

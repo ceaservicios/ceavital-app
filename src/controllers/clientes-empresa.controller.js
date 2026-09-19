@@ -41,7 +41,7 @@ export function editarClienteEmpresaController(req, res) {
 
 export function eliminarClienteEmpresaController(req, res) {
   const id = parsearId(req.params.id);
-  clientesEmpresaService.eliminarClienteEmpresa(id);
+  clientesEmpresaService.eliminarClienteEmpresa(id, { usuarioId: req.sesion.usuario_id });
   res.status(204).send();
 }
 
