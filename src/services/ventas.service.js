@@ -3,16 +3,18 @@ import { ApiError } from '../utils/api-error.js';
 import { existeClienteActivo, registrarAjustePorAnulacion, registrarCargoPorVenta } from './clientes-empresa.service.js';
 import { stockDisponible } from './reservas.service.js';
 import { sqlDiaNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
+import { mediosPagoPermitidos } from './modulos.service.js';
 
 // 'cta_cte' (B2B Fase 1) es distinto de 'fiado' -- 'fiado' sigue siendo la
 // venta fiada informal, sin cliente ni ledger (decisión confirmada con el
 // usuario). 'cta_cte' SIEMPRE requiere un cliente_empresa_id real, ver
 // validarClienteEmpresa más abajo.
-const MEDIOS_PAGO = ['efectivo', 'tarjeta', 'transferencia_qr', 'mercado_pago', 'fiado', 'cta_cte'];
-
-function validarMedioPago(valor) {
-  if (!MEDIOS_PAGO.includes(valor)) {
-    throw new ApiError(400, `medio_pago tiene que ser uno de: ${MEDIOS_PAGO.join(', ')}`);
+// 'cta_cte' solo se acepta si el plan incluye el módulo de clientes-empresa
+// (ver modulos.service.mediosPagoPermitidos).
+async function validarMedioPago(valor) {
+  const permitidos = await mediosPagoPermitidos();
+  if (!permitidos.includes(valor)) {
+    throw new ApiError(400, `medio_pago tiene que ser uno de: ${permitidos.join(', ')}`);
   }
   return valor;
 }
@@ -117,7 +119,7 @@ export async function registrarVentaEnTransaccion(
   { medio_pago, items, cliente_empresa_id },
   { usuarioId, pedidoId = null, preciosCongelados = null }
 ) {
-  const medioPago = validarMedioPago(medio_pago);
+  const medioPago = await validarMedioPago(medio_pago);
   const clienteEmpresaId = await validarClienteEmpresa(medioPago, cliente_empresa_id);
   const itemsValidados = validarItems(items);
 
@@ -193,7 +195,7 @@ export { obtenerVentaConItems };
 // mal cargado, anular la venta (revierte el cargo con un AJUSTE) y volver a
 // registrarla bien.
 export async function editarMedioPago(id, { medio_pago }) {
-  const medioPago = validarMedioPago(medio_pago);
+  const medioPago = await validarMedioPago(medio_pago);
 
   await db.transaction(async () => {
     const venta = await db.prepare('SELECT id, estado, medio_pago FROM ventas WHERE id = ?').get(id);

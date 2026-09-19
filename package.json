@@ -8,9 +8,11 @@
   },
   "scripts": {
     "start": "node src/server.js",
+    "test": "node --test \"test/*.test.js\"",
     "dev": "nodemon src/server.js",
     "migrate": "node src/db/run-migrate.js",
     "seed:admin": "node src/db/seed-admin.js",
+    "set-plan": "node src/db/set-plan.js",
     "reset-admin-password": "node src/db/reset-admin-password.js",
     "importar:sqlite": "node src/db/importar-sqlite.js"
   },

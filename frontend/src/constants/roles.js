@@ -18,6 +18,19 @@ export function iniciales(nombre) {
     .join('');
 }
 
+// Ítems de menú/rutas que pertenecen a un módulo opcional del plan. Un módulo
+// apagado se oculta por completo (no se muestra bloqueado); ver src/config/modulos.js
+// del backend.
+const MODULO_DEL_PLAN = {
+  'clientes-empresa': 'clientes_empresa',
+  'pedidos-cliente': 'pedidos',
+};
+
+export function moduloDisponible(modulo, modulosActivos) {
+  const requerido = MODULO_DEL_PLAN[modulo];
+  return !requerido || Boolean(modulosActivos?.includes(requerido));
+}
+
 /**
  * Permisos de navegación por modulo. Fuente de verdad: la matriz de permisos
  * real (Docs/Resumen-Ejecutivo.md), NO el Sidebar del mockup original -- ese

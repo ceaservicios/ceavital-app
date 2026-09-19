@@ -1,11 +1,4 @@
-import config from '../config/env.js';
 import { marcarActividadCliente, obtenerSesionClienteValida } from '../services/clientes-portal.service.js';
-
-// Portal apagado (PORTAL_CLIENTES=off): las rutas del portal directamente no existen.
-export function portalDisponible(req, res, next) {
-  if (!config.portalClientes) return res.status(404).json({ error: 'No encontrado' });
-  next();
-}
 
 // Exige sesión de CLIENTE válida (cookie propia, distinta de la de los
 // usuarios internos). Solo deja el id del cliente autenticado en req.cliente:

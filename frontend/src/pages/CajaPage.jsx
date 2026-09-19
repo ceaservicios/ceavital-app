@@ -78,7 +78,9 @@ const PUEDE_ANULAR = new Set(['admin', 'encargado']);
 const PUEDE_ELIMINAR_GASTO = new Set(['admin', 'encargado']);
 
 export default function CajaPage() {
-  const { usuario } = useAuth();
+  const { usuario, moduloActivo } = useAuth();
+  const cuentaCorrienteActiva = moduloActivo('clientes_empresa');
+  const mediosVisibles = MEDIOS_PAGO.filter((m) => m.valor !== 'cta_cte' || cuentaCorrienteActiva);
 
   const [query, setQuery] = useState('');
   const [resultados, setResultados] = useState([]);
@@ -158,11 +160,12 @@ export default function CajaPage() {
   // deja GET /clientes-empresa abierto a todos y al Cajero le devuelve solo
   // id + razón social, nunca el saldo ni datos de contacto).
   useEffect(() => {
+    if (!cuentaCorrienteActiva) return;
     api
       .get('/clientes-empresa')
       .then((data) => setClientesEmpresa(data.clientes))
       .catch(() => setClientesEmpresa([]));
-  }, []);
+  }, [cuentaCorrienteActiva]);
 
   async function registrarGasto(e) {
     e.preventDefault();
@@ -445,7 +448,7 @@ export default function CajaPage() {
           <div className="caja-medios">
             <span className="caja-section-label">Medio de cobro</span>
             <div className="caja-medios-grid">
-              {MEDIOS_PAGO.map((medio) => (
+              {mediosVisibles.map((medio) => (
                 <button
                   type="button"
                   key={medio.valor}

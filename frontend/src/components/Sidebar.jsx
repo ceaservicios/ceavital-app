@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { etiquetaRol, iniciales, puedeVerModulo } from '../constants/roles.js';
+import { etiquetaRol, iniciales, moduloDisponible, puedeVerModulo } from '../constants/roles.js';
 import './Sidebar.css';
 
 const ICONOS = {
@@ -106,7 +106,7 @@ const SECCIONES = [
 ];
 
 export default function Sidebar({ abierto = false }) {
-  const { usuario, logout } = useAuth();
+  const { usuario, logout, modulos } = useAuth();
   const rol = usuario?.rol;
 
   return (
@@ -120,7 +120,7 @@ export default function Sidebar({ abierto = false }) {
         {SECCIONES.map((seccion) => (
           <div className="sidebar-section" key={seccion.titulo}>
             <div className="sidebar-section-title">{seccion.titulo}</div>
-            {seccion.items.map((item) => {
+            {seccion.items.filter((item) => moduloDisponible(item.modulo, modulos)).map((item) => {
               const habilitado = puedeVerModulo(item.modulo, rol);
               if (!habilitado) {
                 return (

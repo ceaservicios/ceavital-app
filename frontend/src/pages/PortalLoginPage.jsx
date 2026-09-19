@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client.js';
+import { useAuth } from '../context/AuthContext.jsx';
 import './LoginPage.css';
 
 // Ingreso del cliente-empresa a su propia cuenta. Sesión aparte de la de los
 // usuarios del negocio (ver src/services/clientes-portal.service.js).
 export default function PortalLoginPage() {
   const navigate = useNavigate();
+  const { cargandoSesion, moduloActivo } = useAuth();
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
@@ -24,6 +26,25 @@ export default function PortalLoginPage() {
     } finally {
       setEnviando(false);
     }
+  }
+
+  if (cargandoSesion) return null;
+
+  // Plan sin el módulo de portal: no hay ingreso de clientes en esta instalación.
+  if (!moduloActivo('portal')) {
+    return (
+      <div className="login-page">
+        <div className="login-card card">
+          <div className="login-brand">
+            <img src="/logo-icon.png" alt="CEAVital" className="login-logo" />
+            <div className="login-brand-text">
+              <span className="login-brand-title">Portal no disponible</span>
+              <span className="login-brand-subtitle">Este negocio no tiene habilitado el acceso de clientes.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -3,6 +3,8 @@ import { hoyNegocio, sqlDiaNegocio } from '../utils/fecha-negocio.js';
 import { ApiError } from '../utils/api-error.js';
 import { totalGastosDelDia } from './gastos.service.js';
 
+// Se suman todos los medios que existan en los datos, aunque el plan actual no
+// ofrezca 'cta_cte': una venta ya registrada nunca se descarta del total.
 const MEDIOS_PAGO = ['efectivo', 'tarjeta', 'transferencia_qr', 'mercado_pago', 'fiado', 'cta_cte'];
 
 function validarFecha(valor) {

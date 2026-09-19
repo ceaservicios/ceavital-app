@@ -5,6 +5,7 @@ import { ApiError } from '../utils/api-error.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
 import { AuthError } from './auth.service.js';
 import { armarCorreoAcceso, correoDisponible, enviarCorreo } from './mail.service.js';
+import { moduloActivo } from './modulos.service.js';
 
 // Portal del cliente-empresa: credenciales que carga el Admin/Encargado desde
 // la ficha del cliente, y login propio del cliente para ver su cuenta. Vive
@@ -59,9 +60,9 @@ async function obtenerClienteActivoParaAcceso(id) {
   return fila;
 }
 
-function aAcceso(fila) {
+async function aAcceso(fila) {
   return {
-    portal_disponible: config.portalClientes,
+    portal_disponible: await moduloActivo('portal'),
     configurado: Boolean(fila.portal_usuario && fila.tiene_password),
     usuario: fila.portal_usuario ?? null,
     habilitado: Boolean(fila.portal_habilitado),
@@ -111,7 +112,7 @@ export async function enviarAccesoPorCorreo(clienteEmpresaId, { password, enlace
 }
 
 export async function obtenerAcceso(clienteEmpresaId) {
-  return aAcceso(await obtenerClienteActivoParaAcceso(clienteEmpresaId));
+  return await aAcceso(await obtenerClienteActivoParaAcceso(clienteEmpresaId));
 }
 
 // Alta o cambio del acceso del cliente. Alta: usuario y contraseña son

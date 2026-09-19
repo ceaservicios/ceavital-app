@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
+import { requireModulo } from '../middleware/modulo.middleware.js';
 import {
   categoriasController,
   condicionesPagoController,
@@ -27,6 +28,8 @@ router.delete('/unidades-medida/:id', requireAuth(['admin']), unidadesMedidaCont
 // Condiciones de pago (B2B, pedido del usuario 2026-09-18) -- mismo criterio:
 // Ver = Admin + Encargado (necesitan el listado para el <select> de
 // Clientes-Empresa), Crear/Editar/Eliminar = exclusivo Admin.
+// Las condiciones de pago pertenecen al módulo de clientes-empresa.
+router.use('/condiciones-pago', requireModulo('clientes_empresa'));
 router.get('/condiciones-pago', requireAuth(['admin', 'encargado']), condicionesPagoController.listar);
 router.post('/condiciones-pago', requireAuth(['admin']), condicionesPagoController.crear);
 router.patch('/condiciones-pago/:id', requireAuth(['admin']), condicionesPagoController.editar);

@@ -42,11 +42,12 @@ const config = {
     .map((o) => o.trim())
     .filter(Boolean),
 
-  // Portal del cliente-empresa (login propio del cliente para ver su cuenta).
-  // Activo por defecto; PORTAL_CLIENTES=off lo apaga por completo (las rutas
-  // del portal responden 404 y la ficha lo avisa), por ejemplo en una
-  // instalación LAN donde no se quiere ofrecer.
-  portalClientes: process.env.PORTAL_CLIENTES !== 'off',
+  // Módulos por plan: cuántos segundos se cachea el plan leído de la base (0 = sin
+  // caché, lo usan los tests). Cambiar el plan desde la propia app invalida la caché
+  // al instante; un cambio hecho por fuera (npm run set-plan) se nota en este tiempo.
+  modulos: {
+    cacheSegundos: process.env.PLAN_CACHE_SEGUNDOS === undefined ? 30 : Number(process.env.PLAN_CACHE_SEGUNDOS) || 0,
+  },
 
   // URL pública del sistema, para armar el enlace del portal en los mails que
   // se le mandan al cliente. Vacío = se deduce de la request (funciona detrás

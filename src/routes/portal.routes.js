@@ -11,7 +11,7 @@ import {
   obtenerPedidoPortalController,
   resumenPortalController,
 } from '../controllers/portal.controller.js';
-import { portalDisponible, requirePortalAuth } from '../middleware/portal-auth.middleware.js';
+import { requirePortalAuth } from '../middleware/portal-auth.middleware.js';
 import { asyncHandler } from '../utils/async-handler.js';
 
 const router = Router();
@@ -34,8 +34,6 @@ const pedidosLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Demasiados pedidos en poco tiempo, esperá unos minutos.' },
 });
-
-router.use(portalDisponible);
 
 router.post('/login', loginLimiter, asyncHandler(loginPortalController));
 router.post('/logout', requirePortalAuth, logoutPortalController);

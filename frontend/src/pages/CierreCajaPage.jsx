@@ -56,7 +56,7 @@ const ICONOS = {
 };
 
 export default function CierreCajaPage() {
-  const { usuario } = useAuth();
+  const { usuario, moduloActivo } = useAuth();
   const puedeCerrar = PUEDE_CERRAR.has(usuario?.rol);
 
   const [resumen, setResumen] = useState(null);
@@ -137,7 +137,7 @@ export default function CierreCajaPage() {
       <div className="cierre-body">
         <div className="card cierre-resumen">
           <span className="cierre-titulo">Ventas del turno por medio de pago</span>
-          {MEDIOS.map((medio) => (
+          {MEDIOS.filter((medio) => medio.campo !== 'total_cta_cte' || moduloActivo('clientes_empresa') || (resumen?.total_cta_cte ?? 0) > 0).map((medio) => (
             <div className="cierre-medio-row" key={medio.campo}>
               <div className="cierre-medio-label">
                 {ICONOS[medio.icono]}

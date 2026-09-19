@@ -6,6 +6,24 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [usuario, setUsuario] = useState(null);
   const [cargandoSesion, setCargandoSesion] = useState(true);
+  // Módulos activos según el plan de la instalación (GET /modulos, público).
+  // null = todavía cargando; si el pedido falla se muestra solo el núcleo.
+  const [modulos, setModulos] = useState(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    api
+      .get('/modulos')
+      .then((data) => {
+        if (!cancelado) setModulos(data.modulos);
+      })
+      .catch(() => {
+        if (!cancelado) setModulos(['nucleo']);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelado = false;
@@ -50,7 +68,16 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ usuario, cargandoSesion, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        usuario,
+        cargandoSesion: cargandoSesion || modulos === null,
+        modulos: modulos ?? [],
+        moduloActivo: (modulo) => Boolean(modulos?.includes(modulo)),
+        login,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

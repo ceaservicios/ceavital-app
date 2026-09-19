@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
+import { useAuth } from '../context/AuthContext.jsx';
 import './ConfiguracionPage.css';
 
 // Sección genérica de catálogo (categorías / unidades de medida / condiciones
@@ -188,8 +189,10 @@ const SECCIONES = [
 ];
 
 export default function ConfiguracionPage() {
+  const { moduloActivo } = useAuth();
+  const secciones = SECCIONES.filter((s) => s.clave !== 'pagos' || moduloActivo('clientes_empresa'));
   const [tab, setTab] = useState('categorias');
-  const seccion = SECCIONES.find((s) => s.clave === tab);
+  const seccion = secciones.find((s) => s.clave === tab) ?? secciones[0];
 
   return (
     <div className="config-page">
@@ -198,7 +201,7 @@ export default function ConfiguracionPage() {
       </div>
 
       <div className="config-tabs" role="tablist">
-        {SECCIONES.map((s) => (
+        {secciones.map((s) => (
           <button
             key={s.clave}
             type="button"

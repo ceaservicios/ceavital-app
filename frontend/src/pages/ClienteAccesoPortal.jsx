@@ -146,7 +146,7 @@ export default function ClienteAccesoPortal({ clienteId, razonSocial, email }) {
       <div className="card cliente-card">
         <span className="cliente-seccion-titulo">Acceso del cliente</span>
         <div className="cliente-hint">
-          El acceso de clientes está desactivado en esta instalación (variable <code>PORTAL_CLIENTES=off</code> del servidor).
+          El acceso de clientes no está incluido en el plan de esta instalación.
         </div>
       </div>
     );
