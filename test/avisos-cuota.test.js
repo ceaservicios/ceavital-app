@@ -152,7 +152,7 @@ async function levantar(puerto, extraEntorno) {
 
 async function ingresar(puerto) {
   const nav = nuevoNavegador();
-  const r = await api(nav, puerto, 'POST', '/sa/login', { usuario: 'cea', password: CLAVE_SA });
+  const r = await api(nav, puerto, 'POST', '/auth/login', { usuario: 'cea', password: CLAVE_SA });
   assert.equal(r.status, 200);
   nav.csrf = r.data.csrf_token;
   return nav;

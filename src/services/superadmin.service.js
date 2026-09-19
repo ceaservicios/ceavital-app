@@ -14,6 +14,20 @@ const PASSWORD_MAX = 72; // límite real de bcrypt: más allá se ignora en sile
 
 const generarToken = () => crypto.randomBytes(32).toString('hex');
 
+// El login es UNO solo (el de la app): si el usuario es el del superadmin entra al panel,
+// si no, al sistema del negocio. Para que nunca haya ambigüedad, el nombre del superadmin
+// está reservado (no se puede crear un usuario del negocio con ese nombre, ver
+// usuarios.service) y el superadmin no puede tomar el nombre de un usuario del negocio.
+export async function esUsuarioSuperadmin(usuario) {
+  return Boolean(await db.prepare('SELECT 1 AS ok FROM superadmin WHERE LOWER(usuario) = LOWER(?)').get(usuario));
+}
+
+async function usuarioDelNegocioExiste(usuario) {
+  return Boolean(
+    await db.prepare('SELECT 1 AS ok FROM usuarios WHERE LOWER(usuario) = LOWER(?) AND eliminado_en IS NULL').get(usuario)
+  );
+}
+
 // Crea la cuenta la primera vez, con SUPERADMIN_USUARIO / SUPERADMIN_PASSWORD del
 // entorno. Si ya existe alguna, no hace nada (no pisa una contraseña ya cambiada). Si
 // no hay cuenta ni variable, la instalación queda sin superadmin: la ruta /sa no deja
@@ -25,6 +39,10 @@ export async function asegurarSuperadmin() {
     // no: esa es la guardada). Cambiarlo corta las sesiones abiertas y queda registrado.
     const fijado = config.superadmin.usuario;
     if (fijado && fijado !== existente.usuario) {
+      if (await usuarioDelNegocioExiste(fijado)) {
+        console.error(`[superadmin] SUPERADMIN_USUARIO "${fijado}" ya lo usa un usuario del negocio: no se cambió (renombrá primero ese usuario desde Usuarios)`);
+        return;
+      }
       await db.transaction(async () => {
         await db.prepare('UPDATE superadmin SET usuario = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?').run(fijado, existente.id);
         await db
@@ -52,6 +70,11 @@ export async function asegurarSuperadmin() {
   }
   if (!usuario) {
     console.error('[superadmin] SUPERADMIN_USUARIO está vacío: no se creó la cuenta');
+    return;
+  }
+
+  if (await usuarioDelNegocioExiste(usuario)) {
+    console.error(`[superadmin] el usuario "${usuario}" ya lo usa un usuario del negocio: no se creó la cuenta de superadmin`);
     return;
   }
 

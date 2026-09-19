@@ -24,8 +24,8 @@ export default function LoginPage() {
     setError(null);
     setEnviando(true);
     try {
-      await login(usuarioLogin.trim(), password);
-      navigate(location.state?.from ?? '/caja', { replace: true });
+      const data = await login(usuarioLogin.trim(), password);
+      navigate(data.tipo === 'superadmin' ? '/sa' : location.state?.from ?? '/caja', { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);

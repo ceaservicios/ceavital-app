@@ -1,19 +1,17 @@
 import { Router } from 'express';
-import rateLimit from 'express-rate-limit';
 import {
   accionesSuperadminController,
   cambiarPlanSuperadminController,
   correoPruebaSuperadminController,
   empresaEmailSuperadminController,
   fijarCuotaSuperadminController,
-  loginSuperadminController,
   logoutSuperadminController,
   meSuperadminController,
   panelSuperadminController,
   reactivarSuperadminController,
   suspenderSuperadminController,
 } from '../controllers/superadmin.controller.js';
-import { origenPermitido, requireSuperadmin } from '../middleware/superadmin-auth.middleware.js';
+import { requireSuperadmin } from '../middleware/superadmin-auth.middleware.js';
 
 const router = Router();
 
@@ -23,22 +21,7 @@ router.use((req, res, next) => {
   next();
 });
 
-// Alcanzable desde internet: tope por IP además del bloqueo por cuenta del servicio.
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiados intentos de ingreso, esperá unos minutos.' },
-});
-
-router.post(
-  '/login',
-  loginLimiter,
-  (req, res, next) => (origenPermitido(req) ? next() : res.status(403).json({ error: 'Pedido no autorizado' })),
-  loginSuperadminController
-);
-
+// El ingreso del superadmin es el mismo de la app (POST /api/auth/login, ver auth.controller).
 router.use(requireSuperadmin);
 router.post('/logout', logoutSuperadminController);
 router.get('/me', meSuperadminController);

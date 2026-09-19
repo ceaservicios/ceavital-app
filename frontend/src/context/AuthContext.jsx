@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { api, setUnauthorizedHandler } from '../api/client.js';
+import { api, setCsrfSuperadmin, setUnauthorizedHandler } from '../api/client.js';
 
 const AuthContext = createContext(null);
 
@@ -50,6 +50,12 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (usuarioLogin, password) => {
     const data = await api.post('/auth/login', { usuario: usuarioLogin, password });
+    // El superadmin de CEA entra por el mismo login: no es un usuario del negocio, su
+    // sesión es aparte (cookie propia) y la pantalla lo lleva a su panel.
+    if (data.tipo === 'superadmin') {
+      setCsrfSuperadmin(data.csrf_token);
+      return data;
+    }
     setUsuario({
       usuarioId: data.usuario.id,
       usuario: data.usuario.usuario,

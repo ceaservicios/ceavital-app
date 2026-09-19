@@ -58,7 +58,7 @@ export default function SuperadminPage() {
   const [avisoDias, setAvisoDias] = useState('15');
   const [emailEmpresa, setEmailEmpresa] = useState('');
 
-  const irAlLogin = useCallback(() => navigate('/sa/login', { replace: true }), [navigate]);
+  const irAlLogin = useCallback(() => navigate('/login', { replace: true }), [navigate]);
 
   const cargar = useCallback(async () => {
     const data = await api.get('/sa/panel');

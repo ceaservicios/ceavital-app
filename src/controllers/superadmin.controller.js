@@ -13,6 +13,7 @@ import { listarAvisosEnviados } from '../services/avisos-cuota.service.js';
 import { correoCeaDisponible } from '../services/mail.service.js';
 import { planActual } from '../services/modulos.service.js';
 import { cerrarSesionSuperadmin, listarAcciones, loginSuperadmin } from '../services/superadmin.service.js';
+import { origenPermitido } from '../middleware/superadmin-auth.middleware.js';
 import { ApiError } from '../utils/api-error.js';
 
 // La cookie solo viaja a /api/sa (Path) y nunca en pedidos que vienen de otro sitio
@@ -29,9 +30,11 @@ export async function loginSuperadminController(req, res) {
   if (!usuario || typeof usuario !== 'string' || !password || typeof password !== 'string') {
     return res.status(400).json({ error: 'Usuario y contraseña son requeridos' });
   }
+  if (!origenPermitido(req)) return res.status(403).json({ error: 'Pedido no autorizado' });
   const r = await loginSuperadmin(usuario.trim(), password, req.ip);
+  res.set('Cache-Control', 'no-store'); // la respuesta trae el token CSRF
   res.cookie('sa_token', r.token, { ...OPCIONES_COOKIE, maxAge: config.session.timeoutMinutes * 60 * 1000 });
-  res.json({ superadmin: r.superadmin, csrf_token: r.csrfToken });
+  res.json({ tipo: 'superadmin', superadmin: r.superadmin, csrf_token: r.csrfToken });
 }
 
 export async function logoutSuperadminController(req, res) {

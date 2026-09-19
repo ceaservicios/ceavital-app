@@ -1,3 +1,4 @@
+import { esUsuarioSuperadmin } from './superadmin.service.js';
 import db from '../db/connection.js';
 import { ApiError } from '../utils/api-error.js';
 import { hashPassword } from '../utils/password.js';
@@ -48,6 +49,7 @@ async function verificarLoginLibre(login, excluirId = null) {
     .prepare(`SELECT id FROM usuarios WHERE usuario = ? AND eliminado_en IS NULL AND id != ?`)
     .get(login, excluirId ?? -1);
   if (existente) throw new ApiError(409, 'Ya existe un usuario activo con ese login');
+  if (await esUsuarioSuperadmin(login)) throw new ApiError(409, 'Ese nombre de usuario está reservado');
 }
 
 // Cuántos Admin activos quedan sin contar `excluirId` -- usado para bloquear

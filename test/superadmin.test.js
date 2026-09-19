@@ -65,7 +65,7 @@ async function consultar(texto, params = []) {
 
 // Ingreso al segundo servidor (puerto PUERTO + 1), que tiene su propio contador por IP.
 async function loginServidor2(nav, cuerpo) {
-  const res = await fetch(`http://127.0.0.1:${PUERTO + 1}/api/sa/login`, {
+  const res = await fetch(`http://127.0.0.1:${PUERTO + 1}/api/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(cuerpo),
@@ -135,16 +135,17 @@ describe('superadmin', { skip: !ADMIN_URL && 'falta TEST_DATABASE_URL' }, () => 
     for (const [m, r] of [['GET', '/sa/me'], ['GET', '/sa/panel'], ['GET', '/sa/acciones'], ['PUT', '/sa/plan'], ['PUT', '/sa/cuota'], ['POST', '/sa/suspender'], ['POST', '/sa/reactivar'], ['POST', '/sa/logout']]) {
       assert.equal((await api(anonimo, m, r, {})).status, 401, `${m} ${r}`);
     }
-    const usuarioMalo = await api(anonimo, 'POST', '/sa/login', { usuario: 'nadie', password: 'x'.repeat(14) });
-    const passwordMala = await api(anonimo, 'POST', '/sa/login', { usuario: 'cea', password: 'x'.repeat(14) });
+    const usuarioMalo = await api(anonimo, 'POST', '/auth/login', { usuario: 'nadie', password: 'x'.repeat(14) });
+    const passwordMala = await api(anonimo, 'POST', '/auth/login', { usuario: 'cea', password: 'x'.repeat(14) });
     assert.equal(usuarioMalo.status, 401);
     assert.equal(passwordMala.status, 401);
     assert.equal(usuarioMalo.data.error, passwordMala.data.error, 'no debe delatar si el usuario existe');
   });
 
   it('login correcto: cookie propia HttpOnly, SameSite=Strict y limitada a /api/sa, más el token CSRF', async () => {
-    const r = await api(sa, 'POST', '/sa/login', { usuario: 'cea', password: CLAVE_SA });
+    const r = await api(sa, 'POST', '/auth/login', { usuario: 'cea', password: CLAVE_SA });
     assert.equal(r.status, 200);
+    assert.equal(r.data.tipo, 'superadmin');
     assert.equal(r.data.superadmin.usuario, 'cea');
     assert.match(r.data.csrf_token, /^[0-9a-f]{64}$/);
     sa.csrf = r.data.csrf_token;
@@ -207,6 +208,21 @@ describe('superadmin', { skip: !ADMIN_URL && 'falta TEST_DATABASE_URL' }, () => 
     assert.equal((await api(alReves, 'GET', '/sa/panel')).status, 401);
   });
 
+  it('un solo ingreso: el nombre del superadmin está reservado y el usuario del negocio no lleva tipo', async () => {
+    for (const nombre of ['cea', 'CEA']) {
+      const r = await api(negocio, 'POST', '/usuarios', { nombre: 'Intruso', usuario: nombre, password: 'ClaveSegura123', rol: 'cajero' });
+      assert.equal(r.status, 409, nombre);
+      assert.match(r.data.error, /reservado/);
+    }
+    // Un ingreso nuevo del rol Admin expulsa a la sesión anterior (regla del sistema): se reemplaza.
+    const nuevo = nuevoNavegador();
+    const login = await api(nuevo, 'POST', '/auth/login', { usuario: 'admin_test', password: 'ClaveSegura123' });
+    assert.equal(login.status, 200);
+    assert.equal(login.data.tipo, undefined);
+    assert.equal(login.data.usuario.rol, 'admin');
+    negocio.cookies = nuevo.cookies;
+  });
+
   it('cambiar el plan desde el panel se aplica al instante y queda registrado', async () => {
     assert.equal((await api(sa, 'PUT', '/sa/plan', { plan: 'inexistente' })).status, 400);
     assert.equal((await api(sa, 'PUT', '/sa/plan', {})).status, 400);
@@ -264,6 +280,12 @@ describe('superadmin', { skip: !ADMIN_URL && 'falta TEST_DATABASE_URL' }, () => 
     assert.equal((await api(nuevo, 'POST', '/portal/login', { usuario: 'cliente', password: 'ClaveCliente123' })).status, 403);
     // Los datos se conservan.
     assert.equal((await consultar('SELECT COUNT(*)::int AS n FROM usuarios'))[0].n, usuariosAntes);
+    // El superadmin puede ingresar aunque la instalación esté suspendida (si no, nadie podría reactivarla).
+    const saNuevo = nuevoNavegador();
+    const reingreso = await api(saNuevo, 'POST', '/auth/login', { usuario: 'cea', password: CLAVE_SA });
+    assert.equal(reingreso.status, 200);
+    sa.cookies = saNuevo.cookies;
+    sa.csrf = reingreso.data.csrf_token;
     // El superadmin sigue adentro para poder reactivar; suspender dos veces es un error.
     assert.equal((await api(sa, 'POST', '/sa/suspender', { motivo: 'otra vez' })).status, 409);
   });
@@ -308,6 +330,28 @@ describe('superadmin', { skip: !ADMIN_URL && 'falta TEST_DATABASE_URL' }, () => 
     assert.equal((await api(sa, 'GET', '/sa/panel')).status, 401, 'la sesión abierta quedó cortada');
   });
 
+  it('SUPERADMIN_USUARIO no puede tomar el nombre de un usuario del negocio (no se cambia nada)', async () => {
+    const puerto3 = PUERTO + 2;
+    const proc = spawn(process.execPath, ['src/server.js'], {
+      cwd: RAIZ,
+      env: { ...entorno, PORT: String(puerto3), SUPERADMIN_USUARIO: 'admin_test' },
+      stdio: 'ignore',
+    });
+    try {
+      for (let i = 0; i < 60; i++) {
+        try {
+          if ((await fetch(`http://127.0.0.1:${puerto3}/api/health`)).ok) break;
+        } catch {
+          /* todavía arrancando */
+        }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      assert.equal((await consultar('SELECT usuario FROM superadmin'))[0].usuario, 'cea');
+    } finally {
+      proc.kill();
+    }
+  });
+
   it('SUPERADMIN_USUARIO cambia el nombre de usuario al arrancar (con un email), corta sesiones y deja registro', async () => {
     const puerto2 = PUERTO + 1;
     const proc = spawn(process.execPath, ['src/server.js'], {
@@ -330,8 +374,8 @@ describe('superadmin', { skip: !ADMIN_URL && 'falta TEST_DATABASE_URL' }, () => 
       assert.equal(registro[0].detalle, 'cea -> admin@ceavital.net');
       // La contraseña guardada no cambia; el usuario viejo ya no entra y el nuevo sí (sin distinguir mayúsculas).
       const otro = nuevoNavegador();
-      assert.equal((await api(otro, 'POST', '/sa/login', { usuario: 'cea', password: 'OtraClaveSuperadmin-2027' })).status, 401);
-      assert.equal((await api(otro, 'POST', '/sa/login', { usuario: 'Admin@CEAvital.net', password: 'OtraClaveSuperadmin-2027' })).status, 200);
+      assert.equal((await api(otro, 'POST', '/auth/login', { usuario: 'cea', password: 'OtraClaveSuperadmin-2027' })).status, 401);
+      assert.equal((await api(otro, 'POST', '/auth/login', { usuario: 'Admin@CEAvital.net', password: 'OtraClaveSuperadmin-2027' })).status, 200);
     }
   });
 
