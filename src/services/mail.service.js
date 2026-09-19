@@ -4,16 +4,20 @@ import { ApiError } from '../utils/api-error.js';
 
 // Envío de mails por SMTP. Opcional: el sistema funciona 100% sin esto (regla
 // "sin internet"); solo se usa para mandarle al cliente los datos de acceso.
-let transporte = null;
+// Dos canales: 'empresa' (SMTP_*: la empresa a sus clientes) y 'cea' (SA_SMTP_*: los
+// avisos del superadmin, remitente de CEA).
+const CANALES = { empresa: () => config.smtp, cea: () => config.saSmtp };
+const transportes = {};
 
-export function correoDisponible() {
-  return Boolean(config.smtp.host && config.smtp.from);
-}
+const disponible = (canal) => Boolean(CANALES[canal]().host && CANALES[canal]().from);
 
-function obtenerTransporte() {
-  if (!transporte) {
-    const { host, port, secure, user, pass } = config.smtp;
-    transporte = nodemailer.createTransport({
+export const correoDisponible = () => disponible('empresa');
+export const correoCeaDisponible = () => disponible('cea');
+
+function obtenerTransporte(canal) {
+  if (!transportes[canal]) {
+    const { host, port, secure, user, pass } = CANALES[canal]();
+    transportes[canal] = nodemailer.createTransport({
       host,
       port,
       secure,
@@ -24,15 +28,15 @@ function obtenerTransporte() {
       socketTimeout: 20_000,
     });
   }
-  return transporte;
+  return transportes[canal];
 }
 
-export async function enviarCorreo({ para, asunto, texto, html }) {
-  if (!correoDisponible()) {
+export async function enviarCorreo({ para, asunto, texto, html }, canal = 'empresa') {
+  if (!disponible(canal)) {
     throw new ApiError(503, 'El envío de mails no está configurado en este servidor');
   }
   try {
-    await obtenerTransporte().sendMail({ from: config.smtp.from, to: para, subject: asunto, text: texto, html });
+    await obtenerTransporte(canal).sendMail({ from: CANALES[canal]().from, to: para, subject: asunto, text: texto, html });
   } catch (err) {
     // El detalle técnico (host, credenciales) queda en el log del servidor,
     // nunca en la respuesta al navegador.
@@ -41,7 +45,7 @@ export async function enviarCorreo({ para, asunto, texto, html }) {
   }
 }
 
-function escaparHtml(valor) {
+export function escaparHtml(valor) {
   return String(valor)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -88,5 +92,43 @@ export function armarCorreoAcceso({ razonSocial, enlace, usuario, password }) {
   </table>
 </body></html>`;
 
+  return { asunto, texto, html };
+}
+
+const fechaLegible = (iso) => iso.split('-').reverse().join('/');
+const plural = (n) => `${n} día${n === 1 ? '' : 's'}`;
+
+// Aviso de cuota de CEA a la empresa contratante. tipo: por_vencer | vence_hoy | vencida.
+export function armarCorreoCuota({ tipo, vence, diasRestantes }) {
+  const fecha = fechaLegible(vence);
+  const casos = {
+    por_vencer: {
+      asunto: `CEAVital: tu cuota vence el ${fecha}`,
+      linea: `Tu cuota de CEAVital vence el ${fecha} (faltan ${plural(diasRestantes)}).`,
+    },
+    vence_hoy: {
+      asunto: 'CEAVital: tu cuota vence hoy',
+      linea: `Tu cuota de CEAVital vence hoy, ${fecha}.`,
+    },
+    vencida: {
+      asunto: `CEAVital: tu cuota está vencida desde el ${fecha}`,
+      linea: `Tu cuota de CEAVital venció el ${fecha} (hace ${plural(-diasRestantes)}).`,
+    },
+  };
+  const { asunto, linea } = casos[tipo];
+  const cierre = 'Para regularizarla o consultar cualquier duda, respondé este mail o escribinos por WhatsApp.';
+
+  const texto = ['Hola,', '', linea, cierre, '', 'CEA Servicios - CEAVital'].join('\n');
+  const html = `<!doctype html>
+<html lang="es"><body style="margin:0;padding:24px;background:#ebecee;font-family:Arial,Helvetica,sans-serif;color:#1b2622;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;">
+    <tr><td style="background:#0e4b38;padding:18px 24px;color:#ffffff;font-size:20px;font-weight:bold;">CEAVital</td></tr>
+    <tr><td style="padding:24px;font-size:15px;line-height:1.5;">
+      <p style="margin:0 0 12px;">Hola,</p>
+      <p style="margin:0 0 12px;font-weight:bold;">${escaparHtml(linea)}</p>
+      <p style="margin:0;color:#3a4642;">${escaparHtml(cierre)}</p>
+    </td></tr>
+  </table>
+</body></html>`;
   return { asunto, texto, html };
 }

@@ -15,6 +15,7 @@ import { buildCorsMiddleware, helmetMiddleware } from './middleware/security.mid
 import routes from './routes/index.js';
 import { cerrarSesionesInactivas } from './services/session.service.js';
 import { cerrarSesionesClienteInactivas } from './services/clientes-portal.service.js';
+import { revisarAvisosCuota } from './services/avisos-cuota.service.js';
 import { asegurarSuperadmin, cerrarSesionesSuperadminInactivas } from './services/superadmin.service.js';
 
 function asegurarCertificado() {
@@ -118,3 +119,11 @@ setInterval(async () => {
     console.error('[sesiones] no se pudo cerrar sesiones inactivas:', err.message);
   }
 }, 5 * 60 * 1000);
+
+// Avisos de cuota por mail (a los 30 s de arrancar y después cada hora). Un mail que no
+// sale se reintenta en la próxima pasada.
+const revisarCuota = () => revisarAvisosCuota().catch((err) => console.error('[cuota] revisión fallida:', err.message));
+if (config.avisosCuota) {
+  setTimeout(revisarCuota, 30_000);
+  setInterval(revisarCuota, 60 * 60 * 1000);
+}

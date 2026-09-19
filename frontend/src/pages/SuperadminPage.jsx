@@ -16,6 +16,15 @@ const ETIQUETA_ACCION = {
   reactivar: 'Reactivación',
   bloqueo_por_intentos: 'Bloqueo por intentos fallidos',
   password_cambiada: 'Contraseña cambiada',
+  empresa_email: 'Email de la empresa',
+  correo_prueba: 'Mail de prueba',
+  aviso_cuota: 'Aviso de cuota por mail',
+};
+
+const ETIQUETA_AVISO = {
+  por_vencer: 'Por vencer',
+  vence_hoy: 'Vence hoy',
+  vencida: 'Vencida',
 };
 
 const ESTADO_CUOTA = {
@@ -47,6 +56,7 @@ export default function SuperadminPage() {
   const [motivo, setMotivo] = useState('');
   const [vence, setVence] = useState('');
   const [avisoDias, setAvisoDias] = useState('15');
+  const [emailEmpresa, setEmailEmpresa] = useState('');
 
   const irAlLogin = useCallback(() => navigate('/sa/login', { replace: true }), [navigate]);
 
@@ -56,6 +66,7 @@ export default function SuperadminPage() {
     setPlanElegido((actual) => actual || data.plan.id);
     setVence(data.instancia.cuota.vence ?? '');
     setAvisoDias(String(data.instancia.cuota.aviso_dias));
+    setEmailEmpresa(data.instancia.empresa_email ?? '');
   }, []);
 
   useEffect(() => {
@@ -312,6 +323,80 @@ export default function SuperadminPage() {
           </form>
         </section>
       </div>
+
+      {/* Avisos de cuota por mail */}
+      <section className="card sa-card">
+        <h2 className="sa-h2">Avisos por mail</h2>
+        <p>
+          <span className={`sa-chip ${panel.correo.disponible ? 'sa-chip-ok' : 'sa-chip-aviso'}`}>
+            {panel.correo.disponible ? 'Correo de CEA configurado' : 'Correo de CEA sin configurar'}
+          </span>
+        </p>
+        <p className="sa-ayuda">
+          {panel.correo.disponible
+            ? 'Cuando la cuota entra en el período de aviso, el día que vence y cuando ya está vencida, se le manda un mail a la empresa (uno por etapa).'
+            : 'Faltan las variables SA_SMTP_* en el servidor: hasta cargarlas no se manda ningún mail.'}
+        </p>
+        <form
+          className="sa-form-email"
+          onSubmit={(e) => {
+            e.preventDefault();
+            ejecutar(() => api.put('/sa/empresa-email', { email: emailEmpresa }), 'Email guardado.');
+          }}
+        >
+          <div className="field">
+            <label htmlFor="sa-email-empresa">Email de la empresa</label>
+            <input
+              id="sa-email-empresa"
+              type="email"
+              maxLength={200}
+              value={emailEmpresa}
+              onChange={(e) => setEmailEmpresa(e.target.value)}
+              disabled={ocupado}
+              placeholder="empresa@ejemplo.com"
+            />
+          </div>
+          <button type="submit" className="btn btn-primary" disabled={ocupado}>
+            Guardar email
+          </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={ocupado || !panel.correo.disponible || !instancia.empresa_email || emailEmpresa.trim() !== instancia.empresa_email}
+            title={emailEmpresa.trim() !== (instancia.empresa_email ?? '') ? 'Guardá el email antes de probar' : undefined}
+            onClick={() => ejecutar(async () => {
+              const r = await api.post('/sa/correo-prueba', {});
+              setAviso(`Mail de prueba enviado a ${r.enviado_a}.`);
+            }, 'Mail de prueba enviado.')}
+          >
+            Enviar mail de prueba
+          </button>
+        </form>
+        {panel.correo.avisos.length > 0 && (
+          <div className="sa-tabla-scroll">
+            <table className="sa-tabla">
+              <thead>
+                <tr>
+                  <th>Enviado</th>
+                  <th>Aviso</th>
+                  <th>Cuota vence</th>
+                  <th>A</th>
+                </tr>
+              </thead>
+              <tbody>
+                {panel.correo.avisos.map((a) => (
+                  <tr key={`${a.tipo}-${a.cuota_vence}`}>
+                    <td>{formatearFechaHora(a.enviado_en)}</td>
+                    <td>{ETIQUETA_AVISO[a.tipo] ?? a.tipo}</td>
+                    <td>{formatearFecha(a.cuota_vence)}</td>
+                    <td>{a.destinatario}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       {/* Registro de acciones */}
       <section className="card sa-card">

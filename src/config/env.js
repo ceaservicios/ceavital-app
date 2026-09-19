@@ -80,6 +80,20 @@ const config = {
     password: process.env.SUPERADMIN_PASSWORD || '',
   },
 
+  // Correo de CEA (remitente admin@ceavital.net) para los avisos de cuota del superadmin.
+  // Separado a propósito de `smtp`: en un clon, `smtp` pasa a ser el correo de la empresa
+  // para escribirle a sus clientes, y los avisos de CEA no pueden salir con esa identidad.
+  // AVISOS_CUOTA=off apaga la revisión automática de cuotas (la usan los tests).
+  avisosCuota: process.env.AVISOS_CUOTA !== 'off',
+  saSmtp: {
+    host: (process.env.SA_SMTP_HOST || '').trim(),
+    port: Number(process.env.SA_SMTP_PORT) || 587,
+    secure: process.env.SA_SMTP_SECURE === 'true' || Number(process.env.SA_SMTP_PORT) === 465,
+    user: (process.env.SA_SMTP_USER || '').trim(),
+    pass: process.env.SA_SMTP_PASS || '',
+    from: (process.env.SA_SMTP_FROM || process.env.SA_SMTP_USER || '').trim(),
+  },
+
   session: {
     // Sesion inactiva se cierra sola a los 30 min (Instructivo-Funcional > Requisitos transversales).
     timeoutMinutes: 30,

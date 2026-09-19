@@ -164,6 +164,16 @@
   grid-column: 1 / -1;
 }
 
+.sa-form-email {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+.sa-form-email .field {
+  flex: 1 1 260px;
+}
+
 .sa-tabla-scroll {
   overflow-x: auto;
 }

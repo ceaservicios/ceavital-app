@@ -3,6 +3,7 @@ import { ApiError } from '../utils/api-error.js';
 import { SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
 import { cambiarPlan, invalidarCachePlan } from './modulos.service.js';
 import { registrarAccion } from './superadmin.service.js';
+import { correoCeaDisponible, enviarCorreo } from './mail.service.js';
 
 // Estado de la instalación que gestiona el superadmin: suspensión y cuota. (El plan
 // vive en `configuracion` y lo cambia modulos.service.cambiarPlan.)
@@ -13,7 +14,7 @@ const FECHA_ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
 export async function obtenerInstancia() {
   const fila = await db
     .prepare(
-      `SELECT estado, motivo_suspension, suspendida_en, cuota_vence, cuota_aviso_dias,
+      `SELECT estado, motivo_suspension, suspendida_en, empresa_email, cuota_vence, cuota_aviso_dias,
               (cuota_vence - ${SQL_HOY_NEGOCIO}) AS cuota_dias_restantes
        FROM instancia WHERE id = 1`
     )
@@ -28,6 +29,7 @@ export async function obtenerInstancia() {
     estado: fila.estado,
     motivo_suspension: fila.motivo_suspension ?? null,
     suspendida_en: fila.suspendida_en ?? null,
+    empresa_email: fila.empresa_email ?? null,
     cuota: {
       vence: fila.cuota_vence ?? null,
       aviso_dias: fila.cuota_aviso_dias,
@@ -132,4 +134,38 @@ export async function cambiarPlanComoSuperadmin(superadminId, plan, ip) {
   // cambiarPlan ya invalidó la caché, pero antes de que esta transacción confirmara: otro
   // pedido pudo volver a cachear el plan viejo en el medio.
   invalidarCachePlan();
+}
+
+const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Mail de la empresa contratante, a quien van los avisos de cuota. Vacío = no se manda nada.
+export async function fijarEmpresaEmail(superadminId, email, ip) {
+  let valor = null;
+  if (email !== null && email !== undefined && email !== '') {
+    if (typeof email !== 'string' || email.trim().length > 200 || !EMAIL_VALIDO.test(email.trim())) {
+      throw new ApiError(400, 'El email no tiene un formato válido');
+    }
+    valor = email.trim();
+  }
+  await db.transaction(async () => {
+    await db.prepare('UPDATE instancia SET empresa_email = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = 1').run(valor);
+    await registrarAccion(superadminId, 'empresa_email', valor ?? 'quitado', ip);
+  });
+}
+
+// Manda un mail de prueba al email de la empresa para comprobar que el correo de CEA sale.
+export async function enviarCorreoDePrueba(superadminId, ip) {
+  if (!correoCeaDisponible()) throw new ApiError(503, 'El correo de CEA no está configurado en este servidor (variables SA_SMTP_*)');
+  const { empresa_email: para } = await obtenerInstancia();
+  if (!para) throw new ApiError(400, 'Cargá primero el email de la empresa');
+  await enviarCorreo(
+    {
+      para,
+      asunto: 'CEAVital: mail de prueba',
+      texto: 'Este es un mail de prueba de CEAVital. Si lo recibiste, los avisos de cuota van a llegar a esta dirección.',
+    },
+    'cea'
+  );
+  await registrarAccion(superadminId, 'correo_prueba', `enviado a ${para}`, ip);
+  return { enviado_a: para };
 }

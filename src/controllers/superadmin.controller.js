@@ -2,11 +2,15 @@ import config from '../config/env.js';
 import { MODULOS, PLANES } from '../config/modulos.js';
 import {
   cambiarPlanComoSuperadmin,
+  enviarCorreoDePrueba,
   fijarCuota,
+  fijarEmpresaEmail,
   obtenerInstancia,
   reactivarInstancia,
   suspenderInstancia,
 } from '../services/instancia.service.js';
+import { listarAvisosEnviados } from '../services/avisos-cuota.service.js';
+import { correoCeaDisponible } from '../services/mail.service.js';
 import { planActual } from '../services/modulos.service.js';
 import { cerrarSesionSuperadmin, listarAcciones, loginSuperadmin } from '../services/superadmin.service.js';
 import { ApiError } from '../utils/api-error.js';
@@ -50,6 +54,7 @@ export async function panelSuperadminController(req, res) {
     plan: describirPlan(plan),
     planes: Object.keys(PLANES).map(describirPlan),
     modulos: Object.entries(MODULOS).map(([id, m]) => ({ id, nombre: m.nombre })),
+    correo: { disponible: correoCeaDisponible(), avisos: await listarAvisosEnviados() },
     acciones,
   });
 }
@@ -78,4 +83,13 @@ export async function reactivarSuperadminController(req, res) {
 export async function fijarCuotaSuperadminController(req, res) {
   await fijarCuota(req.superadmin.id, req.body || {}, req.ip);
   res.json({ instancia: await obtenerInstancia() });
+}
+
+export async function empresaEmailSuperadminController(req, res) {
+  await fijarEmpresaEmail(req.superadmin.id, req.body?.email, req.ip);
+  res.json({ instancia: await obtenerInstancia() });
+}
+
+export async function correoPruebaSuperadminController(req, res) {
+  res.json(await enviarCorreoDePrueba(req.superadmin.id, req.ip));
 }

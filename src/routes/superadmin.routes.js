@@ -3,6 +3,8 @@ import rateLimit from 'express-rate-limit';
 import {
   accionesSuperadminController,
   cambiarPlanSuperadminController,
+  correoPruebaSuperadminController,
+  empresaEmailSuperadminController,
   fijarCuotaSuperadminController,
   loginSuperadminController,
   logoutSuperadminController,
@@ -44,6 +46,8 @@ router.get('/panel', panelSuperadminController);
 router.get('/acciones', accionesSuperadminController);
 router.put('/plan', cambiarPlanSuperadminController);
 router.put('/cuota', fijarCuotaSuperadminController);
+router.put('/empresa-email', empresaEmailSuperadminController);
+router.post('/correo-prueba', correoPruebaSuperadminController);
 router.post('/suspender', suspenderSuperadminController);
 router.post('/reactivar', reactivarSuperadminController);
 
