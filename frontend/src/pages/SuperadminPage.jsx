@@ -5,21 +5,8 @@ import { formatearFecha, formatearFechaHora } from '../utils/format.js';
 import './SuperadminPage.css';
 
 // Panel de CEA sobre esta instalación (/sa): plan y módulos, suspensión, cuota,
-// versión y registro de acciones. Sesión propia (cookie sa_token + token CSRF en
+// versión y avisos de cuota. Sesión propia (cookie sa_token + token CSRF en
 // memoria), completamente aparte del sistema del negocio.
-
-const ETIQUETA_ACCION = {
-  login: 'Ingreso',
-  plan: 'Cambio de plan',
-  cuota: 'Cuota',
-  suspender: 'Suspensión',
-  reactivar: 'Reactivación',
-  bloqueo_por_intentos: 'Bloqueo por intentos fallidos',
-  password_cambiada: 'Contraseña cambiada',
-  empresa_email: 'Email de la empresa',
-  correo_prueba: 'Mail de prueba',
-  aviso_cuota: 'Aviso de cuota por mail',
-};
 
 const ETIQUETA_AVISO = {
   por_vencer: 'Por vencer',
@@ -390,37 +377,6 @@ export default function SuperadminPage() {
                     <td>{ETIQUETA_AVISO[a.tipo] ?? a.tipo}</td>
                     <td>{formatearFecha(a.cuota_vence)}</td>
                     <td>{a.destinatario}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      {/* Registro de acciones */}
-      <section className="card sa-card">
-        <h2 className="sa-h2">Registro de acciones</h2>
-        {panel.acciones.length === 0 ? (
-          <p className="sa-ayuda">Todavía no hay acciones registradas.</p>
-        ) : (
-          <div className="sa-tabla-scroll">
-            <table className="sa-tabla">
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Acción</th>
-                  <th>Detalle</th>
-                  <th>Usuario</th>
-                </tr>
-              </thead>
-              <tbody>
-                {panel.acciones.map((a) => (
-                  <tr key={a.id}>
-                    <td>{formatearFechaHora(a.creado_en)}</td>
-                    <td>{ETIQUETA_ACCION[a.accion] ?? a.accion}</td>
-                    <td>{a.detalle ?? ''}</td>
-                    <td>{a.usuario ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>

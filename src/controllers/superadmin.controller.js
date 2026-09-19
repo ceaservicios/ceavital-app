@@ -12,7 +12,7 @@ import {
 import { listarAvisosEnviados } from '../services/avisos-cuota.service.js';
 import { correoCeaDisponible } from '../services/mail.service.js';
 import { planActual } from '../services/modulos.service.js';
-import { cerrarSesionSuperadmin, listarAcciones, loginSuperadmin } from '../services/superadmin.service.js';
+import { cerrarSesionSuperadmin, loginSuperadmin } from '../services/superadmin.service.js';
 import { origenPermitido } from '../middleware/superadmin-auth.middleware.js';
 import { ApiError } from '../utils/api-error.js';
 
@@ -31,7 +31,7 @@ export async function loginSuperadminController(req, res) {
     return res.status(400).json({ error: 'Usuario y contraseña son requeridos' });
   }
   if (!origenPermitido(req)) return res.status(403).json({ error: 'Pedido no autorizado' });
-  const r = await loginSuperadmin(usuario.trim(), password, req.ip);
+  const r = await loginSuperadmin(usuario.trim(), password);
   res.set('Cache-Control', 'no-store'); // la respuesta trae el token CSRF
   res.cookie('sa_token', r.token, { ...OPCIONES_COOKIE, maxAge: config.session.timeoutMinutes * 60 * 1000 });
   res.json({ tipo: 'superadmin', superadmin: r.superadmin, csrf_token: r.csrfToken });
@@ -50,7 +50,7 @@ export function meSuperadminController(req, res) {
 const describirPlan = (id) => ({ id, nombre: PLANES[id].nombre, modulos: PLANES[id].modulos });
 
 export async function panelSuperadminController(req, res) {
-  const [instancia, plan, acciones] = await Promise.all([obtenerInstancia(), planActual(), listarAcciones(20)]);
+  const [instancia, plan] = await Promise.all([obtenerInstancia(), planActual()]);
   res.json({
     version: config.version,
     instancia,
@@ -58,41 +58,36 @@ export async function panelSuperadminController(req, res) {
     planes: Object.keys(PLANES).map(describirPlan),
     modulos: Object.entries(MODULOS).map(([id, m]) => ({ id, nombre: m.nombre })),
     correo: { disponible: correoCeaDisponible(), avisos: await listarAvisosEnviados() },
-    acciones,
   });
-}
-
-export async function accionesSuperadminController(req, res) {
-  res.json({ acciones: await listarAcciones(req.query.limite) });
 }
 
 export async function cambiarPlanSuperadminController(req, res) {
   const plan = req.body?.plan;
   if (typeof plan !== 'string') throw new ApiError(400, 'plan es requerido');
-  await cambiarPlanComoSuperadmin(req.superadmin.id, plan, req.ip);
+  await cambiarPlanComoSuperadmin(plan);
   res.json({ plan: describirPlan(plan) });
 }
 
 export async function suspenderSuperadminController(req, res) {
-  await suspenderInstancia(req.superadmin.id, req.body?.motivo, req.ip);
+  await suspenderInstancia(req.body?.motivo);
   res.json({ instancia: await obtenerInstancia() });
 }
 
 export async function reactivarSuperadminController(req, res) {
-  await reactivarInstancia(req.superadmin.id, req.ip);
+  await reactivarInstancia();
   res.json({ instancia: await obtenerInstancia() });
 }
 
 export async function fijarCuotaSuperadminController(req, res) {
-  await fijarCuota(req.superadmin.id, req.body || {}, req.ip);
+  await fijarCuota(req.body || {});
   res.json({ instancia: await obtenerInstancia() });
 }
 
 export async function empresaEmailSuperadminController(req, res) {
-  await fijarEmpresaEmail(req.superadmin.id, req.body?.email, req.ip);
+  await fijarEmpresaEmail(req.body?.email);
   res.json({ instancia: await obtenerInstancia() });
 }
 
 export async function correoPruebaSuperadminController(req, res) {
-  res.json(await enviarCorreoDePrueba(req.superadmin.id, req.ip));
+  res.json(await enviarCorreoDePrueba());
 }

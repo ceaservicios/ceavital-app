@@ -132,7 +132,7 @@ describe('superadmin', { skip: !ADMIN_URL && 'falta TEST_DATABASE_URL' }, () => 
 
   it('sin sesión, todo el panel da 401 y las credenciales malas dan el mismo mensaje', async () => {
     const anonimo = nuevoNavegador();
-    for (const [m, r] of [['GET', '/sa/me'], ['GET', '/sa/panel'], ['GET', '/sa/acciones'], ['PUT', '/sa/plan'], ['PUT', '/sa/cuota'], ['POST', '/sa/suspender'], ['POST', '/sa/reactivar'], ['POST', '/sa/logout']]) {
+    for (const [m, r] of [['GET', '/sa/me'], ['GET', '/sa/panel'], ['PUT', '/sa/plan'], ['PUT', '/sa/cuota'], ['POST', '/sa/suspender'], ['POST', '/sa/reactivar'], ['POST', '/sa/logout']]) {
       assert.equal((await api(anonimo, m, r, {})).status, 401, `${m} ${r}`);
     }
     const usuarioMalo = await api(anonimo, 'POST', '/auth/login', { usuario: 'nadie', password: 'x'.repeat(14) });
@@ -171,7 +171,6 @@ describe('superadmin', { skip: !ADMIN_URL && 'falta TEST_DATABASE_URL' }, () => 
     assert.ok(data.version);
     assert.equal(data.instancia.estado, 'activa');
     assert.equal(data.instancia.cuota.estado, 'sin_definir');
-    assert.ok(Array.isArray(data.acciones));
   });
 
   it('CSRF: un pedido que modifica algo sin token, con token ajeno o desde otro origen se rechaza', async () => {
@@ -223,7 +222,7 @@ describe('superadmin', { skip: !ADMIN_URL && 'falta TEST_DATABASE_URL' }, () => 
     negocio.cookies = nuevo.cookies;
   });
 
-  it('cambiar el plan desde el panel se aplica al instante y queda registrado', async () => {
+  it('cambiar el plan desde el panel se aplica al instante', async () => {
     assert.equal((await api(sa, 'PUT', '/sa/plan', { plan: 'inexistente' })).status, 400);
     assert.equal((await api(sa, 'PUT', '/sa/plan', {})).status, 400);
 
@@ -234,9 +233,6 @@ describe('superadmin', { skip: !ADMIN_URL && 'falta TEST_DATABASE_URL' }, () => 
 
     assert.equal((await api(sa, 'PUT', '/sa/plan', { plan: 'empresas' })).status, 200);
     assert.equal((await api(negocio, 'GET', '/clientes-empresa')).status, 200);
-
-    const acciones = (await api(sa, 'GET', '/sa/acciones')).data.acciones;
-    assert.ok(acciones.some((a) => a.accion === 'plan' && a.detalle === 'plan: comercio' && a.usuario === 'cea'));
   });
 
   it('cuota: estados por vencer / vencida / vigente, validaciones y borrado', async () => {
@@ -302,14 +298,6 @@ describe('superadmin', { skip: !ADMIN_URL && 'falta TEST_DATABASE_URL' }, () => 
     assert.equal((await api(nuevo, 'POST', '/auth/login', { usuario: 'admin_test', password: 'ClaveSegura123' })).status, 200);
   });
 
-  it('el registro de acciones guarda todo lo que hizo el superadmin, del más nuevo al más viejo', async () => {
-    const { acciones } = (await api(sa, 'GET', '/sa/acciones?limite=200')).data;
-    const tipos = acciones.map((a) => a.accion);
-    for (const esperado of ['login', 'plan', 'cuota', 'suspender', 'reactivar']) assert.ok(tipos.includes(esperado), esperado);
-    assert.ok(acciones.every((a, i) => i === 0 || a.id < acciones[i - 1].id));
-    assert.ok(acciones.some((a) => a.accion === 'suspender' && a.detalle === 'Cuota impaga'));
-  });
-
   it('el script de reinicio cambia la contraseña, desbloquea y cierra las sesiones abiertas', async () => {
     const corto = spawnSync(process.execPath, ['src/db/reset-superadmin-password.js'], {
       cwd: RAIZ,
@@ -352,7 +340,7 @@ describe('superadmin', { skip: !ADMIN_URL && 'falta TEST_DATABASE_URL' }, () => 
     }
   });
 
-  it('SUPERADMIN_USUARIO cambia el nombre de usuario al arrancar (con un email), corta sesiones y deja registro', async () => {
+  it('SUPERADMIN_USUARIO cambia el nombre de usuario al arrancar (con un email), y corta sesiones', async () => {
     const puerto2 = PUERTO + 1;
     const proc = spawn(process.execPath, ['src/server.js'], {
       cwd: RAIZ,
@@ -370,8 +358,6 @@ describe('superadmin', { skip: !ADMIN_URL && 'falta TEST_DATABASE_URL' }, () => 
         await new Promise((r) => setTimeout(r, 250));
       }
       assert.equal((await consultar('SELECT usuario FROM superadmin'))[0].usuario, 'admin@ceavital.net');
-      const registro = await consultar(`SELECT detalle FROM superadmin_acciones WHERE accion = 'usuario_cambiado'`);
-      assert.equal(registro[0].detalle, 'cea -> admin@ceavital.net');
       // La contraseña guardada no cambia; el usuario viejo ya no entra y el nuevo sí (sin distinguir mayúsculas).
       const otro = nuevoNavegador();
       assert.equal((await api(otro, 'POST', '/auth/login', { usuario: 'cea', password: 'OtraClaveSuperadmin-2027' })).status, 401);

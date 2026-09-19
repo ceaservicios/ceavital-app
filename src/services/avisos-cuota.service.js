@@ -1,7 +1,6 @@
 import db from '../db/connection.js';
 import { correoCeaDisponible, enviarCorreo, armarCorreoCuota } from './mail.service.js';
 import { obtenerInstancia } from './instancia.service.js';
-import { registrarAccion } from './superadmin.service.js';
 
 // Avisos de cuota por mail, de CEA a la empresa contratante. Un mail por cada etapa,
 // una sola vez por fecha de vencimiento: al entrar en el período de aviso, el día que
@@ -41,7 +40,6 @@ export async function revisarAvisosCuota() {
     console.error('[cuota] no se pudo mandar el aviso, se reintenta en la próxima revisión:', err.message);
     return null;
   }
-  await registrarAccion(null, 'aviso_cuota', `${tipo} enviado a ${instancia.empresa_email}`, null);
   console.log(`[cuota] aviso "${tipo}" enviado`);
   return tipo;
 }

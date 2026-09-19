@@ -1,8 +1,7 @@
 import db from '../db/connection.js';
 import { ApiError } from '../utils/api-error.js';
 import { SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
-import { cambiarPlan, invalidarCachePlan } from './modulos.service.js';
-import { registrarAccion } from './superadmin.service.js';
+import { cambiarPlan } from './modulos.service.js';
 import { correoCeaDisponible, enviarCorreo } from './mail.service.js';
 
 // Estado de la instalación que gestiona el superadmin: suspensión y cuota. (El plan
@@ -48,7 +47,7 @@ export async function asegurarInstanciaActiva() {
   }
 }
 
-export async function suspenderInstancia(superadminId, motivo, ip) {
+export async function suspenderInstancia(motivo) {
   if (typeof motivo !== 'string' || !motivo.trim()) throw new ApiError(400, 'El motivo de la suspensión es requerido');
   if (motivo.trim().length > MOTIVO_MAX) throw new ApiError(400, `El motivo no puede superar los ${MOTIVO_MAX} caracteres`);
 
@@ -76,11 +75,10 @@ export async function suspenderInstancia(superadminId, motivo, ip) {
          WHERE estado = 'activa'`
       )
       .run();
-    await registrarAccion(superadminId, 'suspender', motivo.trim(), ip);
   });
 }
 
-export async function reactivarInstancia(superadminId, ip) {
+export async function reactivarInstancia() {
   await db.transaction(async () => {
     const { estado } = await db.prepare('SELECT estado FROM instancia WHERE id = 1').get();
     if (estado !== 'suspendida') throw new ApiError(409, 'La instalación no está suspendida');
@@ -90,13 +88,12 @@ export async function reactivarInstancia(superadminId, ip) {
                 actualizado_en = CURRENT_TIMESTAMP WHERE id = 1`
       )
       .run();
-    await registrarAccion(superadminId, 'reactivar', null, ip);
   });
 }
 
 // vence: 'AAAA-MM-DD' o null (sin cuota definida). avisoDias: cuántos días antes del
 // vencimiento la cuota pasa a "por vencer".
-export async function fijarCuota(superadminId, { vence, aviso_dias: avisoDias }, ip) {
+export async function fijarCuota({ vence, aviso_dias: avisoDias }) {
   let fecha = null;
   if (vence !== null && vence !== undefined && vence !== '') {
     const m = typeof vence === 'string' ? FECHA_ISO.exec(vence) : null;
@@ -116,30 +113,21 @@ export async function fijarCuota(superadminId, { vence, aviso_dias: avisoDias },
     aviso = (await db.prepare('SELECT cuota_aviso_dias FROM instancia WHERE id = 1').get()).cuota_aviso_dias;
   }
 
-  await db.transaction(async () => {
-    await db
-      .prepare('UPDATE instancia SET cuota_vence = ?, cuota_aviso_dias = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = 1')
-      .run(fecha, aviso);
-    await registrarAccion(superadminId, 'cuota', `vence: ${fecha ?? 'sin definir'}; aviso: ${aviso} días`, ip);
-  });
+  await db
+    .prepare('UPDATE instancia SET cuota_vence = ?, cuota_aviso_dias = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = 1')
+    .run(fecha, aviso);
 }
 
 // Cambio de plan hecho por el superadmin: el mismo cambiarPlan de siempre (bloquea si
-// hay pedidos pendientes, cierra sesiones del portal) más el registro de la acción.
-export async function cambiarPlanComoSuperadmin(superadminId, plan, ip) {
-  await db.transaction(async () => {
-    await cambiarPlan(plan);
-    await registrarAccion(superadminId, 'plan', `plan: ${plan}`, ip);
-  });
-  // cambiarPlan ya invalidó la caché, pero antes de que esta transacción confirmara: otro
-  // pedido pudo volver a cachear el plan viejo en el medio.
-  invalidarCachePlan();
+// hay pedidos pendientes, cierra sesiones del portal).
+export async function cambiarPlanComoSuperadmin(plan) {
+  await cambiarPlan(plan);
 }
 
 const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Mail de la empresa contratante, a quien van los avisos de cuota. Vacío = no se manda nada.
-export async function fijarEmpresaEmail(superadminId, email, ip) {
+export async function fijarEmpresaEmail(email) {
   let valor = null;
   if (email !== null && email !== undefined && email !== '') {
     if (typeof email !== 'string' || email.trim().length > 200 || !EMAIL_VALIDO.test(email.trim())) {
@@ -147,14 +135,11 @@ export async function fijarEmpresaEmail(superadminId, email, ip) {
     }
     valor = email.trim();
   }
-  await db.transaction(async () => {
-    await db.prepare('UPDATE instancia SET empresa_email = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = 1').run(valor);
-    await registrarAccion(superadminId, 'empresa_email', valor ?? 'quitado', ip);
-  });
+  await db.prepare('UPDATE instancia SET empresa_email = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = 1').run(valor);
 }
 
 // Manda un mail de prueba al email de la empresa para comprobar que el correo de CEA sale.
-export async function enviarCorreoDePrueba(superadminId, ip) {
+export async function enviarCorreoDePrueba() {
   if (!correoCeaDisponible()) throw new ApiError(503, 'El correo de CEA no está configurado en este servidor (variables SA_SMTP_*)');
   const { empresa_email: para } = await obtenerInstancia();
   if (!para) throw new ApiError(400, 'Cargá primero el email de la empresa');
@@ -166,6 +151,5 @@ export async function enviarCorreoDePrueba(superadminId, ip) {
     },
     'cea'
   );
-  await registrarAccion(superadminId, 'correo_prueba', `enviado a ${para}`, ip);
   return { enviado_a: para };
 }

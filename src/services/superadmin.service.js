@@ -51,7 +51,6 @@ export async function asegurarSuperadmin() {
              WHERE estado = 'activa'`
           )
           .run();
-        await registrarAccion(existente.id, 'usuario_cambiado', `${existente.usuario} -> ${fijado}`, null);
       });
       console.log(`[superadmin] usuario cambiado a "${fijado}"`);
     }
@@ -110,13 +109,12 @@ export async function cambiarPasswordSuperadmin(nueva) {
          WHERE estado = 'activa'`
       )
       .run();
-    await registrarAccion(cuenta.id, 'password_cambiada', 'Desde la terminal del servidor', null);
   });
 }
 
 let hashDeRelleno = null;
 
-export async function loginSuperadmin(usuarioLogin, passwordPlano, ip) {
+export async function loginSuperadmin(usuarioLogin, passwordPlano) {
   const cuenta = await db
     .prepare(
       `SELECT id, usuario, password_hash,
@@ -149,7 +147,6 @@ export async function loginSuperadmin(usuarioLogin, passwordPlano, ip) {
       await db
         .prepare(`UPDATE superadmin SET bloqueado_hasta = LOCALTIMESTAMP + (?::int * INTERVAL '1 minute') WHERE id = ?`)
         .run(config.login.bloqueoMinutos, cuenta.id);
-      await registrarAccion(cuenta.id, 'bloqueo_por_intentos', `${intentos} intentos fallidos`, ip);
       throw new ApiError(423, `Acceso bloqueado por ${config.login.maxIntentos} intentos fallidos. Reintentá en ${config.login.bloqueoMinutos} minutos.`);
     }
     throw new ApiError(401, 'Usuario o contraseña incorrectos');
@@ -173,7 +170,6 @@ export async function loginSuperadmin(usuarioLogin, passwordPlano, ip) {
     await db
       .prepare('INSERT INTO sesiones_superadmin (superadmin_id, token, csrf_token) VALUES (?, ?, ?)')
       .run(cuenta.id, token, csrfToken);
-    await registrarAccion(cuenta.id, 'login', null, ip);
   });
 
   return { token, csrfToken, superadmin: { id: cuenta.id, usuario: cuenta.usuario } };
@@ -213,23 +209,4 @@ export async function cerrarSesionesSuperadminInactivas() {
     )
     .run(config.session.timeoutMinutes);
   return r.changes;
-}
-
-// Registro de acciones de CEA sobre la instancia (solo se agrega). Dentro de una
-// transacción abierta se une a ella, así una acción y su registro quedan o no juntos.
-export async function registrarAccion(superadminId, accion, detalle, ip) {
-  await db
-    .prepare('INSERT INTO superadmin_acciones (superadmin_id, accion, detalle, ip) VALUES (?, ?, ?, ?)')
-    .run(superadminId ?? null, accion, detalle ?? null, ip ?? null);
-}
-
-export function listarAcciones(limite = 50) {
-  const tope = Math.min(Math.max(Number.parseInt(limite, 10) || 50, 1), 200);
-  return db
-    .prepare(
-      `SELECT a.id, a.accion, a.detalle, a.ip, a.creado_en, s.usuario
-       FROM superadmin_acciones a LEFT JOIN superadmin s ON s.id = a.superadmin_id
-       ORDER BY a.id DESC LIMIT ?`
-    )
-    .all(tope);
 }

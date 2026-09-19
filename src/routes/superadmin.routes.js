@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import {
-  accionesSuperadminController,
   cambiarPlanSuperadminController,
   correoPruebaSuperadminController,
   empresaEmailSuperadminController,
@@ -26,7 +25,6 @@ router.use(requireSuperadmin);
 router.post('/logout', logoutSuperadminController);
 router.get('/me', meSuperadminController);
 router.get('/panel', panelSuperadminController);
-router.get('/acciones', accionesSuperadminController);
 router.put('/plan', cambiarPlanSuperadminController);
 router.put('/cuota', fijarCuotaSuperadminController);
 router.put('/empresa-email', empresaEmailSuperadminController);

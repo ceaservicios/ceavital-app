@@ -332,13 +332,7 @@ describe('avisos de cuota por mail', { skip: !ADMIN_URL && 'falta TEST_DATABASE_
     assert.equal((await api(sa, PUERTO, 'GET', '/sa/panel')).data.instancia.estado, 'activa');
   });
 
-  it('el registro de acciones deja constancia del email, la prueba y los avisos automáticos', async () => {
-    const acciones = (await api(sa, PUERTO, 'GET', '/sa/acciones?limite=200')).data.acciones;
-    const tipos = new Set(acciones.map((a) => a.accion));
-    for (const t of ['empresa_email', 'correo_prueba', 'aviso_cuota']) assert.ok(tipos.has(t), t);
-    const automatico = acciones.find((a) => a.accion === 'aviso_cuota');
-    assert.equal(automatico.usuario, null, 'el aviso automático no es de ningún usuario');
-    assert.ok(automatico.detalle.includes(EMPRESA));
+  it('el panel lista los avisos ya enviados', async () => {
     assert.ok((await api(sa, PUERTO, 'GET', '/sa/panel')).data.correo.avisos.length > 0);
   });
 });
