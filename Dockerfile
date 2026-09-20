@@ -24,4 +24,5 @@ ENV PORT=3000
 VOLUME ["/data"]
 
 EXPOSE 3000
-CMD ["node", "src/server.js"]
+# entrada.js arranca la app o, con MODO_BKPS=on, la app de backups (ceavital-app-bkps).
+CMD ["node", "src/entrada.js"]

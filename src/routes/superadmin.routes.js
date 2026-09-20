@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  backupEstadoSuperadminController,
   backupSuperadminController,
   bloquearSuperadminController,
   cambiarPlanSuperadminController,
@@ -37,6 +38,7 @@ router.post('/correo-prueba', correoPruebaSuperadminController);
 router.post('/suspender', suspenderSuperadminController);
 router.post('/reactivar', reactivarSuperadminController);
 router.post('/backup', backupSuperadminController);
+router.get('/backup-estado', backupEstadoSuperadminController);
 router.get('/defensa', defensaSuperadminController);
 router.post('/defensa/desbloquear', desbloquearSuperadminController);
 router.post('/defensa/desbloquear-todas', desbloquearTodasSuperadminController);

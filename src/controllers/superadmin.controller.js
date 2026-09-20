@@ -17,6 +17,8 @@ import { origenPermitido } from '../middleware/superadmin-auth.middleware.js';
 import { ApiError } from '../utils/api-error.js';
 import fs from 'node:fs';
 import { generarBackup } from '../services/backup-completo.service.js';
+import { estadoBackupsAutomaticos } from '../services/backup-corridas.service.js';
+import { TOKEN_MIN } from './backup-sync.controller.js';
 import { bloquearManual, desbloquearIp, desbloquearTodas, estadoDefensa } from '../services/defensa-ip.service.js';
 
 // La cookie solo viaja a /api/sa (Path) y nunca en pedidos que vienen de otro sitio
@@ -125,4 +127,9 @@ export async function bloquearSuperadminController(req, res) {
   const { ip, minutos, detalle } = req.body || {};
   if (typeof ip !== 'string') throw new ApiError(400, 'ip es requerida');
   res.json(await bloquearManual(ip, minutos, detalle));
+}
+
+// Estado de los backups automáticos (los hace la app de backups y le informa a esta instalación).
+export async function backupEstadoSuperadminController(req, res) {
+  res.json(await estadoBackupsAutomaticos(config.backupSync.token.length >= TOKEN_MIN));
 }

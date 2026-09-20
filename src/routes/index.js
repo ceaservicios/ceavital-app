@@ -12,6 +12,7 @@ import clientesEmpresaRoutes from './clientes-empresa.routes.js';
 import pedidosClienteRoutes from './pedidos-cliente.routes.js';
 import portalRoutes from './portal.routes.js';
 import superadminRoutes from './superadmin.routes.js';
+import backupSyncRoutes from './backup-sync.routes.js';
 import { requireModulo } from '../middleware/modulo.middleware.js';
 import { asyncHandler } from '../utils/async-handler.js';
 import { modulosActivos } from '../services/modulos.service.js';
@@ -32,6 +33,8 @@ router.get(
 router.use('/auth', authRoutes);
 // Superadmin de la instalación (CEA): cuenta, sesión y cookie propias, aparte del negocio.
 router.use('/sa', superadminRoutes);
+// Solo para la app de backups (token propio, sin sesión): trae el backup cifrado e informa su estado.
+router.use('/backup-sync', backupSyncRoutes);
 router.use('/productos', productosRoutes);
 router.use('/vencimientos', vencimientosRoutes);
 router.use('/ventas', ventasRoutes);

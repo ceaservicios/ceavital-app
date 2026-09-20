@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, ApiError, setCsrfSuperadmin } from '../api/client.js';
 import { formatearFecha, formatearFechaHora } from '../utils/format.js';
 import SuperadminBackup from './SuperadminBackup.jsx';
+import SuperadminBackupsAuto from './SuperadminBackupsAuto.jsx';
 import SuperadminSeguridad from './SuperadminSeguridad.jsx';
 import './SuperadminPage.css';
 
@@ -389,6 +390,7 @@ export default function SuperadminPage() {
 
       {/* Defensa por IP y backup completo: cada uno maneja su propio estado */}
       <SuperadminSeguridad irAlLogin={irAlLogin} />
+      <SuperadminBackupsAuto irAlLogin={irAlLogin} />
       <SuperadminBackup irAlLogin={irAlLogin} />
     </div>
   );

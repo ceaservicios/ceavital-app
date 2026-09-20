@@ -326,7 +326,8 @@ async function rechazar(req, res, ip, tipo) {
   return res.status(403).json({ error: 'Acceso denegado' });
 }
 
-const RUTAS_DE_LOGIN = /^\/api\/(auth|portal)\/login$/;
+// Ingresos por usuario/contraseña y por token de la app de backups: los fallos cuentan igual.
+const RUTAS_DE_LOGIN = /^\/api\/((auth|portal)\/login|backup-sync\/(export|estado))$/;
 const RESPUESTAS_DE_FALLO = new Set([401, 423, 429]);
 
 // Primer middleware de la app (después de trust proxy): corta a las IPs bloqueadas y a lo
@@ -361,6 +362,9 @@ export async function defensaCuerpoIp(req, res, next) {
   if (!config.defensa.activa) return next();
   const ip = ipDe(req);
   if (esExenta(ip)) return next();
+  // El cuerpo de backup-sync lo manda la app de backups (texto de errores incluido) y solo se
+  // usa con consultas parametrizadas: escanearlo bloquearía a la app de backups por un falso positivo.
+  if (req.path.startsWith('/api/backup-sync/')) return next();
   const ataque = detectarEnCuerpo(req);
   if (ataque) return rechazar(req, res, ip, ataque);
   next();

@@ -16,6 +16,7 @@
     "reset-admin-password": "node src/db/reset-admin-password.js",
     "reset-superadmin-password": "node src/db/reset-superadmin-password.js",
     "desbloquear-ip": "node src/db/desbloquear-ip.js",
+    "bkps:ahora": "node src/bkps/ahora.js",
     "restaurar-backup": "node src/db/restaurar-backup.js",
     "importar:sqlite": "node src/db/importar-sqlite.js"
   },

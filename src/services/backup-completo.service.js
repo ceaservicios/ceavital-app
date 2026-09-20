@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import readline from 'node:readline';
+import { pipeline } from 'node:stream';
 import zlib from 'node:zlib';
 import { promisify } from 'node:util';
 import { pool } from '../db/connection.js';
@@ -25,7 +25,8 @@ import { ApiError } from '../utils/api-error.js';
 // Formato del archivo (.ceavbak):  "CEAVBK01" | salt(16) | iv(12) | ciphertext | tag(16)
 //
 // NO viajan: las sesiones abiertas, la cuenta del superadmin (es de CEA, no del negocio) y
-// las tablas de defensa por IP (ips_bloqueadas, eventos_seguridad): son estado de la
+// las tablas de defensa por IP (ips_bloqueadas, eventos_seguridad) ni el historial de backups
+// (backup_corridas): son estado de la
 // instalación, no datos del negocio.
 
 const scrypt = promisify(crypto.scrypt);
@@ -44,6 +45,8 @@ const TABLAS_EXCLUIDAS = new Set([
   'superadmin',
   'ips_bloqueadas',
   'eventos_seguridad',
+  'backup_corridas',
+  'bkps_marca',
 ]);
 
 const ident = (nombre) => `"${String(nombre).replace(/"/g, '""')}"`;
@@ -173,23 +176,32 @@ async function abrirBackup(ruta, password) {
 const MENSAJE_CLAVE_O_ARCHIVO = 'Contraseña incorrecta o archivo dañado: no se pudo descifrar el backup';
 
 // Recorre las líneas del backup ya descifradas y descomprimidas.
+// pipeline() propaga el error de CUALQUIER etapa (clave mala o archivo alterado = la autenticación
+// GCM falla al final; archivo cortado = gzip incompleto) y destruye todas las demás: sin eso, un
+// archivo cortado dejaba la lectura esperando para siempre con la transacción de restauración abierta.
 async function* leerLineas(ruta, password) {
   const { inicio, fin, decipher } = await abrirBackup(ruta, password);
   const origen = fs.createReadStream(ruta, { start: inicio, end: fin });
   const gunzip = zlib.createGunzip();
-  origen.pipe(decipher).pipe(gunzip);
-  // Un error de cualquier etapa (clave mala = la autenticación GCM falla) corta la lectura.
-  const fallo = new Promise((_, rechazar) => {
-    for (const s of [origen, decipher, gunzip]) s.once('error', rechazar);
-  });
-  fallo.catch(() => {});
-  const lineas = readline.createInterface({ input: gunzip, crlfDelay: Infinity });
+  gunzip.setEncoding('utf8');
+  pipeline(origen, decipher, gunzip, () => {}); // el error llega a gunzip y lo corta el for await
+  let resto = '';
   try {
-    for await (const linea of lineas) yield linea;
+    for await (const trozo of gunzip) {
+      resto += trozo;
+      let salto;
+      while ((salto = resto.indexOf('\n')) >= 0) {
+        const linea = resto.slice(0, salto);
+        resto = resto.slice(salto + 1);
+        if (linea) yield linea;
+      }
+    }
+    if (resto) yield resto;
   } catch {
     throw new Error(MENSAJE_CLAVE_O_ARCHIVO);
   } finally {
     origen.destroy();
+    gunzip.destroy();
   }
 }
 
@@ -241,6 +253,9 @@ export async function restaurarBackup(ruta, password) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Red de seguridad: si algo deja esta transacción abierta y quieta (proceso colgado o muerto),
+    // Postgres la cierra solo y libera las tablas que TRUNCATE bloquea.
+    await client.query("SET LOCAL idle_in_transaction_session_timeout = '10min'");
 
     // El esquema de destino tiene que ser igual o más nuevo que el del backup.
     const enDestino = new Set((await client.query('SELECT archivo FROM _migrations')).rows.map((r) => r.archivo));

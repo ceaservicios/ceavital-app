@@ -111,6 +111,29 @@ const config = {
     bloquearLoopback: process.env.DEFENSA_IP_LOOPBACK === 'on',
   },
 
+  // Backups automaticos (ver src/bkps/ y Docs/Planes-y-Superadmin.md §5).
+  // En PRODUCCION solo hace falta BACKUP_SYNC_TOKEN (32+ caracteres): habilita que la app de
+  // backups pida el backup. Sin token, esa ruta no existe (404).
+  backupSync: {
+    token: (process.env.BACKUP_SYNC_TOKEN || '').trim(),
+  },
+  // En la APP DE BACKUPS (el mismo codigo, con MODO_BKPS=on y DATABASE_URL apuntando a
+  // ceavital-bd-bkps, NUNCA a la base de produccion).
+  bkps: {
+    activo: process.env.MODO_BKPS === 'on',
+    instanciaUrl: (process.env.BKPS_INSTANCIA_URL || '').trim().replace(/\/+$/, ''),
+    token: (process.env.BKPS_TOKEN || '').trim(), // el mismo valor que BACKUP_SYNC_TOKEN de produccion
+    password: process.env.BKPS_BACKUP_PASSWORD || '', // cifra los archivos; sin ella no se pueden abrir
+    hora: (process.env.BKPS_HORA || '03:00').trim(), // hora argentina
+    dir: (process.env.BKPS_DIR || '/data/backups').trim(),
+    alertaEmail: (process.env.BKPS_ALERTA_EMAIL || '').trim(),
+    drive: {
+      credencialesB64: (process.env.GDRIVE_CREDENCIALES_B64 || '').trim(), // JSON de la cuenta de servicio, en base64
+      carpetaId: (process.env.GDRIVE_CARPETA_ID || '').trim(),
+      apiUrl: (process.env.GDRIVE_API_URL || 'https://www.googleapis.com').trim().replace(/\/+$/, ''),
+    },
+  },
+
   session: {
     // Sesion inactiva se cierra sola a los 30 min (Instructivo-Funcional > Requisitos transversales).
     timeoutMinutes: 30,

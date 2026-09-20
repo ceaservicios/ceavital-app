@@ -313,6 +313,7 @@ describe('defensa por IP y backup', { skip: !ADMIN_URL && 'falta TEST_DATABASE_U
           cwd: RAIZ,
           env: { ...entorno, DATABASE_URL: url, BACKUP_PASSWORD: clave },
           encoding: 'utf8',
+          timeout: 120_000, // un archivo dañado tiene que FALLAR, nunca quedar colgado con la transacción abierta
         });
 
       const mala = correr(archivo, 'otra-clave-distinta-1');
@@ -327,10 +328,16 @@ describe('defensa por IP y backup', { skip: !ADMIN_URL && 'falta TEST_DATABASE_U
       assert.notEqual(r2.status, 0);
       assert.match(r2.stderr, /Contraseña incorrecta o archivo dañado/);
 
-      const cortado = alterado.subarray(0, Math.floor(alterado.length * 0.6));
-      const rutaCortada = archivo.replace('.ceavbak', '-cortado.ceavbak');
-      fs.writeFileSync(rutaCortada, cortado);
-      assert.notEqual(correr(rutaCortada, CLAVE_BACKUP).status, 0);
+      // Cortado en varios puntos (regresión: un corte dejaba el proceso colgado con TRUNCATE abierto).
+      const original = fs.readFileSync(archivo);
+      for (const proporcion of [0.05, 0.3, 0.6, 0.95, 0.999]) {
+        const rutaCortada = archivo.replace('.ceavbak', `-cortado-${proporcion}.ceavbak`);
+        fs.writeFileSync(rutaCortada, original.subarray(0, Math.floor(original.length * proporcion)));
+        const rc = correr(rutaCortada, CLAVE_BACKUP);
+        assert.equal(rc.error, undefined, `cortado al ${proporcion * 100}%: no puede quedar colgado (${rc.error?.message})`);
+        assert.ok(typeof rc.status === 'number' && rc.status !== 0, `cortado al ${proporcion * 100}% tiene que fallar`);
+        assert.match(rc.stderr, /Contraseña incorrecta o archivo dañado|demasiado chico|muy chico|no es un backup/, `cortado al ${proporcion * 100}%`);
+      }
 
       const sinConfirmar = spawnSync(process.execPath, ['src/db/restaurar-backup.js', archivo], { cwd: RAIZ, env: { ...entorno, BACKUP_PASSWORD: CLAVE_BACKUP }, encoding: 'utf8' });
       assert.match(sinConfirmar.stdout, /--confirmar/);
