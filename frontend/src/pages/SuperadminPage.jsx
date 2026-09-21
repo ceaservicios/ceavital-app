@@ -4,6 +4,7 @@ import { api, ApiError, setCsrfSuperadmin } from '../api/client.js';
 import { formatearFecha, formatearFechaHora } from '../utils/format.js';
 import SuperadminBackup from './SuperadminBackup.jsx';
 import SuperadminBackupsAuto from './SuperadminBackupsAuto.jsx';
+import SuperadminRestaurar from './SuperadminRestaurar.jsx';
 import SuperadminSeguridad from './SuperadminSeguridad.jsx';
 import './SuperadminPage.css';
 
@@ -392,6 +393,7 @@ export default function SuperadminPage() {
       <SuperadminSeguridad irAlLogin={irAlLogin} />
       <SuperadminBackupsAuto irAlLogin={irAlLogin} />
       <SuperadminBackup irAlLogin={irAlLogin} />
+      <SuperadminRestaurar irAlLogin={irAlLogin} />
     </div>
   );
 }

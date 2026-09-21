@@ -12,7 +12,8 @@ import {
 import { listarAvisosEnviados } from '../services/avisos-cuota.service.js';
 import { correoCeaDisponible } from '../services/mail.service.js';
 import { planActual } from '../services/modulos.service.js';
-import { cerrarSesionSuperadmin, loginSuperadmin } from '../services/superadmin.service.js';
+import { cerrarSesionSuperadmin, confirmarPasswordSuperadmin, loginSuperadmin } from '../services/superadmin.service.js';
+import { recibirArchivo, restaurarDesdeArchivo } from '../services/restauracion.service.js';
 import { origenPermitido } from '../middleware/superadmin-auth.middleware.js';
 import { ApiError } from '../utils/api-error.js';
 import fs from 'node:fs';
@@ -106,6 +107,24 @@ export async function backupSuperadminController(req, res) {
   res.download(ruta, nombre, () => {
     fs.promises.rm(ruta, { force: true }).catch(() => {});
   });
+}
+
+// ---- Restaurar un backup completo (reemplaza los datos del negocio) ----
+// Paso 1: el navegador sube el .ceavbak tal cual (application/octet-stream).
+export async function subirRestauracionController(req, res) {
+  res.json(await recibirArchivo(req));
+}
+
+// Paso 2: con el id del archivo, la contraseña del backup y la contraseña del superadmin
+// (se vuelve a pedir a propósito: es una acción destructiva).
+export async function restaurarSuperadminController(req, res) {
+  const { archivo_id: archivoId, password_backup: passwordBackup, password_superadmin: passwordSuperadmin } = req.body || {};
+  await confirmarPasswordSuperadmin(req.superadmin.id, passwordSuperadmin);
+  const r = await restaurarDesdeArchivo(archivoId, passwordBackup);
+  const filas = Object.values(r.tablas).reduce((a, b) => a + b, 0);
+  console.log(`[backup] el superadmin restauró un backup del ${r.creado_en} (app ${r.version}): ${Object.keys(r.tablas).length} tablas, ${filas} filas`);
+  res.set('Cache-Control', 'no-store');
+  res.json({ creado_en: r.creado_en, version: r.version, tablas: Object.keys(r.tablas).length, filas });
 }
 
 // ---- Defensa activa por IP ----

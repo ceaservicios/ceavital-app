@@ -85,6 +85,10 @@ export default function SuperadminBackup({ irAlLogin }) {
 
       <details className="sa-eventos">
         <summary>Cómo restaurarlo (en esta u otra instalación)</summary>
+        <p className="sa-ayuda">
+          En <strong>esta</strong> instalación, usá la tarjeta "Restaurar un backup" de más abajo. Para restaurar en <strong>otra</strong> instalación, entrá a su
+          panel y usá esa misma tarjeta, o hacelo por terminal así:
+        </p>
         <ol className="sa-pasos">
           <li>En la instalación destino, con la app ya desplegada (arrancó una vez y creó el esquema), abrí la terminal del servicio en Easypanel.</li>
           <li>

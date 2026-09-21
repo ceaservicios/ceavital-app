@@ -14,6 +14,8 @@ import {
   meSuperadminController,
   panelSuperadminController,
   reactivarSuperadminController,
+  restaurarSuperadminController,
+  subirRestauracionController,
   suspenderSuperadminController,
 } from '../controllers/superadmin.controller.js';
 import { requireSuperadmin } from '../middleware/superadmin-auth.middleware.js';
@@ -39,6 +41,8 @@ router.post('/suspender', suspenderSuperadminController);
 router.post('/reactivar', reactivarSuperadminController);
 router.post('/backup', backupSuperadminController);
 router.get('/backup-estado', backupEstadoSuperadminController);
+router.post('/restaurar/archivo', subirRestauracionController);
+router.post('/restaurar', restaurarSuperadminController);
 router.get('/defensa', defensaSuperadminController);
 router.post('/defensa/desbloquear', desbloquearSuperadminController);
 router.post('/defensa/desbloquear-todas', desbloquearTodasSuperadminController);

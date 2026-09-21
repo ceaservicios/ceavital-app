@@ -45,12 +45,13 @@ function encabezados(path, method, conCuerpo) {
   return Object.keys(h).length ? h : undefined;
 }
 
-async function request(path, { method = 'GET', body } = {}) {
+// `archivo` (un File/Blob) se sube tal cual, sin JSON: lo usa la restauración de backups.
+async function request(path, { method = 'GET', body, archivo } = {}) {
   const res = await fetch(`${BASE}${path}`, {
     method,
     credentials: 'include', // manda/recibe la cookie httpOnly de sesion
-    headers: encabezados(path, method, Boolean(body)),
-    body: body ? JSON.stringify(body) : undefined,
+    headers: archivo ? { ...encabezados(path, method, false), 'Content-Type': 'application/octet-stream' } : encabezados(path, method, Boolean(body)),
+    body: archivo ?? (body ? JSON.stringify(body) : undefined),
   });
 
   const isJson = res.headers.get('content-type')?.includes('application/json');
@@ -91,6 +92,7 @@ export const api = {
   descargar,
   get: (path) => request(path),
   post: (path, body) => request(path, { method: 'POST', body }),
+  subir: (path, archivo) => request(path, { method: 'POST', archivo }),
   patch: (path, body) => request(path, { method: 'PATCH', body }),
   put: (path, body) => request(path, { method: 'PUT', body }),
   delete: (path) => request(path, { method: 'DELETE' }),

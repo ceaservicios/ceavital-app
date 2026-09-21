@@ -173,7 +173,19 @@ async function abrirBackup(ruta, password) {
   }
 }
 
-const MENSAJE_CLAVE_O_ARCHIVO = 'Contraseña incorrecta o archivo dañado: no se pudo descifrar el backup';
+// ¿El archivo empieza con la marca de un .ceavbak? (no dice nada de la contraseña ni de si está entero)
+export async function tieneCabeceraDeBackup(ruta) {
+  const fd = await fs.promises.open(ruta, 'r');
+  try {
+    const cabecera = Buffer.alloc(MAGIC.length);
+    const { bytesRead } = await fd.read(cabecera, 0, MAGIC.length, 0);
+    return bytesRead === MAGIC.length && cabecera.equals(MAGIC);
+  } finally {
+    await fd.close();
+  }
+}
+
+const MENSAJE_CLAVE_O_ARCHIVO ='Contraseña incorrecta o archivo dañado: no se pudo descifrar el backup';
 
 // Recorre las líneas del backup ya descifradas y descomprimidas.
 // pipeline() propaga el error de CUALQUIER etapa (clave mala o archivo alterado = la autenticación
