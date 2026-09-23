@@ -6,6 +6,10 @@ import { cerrarSesion } from './session.service.js';
 
 const ROLES = ['admin', 'encargado', 'cajero'];
 
+// Topes de longitud de nombre y usuario (sin tope, un nombre de 90.000 caracteres se guardaba).
+const MAX_NOMBRE = 200;
+const MAX_USUARIO = 100;
+
 // Nunca se selecciona password_hash -- ni siquiera para Admin. Explícito acá
 // (no "SELECT *") para que un campo nuevo agregado a la tabla en el futuro no
 // se filtre por accidente a una respuesta HTTP.
@@ -13,13 +17,15 @@ const COLUMNAS_SEGURAS = `
   id, nombre, usuario, rol, intentos_fallidos, bloqueado_hasta, eliminado_en, creado_en, actualizado_en
 `;
 
-function validarString(valor, campo, { requerido = true } = {}) {
+function validarString(valor, campo, { requerido = true, maxLength = MAX_NOMBRE } = {}) {
   if (valor === undefined || valor === null || valor === '') {
     if (requerido) throw new ApiError(400, `${campo} es requerido`);
     return null;
   }
   if (typeof valor !== 'string') throw new ApiError(400, `${campo} tiene que ser texto`);
-  return valor.trim();
+  const limpio = valor.trim();
+  if (limpio.length > maxLength) throw new ApiError(400, `${campo} no puede superar ${maxLength} caracteres`);
+  return limpio;
 }
 
 function validarRol(valor) {
@@ -46,7 +52,7 @@ async function obtenerUsuarioActivo(id) {
 
 async function verificarLoginLibre(login, excluirId = null) {
   const existente = await db
-    .prepare(`SELECT id FROM usuarios WHERE usuario = ? AND eliminado_en IS NULL AND id != ?`)
+    .prepare(`SELECT id FROM usuarios WHERE LOWER(usuario) = LOWER(?) AND eliminado_en IS NULL AND id != ?`)
     .get(login, excluirId ?? -1);
   if (existente) throw new ApiError(409, 'Ya existe un usuario activo con ese login');
   if (await esUsuarioSuperadmin(login)) throw new ApiError(409, 'Ese nombre de usuario está reservado');
@@ -84,8 +90,8 @@ export function obtenerUsuario(id) {
 }
 
 export async function crearUsuario(datos) {
-  const nombre = validarString(datos.nombre, 'nombre');
-  const login = validarString(datos.usuario, 'usuario');
+  const nombre = validarString(datos.nombre, 'nombre', { maxLength: MAX_NOMBRE });
+  const login = validarString(datos.usuario, 'usuario', { maxLength: MAX_USUARIO });
   const rol = validarRol(datos.rol);
   validarPassword(datos.password);
 
@@ -108,10 +114,10 @@ export async function editarUsuario(id, datos) {
 
     const actualizaciones = {};
 
-    if (datos.nombre !== undefined) actualizaciones.nombre = validarString(datos.nombre, 'nombre');
+    if (datos.nombre !== undefined) actualizaciones.nombre = validarString(datos.nombre, 'nombre', { maxLength: MAX_NOMBRE });
 
     if (datos.usuario !== undefined) {
-      actualizaciones.usuario = validarString(datos.usuario, 'usuario');
+      actualizaciones.usuario = validarString(datos.usuario, 'usuario', { maxLength: MAX_USUARIO });
       await verificarLoginLibre(actualizaciones.usuario, id);
     }
 

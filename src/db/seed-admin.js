@@ -18,7 +18,7 @@ async function main() {
   await runMigrations();
 
   const existente = await db
-    .prepare(`SELECT id FROM usuarios WHERE usuario = ? AND eliminado_en IS NULL`)
+    .prepare(`SELECT id FROM usuarios WHERE LOWER(usuario) = LOWER(?) AND eliminado_en IS NULL`)
     .get(usuario);
 
   if (existente) {

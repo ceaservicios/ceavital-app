@@ -20,7 +20,7 @@ export async function planActual() {
   const fila = await db.prepare(`SELECT valor FROM configuracion WHERE clave = 'plan'`).get();
   let plan = PLAN_POR_DEFECTO;
   if (fila) {
-    if (PLANES[fila.valor]) {
+    if (Object.hasOwn(PLANES, fila.valor)) {
       plan = fila.valor;
     } else {
       // Valor corrupto: el mínimo privilegio, nunca abrir módulos que no se pagaron.
@@ -51,7 +51,8 @@ export async function mediosPagoPermitidos() {
 // incluye el portal, cierra las sesiones de clientes abiertas (si no, una cookie
 // vieja volvería a andar al reactivarlo).
 export async function cambiarPlan(plan) {
-  if (!PLANES[plan]) {
+  // hasOwn y no PLANES[plan]: "constructor" o "__proto__" existen en el prototipo y pasaban como plan válido.
+  if (typeof plan !== 'string' || !Object.hasOwn(PLANES, plan)) {
     throw new ApiError(400, `plan tiene que ser uno de: ${Object.keys(PLANES).join(', ')}`);
   }
 

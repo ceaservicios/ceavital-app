@@ -6,6 +6,8 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +25,9 @@ const CLAVE_BACKUP = 'una-clave-larga-de-backup';
 let servidor;
 let urlBase;
 let entorno;
+// Carpeta temporal propia del servidor de este test: el servidor barre al arrancar los archivos
+// pendientes de restauración de su carpeta temporal, y no puede llevarse los de otros tests en paralelo.
+const carpetaTemporal = fs.mkdtempSync(path.join(os.tmpdir(), 'ceavital-test-rest-'));
 const admin = ADMIN_URL ? new pg.Client({ connectionString: ADMIN_URL }) : null;
 
 async function pedir(metodo, ruta, { cuerpo, cookie, csrf, binario, raw } = {}) {
@@ -89,6 +94,9 @@ describe('restaurar un backup desde el panel', { skip: !ADMIN_URL && 'falta TEST
       PORT: String(PUERTO),
       HTTPS_MODE: 'proxy',
       NODE_ENV: 'test',
+      TMPDIR: carpetaTemporal,
+      TMP: carpetaTemporal,
+      TEMP: carpetaTemporal,
       PLAN_CACHE_SEGUNDOS: '0',
       AVISOS_CUOTA: 'off',
       SUPERADMIN_USUARIO: 'cea',
@@ -120,6 +128,7 @@ describe('restaurar un backup desde el panel', { skip: !ADMIN_URL && 'falta TEST
 
   after(async () => {
     servidor?.kill();
+    fs.rmSync(carpetaTemporal, { recursive: true, force: true });
     if (admin) {
       await admin.query(`DROP DATABASE IF EXISTS ${nombreBase} WITH (FORCE)`);
       await admin.end();

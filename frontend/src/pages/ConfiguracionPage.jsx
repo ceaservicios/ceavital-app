@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import './ConfiguracionPage.css';
@@ -16,6 +16,8 @@ function SeccionCatalogo({ titulo, endpoint, singular, descripcion }) {
   const [editandoId, setEditandoId] = useState(null);
   const [nombreEditado, setNombreEditado] = useState('');
   const [confirmandoEliminarId, setConfirmandoEliminarId] = useState(null);
+  // Guardia sincrónica de "Agregar": `disabled={guardando}` no alcanza contra dos clicks en el mismo tick.
+  const creandoRef = useRef(false);
 
   async function cargar() {
     setCargando(true);
@@ -37,6 +39,8 @@ function SeccionCatalogo({ titulo, endpoint, singular, descripcion }) {
 
   async function crear(e) {
     e.preventDefault();
+    if (creandoRef.current) return;
+    creandoRef.current = true;
     setGuardando(true);
     setError(null);
     try {
@@ -46,6 +50,7 @@ function SeccionCatalogo({ titulo, endpoint, singular, descripcion }) {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : `No se pudo crear la ${singular}.`);
     } finally {
+      creandoRef.current = false;
       setGuardando(false);
     }
   }

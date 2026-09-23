@@ -29,6 +29,9 @@ export default function UsuariosPage() {
   // verificador-funcional 2026-09-10) -- ref mutado sincrónicamente, no
   // depende de que React ya haya re-renderizado con `guardando=true`.
   const eliminandoRef = useRef(false);
+  // Guardia sincrónica de "Crear Usuario": `disabled={guardando}` no alcanza contra dos clicks en el mismo
+  // tick (mandaba dos pedidos).
+  const creandoRef = useRef(false);
 
   async function cargar() {
     setCargando(true);
@@ -82,6 +85,8 @@ export default function UsuariosPage() {
 
   async function crearUsuario(e) {
     e.preventDefault();
+    if (creandoRef.current) return;
+    creandoRef.current = true;
     setGuardando(true);
     setPanelError(null);
     try {
@@ -91,6 +96,7 @@ export default function UsuariosPage() {
     } catch (err) {
       setPanelError(err instanceof ApiError ? err.message : 'No se pudo crear el usuario.');
     } finally {
+      creandoRef.current = false;
       setGuardando(false);
     }
   }

@@ -39,6 +39,9 @@ export default function ProveedoresPage() {
   // verificador-funcional 2026-09-10) -- ref mutado sincrónicamente, no
   // depende de que React ya haya re-renderizado con `guardando=true`.
   const eliminandoRef = useRef(false);
+  // Guardia sincrónica de "Crear Proveedor": `disabled={guardando}` no alcanza contra dos clicks en el mismo
+  // tick (creaba el proveedor duplicado).
+  const creandoRef = useRef(false);
 
   const mapaProductos = useMemo(() => new Map(productos.map((p) => [p.id, p])), [productos]);
 
@@ -131,6 +134,8 @@ export default function ProveedoresPage() {
 
   async function crearProveedor(e) {
     e.preventDefault();
+    if (creandoRef.current) return;
+    creandoRef.current = true;
     setGuardando(true);
     setPanelError(null);
     try {
@@ -145,6 +150,7 @@ export default function ProveedoresPage() {
     } catch (err) {
       setPanelError(err instanceof ApiError ? err.message : 'No se pudo crear el proveedor.');
     } finally {
+      creandoRef.current = false;
       setGuardando(false);
     }
   }

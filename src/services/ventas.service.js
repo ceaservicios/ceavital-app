@@ -68,7 +68,8 @@ async function obtenerVentaConItems(ventaId) {
       `SELECT vi.*, p.nombre AS producto_nombre
        FROM venta_items vi
        JOIN productos p ON p.id = vi.producto_id
-       WHERE vi.venta_id = ?`
+       WHERE vi.venta_id = ?
+       ORDER BY vi.id`
     )
     .all(ventaId);
 

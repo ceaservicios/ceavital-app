@@ -4,13 +4,19 @@ import { ApiError } from '../utils/api-error.js';
 
 const CAMPOS_PRECIO = ['precio_costo', 'precio_venta'];
 
-function validarString(valor, campo, { requerido = true } = {}) {
+// Topes de longitud de los textos libres (sin tope, un nombre de 90.000 caracteres se guardaba).
+const MAX_TEXTO = 200;
+const MAX_CODIGO_BARRAS = 50;
+
+function validarString(valor, campo, { requerido = true, maxLength = MAX_TEXTO } = {}) {
   if (valor === undefined || valor === null || valor === '') {
     if (requerido) throw new ApiError(400, `${campo} es requerido`);
     return null;
   }
   if (typeof valor !== 'string') throw new ApiError(400, `${campo} tiene que ser texto`);
-  return valor.trim();
+  const limpio = valor.trim();
+  if (limpio.length > maxLength) throw new ApiError(400, `${campo} no puede superar ${maxLength} caracteres`);
+  return limpio;
 }
 
 function validarEntero(valor, campo, { requerido = true, minimo = null } = {}) {
@@ -177,7 +183,7 @@ export async function obtenerProducto(id, { rol }) {
 
 export async function crearProducto(datos, { rol }) {
   const nombre = validarString(datos.nombre, 'nombre');
-  const codigoBarras = validarString(datos.codigo_barras, 'codigo_barras', { requerido: false });
+  const codigoBarras = validarString(datos.codigo_barras, 'codigo_barras', { requerido: false, maxLength: MAX_CODIGO_BARRAS });
   const categoriaId = datos.categoria_id != null ? validarEntero(datos.categoria_id, 'categoria_id') : null;
   const unidadMedidaId = validarEntero(datos.unidad_medida_id, 'unidad_medida_id');
   const precioCosto = validarEntero(datos.precio_costo, 'precio_costo', { minimo: 0 });
@@ -285,7 +291,7 @@ export async function editarProducto(id, datos, { rol }) {
       await verificarProveedorActivo(actualizaciones.proveedor_id);
     }
     if (datos.codigo_barras !== undefined) {
-      actualizaciones.codigo_barras = validarString(datos.codigo_barras, 'codigo_barras', { requerido: false });
+      actualizaciones.codigo_barras = validarString(datos.codigo_barras, 'codigo_barras', { requerido: false, maxLength: MAX_CODIGO_BARRAS });
       await verificarCodigoBarrasLibre(actualizaciones.codigo_barras, id);
     }
     if (datos.precio_costo !== undefined) {

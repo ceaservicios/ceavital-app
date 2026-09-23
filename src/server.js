@@ -17,6 +17,7 @@ import { cerrarSesionesInactivas } from './services/session.service.js';
 import { cerrarSesionesClienteInactivas } from './services/clientes-portal.service.js';
 import { defensaCuerpoIp, defensaIp, iniciarDefensa, rutaApiInexistente } from './services/defensa-ip.service.js';
 import { revisarAvisosCuota } from './services/avisos-cuota.service.js';
+import { barrerTemporales } from './services/restauracion.service.js';
 import { asegurarSuperadmin, cerrarSesionesSuperadminInactivas } from './services/superadmin.service.js';
 
 function asegurarCertificado() {
@@ -53,6 +54,7 @@ process.on('unhandledRejection', (motivo) => {
 await runMigrations();
 await asegurarSuperadmin();
 await iniciarDefensa();
+await barrerTemporales().then((n) => n > 0 && console.log(`[restauracion] ${n} archivo(s) temporal(es) de una restauración anterior eliminado(s)`));
 
 // Pase a produccion desde SQLite: una sola vez, solo si PostgreSQL esta vacio.
 // Si falla, el servidor NO arranca (no se sirve una base vacia con datos sin migrar).

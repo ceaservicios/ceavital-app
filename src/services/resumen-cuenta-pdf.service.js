@@ -174,9 +174,10 @@ function dibujarFila(doc, y, celdas, { par, negrita = false, fondo = null }) {
   return y + alto;
 }
 
-function detalleDe(m) {
+export function detalleDe(m) {
   const partes = [];
-  if (m.venta_id) partes.push(`Venta #${m.venta_id}`);
+  // El cargo por venta ya trae "Venta #N" en su descripción: no repetirlo.
+  if (m.venta_id && !new RegExp(`#${m.venta_id}\\b`).test(m.descripcion || '')) partes.push(`Venta #${m.venta_id}`);
   if (m.descripcion) partes.push(m.descripcion);
   return partes.join(' - ');
 }

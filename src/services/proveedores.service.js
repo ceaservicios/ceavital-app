@@ -2,15 +2,20 @@ import db from '../db/connection.js';
 import { hoyNegocio } from '../utils/fecha-negocio.js';
 import { ApiError } from '../utils/api-error.js';
 
+// Tope de longitud de los textos libres (nombre, teléfono, email, condición de pago).
+const MAX_TEXTO = 200;
+
 const ESTADOS_PEDIDO = ['realizado', 'pendiente', 'recibido', 'cancelado'];
 
-function validarString(valor, campo, { requerido = true } = {}) {
+function validarString(valor, campo, { requerido = true, maxLength = MAX_TEXTO } = {}) {
   if (valor === undefined || valor === null || valor === '') {
     if (requerido) throw new ApiError(400, `${campo} es requerido`);
     return null;
   }
   if (typeof valor !== 'string') throw new ApiError(400, `${campo} tiene que ser texto`);
-  return valor.trim();
+  const limpio = valor.trim();
+  if (limpio.length > maxLength) throw new ApiError(400, `${campo} no puede superar ${maxLength} caracteres`);
+  return limpio;
 }
 
 function validarEntero(valor, campo, { minimo = null } = {}) {

@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import pg from 'pg';
 import config from '../config/env.js';
+import { ApiError } from '../utils/api-error.js';
 
 // Capa de acceso a PostgreSQL. Mantiene la forma que tenia con SQLite
 // (db.prepare(sql).get/all/run, db.exec) para no reescribir cada consulta, pero
@@ -124,9 +125,18 @@ async function transaction(fn) {
       } catch {
         conexionRota = true; // si el ROLLBACK falla, la conexion se descarta
       }
-      if (CODIGOS_REINTENTABLES.has(err.code) && intento < MAX_INTENTOS) {
-        await new Promise((r) => setTimeout(r, 10 * intento + Math.random() * 20));
-        continue;
+      if (CODIGOS_REINTENTABLES.has(err.code)) {
+        if (intento < MAX_INTENTOS) {
+          // Espera aleatoria (jitter) que crece con cada intento: si todas las transacciones
+          // en conflicto esperaran lo mismo, volverian a chocar juntas una y otra vez.
+          await new Promise((r) => setTimeout(r, 10 * intento + Math.random() * 40 * 2 ** intento));
+          continue;
+        }
+        // Contencion esperada, no un error del sistema: muchas transacciones simultaneas sobre
+        // las mismas filas (ej. 10+ ventas del mismo producto al mismo tiempo) agotan los
+        // reintentos aunque haya stock de sobra. No hubo ningun cambio (se hizo ROLLBACK), asi
+        // que se responde un 409 reintentable en vez de un 500 "Error interno".
+        throw new ApiError(409, 'El sistema está ocupado, volvé a intentar');
       }
       throw err;
     } finally {

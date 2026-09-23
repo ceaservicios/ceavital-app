@@ -19,9 +19,10 @@ export async function login(usuarioLogin, passwordPlano) {
   const usuario = await db
     .prepare(
       `SELECT *, (bloqueado_hasta IS NOT NULL AND bloqueado_hasta > LOCALTIMESTAMP) AS bloqueado
-       FROM usuarios WHERE usuario = ? AND eliminado_en IS NULL`
+       FROM usuarios WHERE LOWER(usuario) = LOWER(?) AND eliminado_en IS NULL
+       ORDER BY (usuario = ?) DESC LIMIT 1`
     )
-    .get(usuarioLogin);
+    .get(usuarioLogin, usuarioLogin);
 
   if (!usuario) {
     throw new AuthError('Usuario o contraseña incorrectos', 'CREDENCIALES_INVALIDAS');

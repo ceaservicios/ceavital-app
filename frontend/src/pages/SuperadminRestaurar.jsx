@@ -8,6 +8,19 @@ import { api, ApiError } from '../api/client.js';
 
 const LIMITE_MB = 300;
 
+// Fecha y hora del backup en hora de Buenos Aires y en 24 horas: con el formato por defecto de es-AR
+// un backup de las 15:11 se veía "03:11:46" sin el "p. m.", y parecía de la madrugada.
+const FORMATO_FECHA_HORA = new Intl.DateTimeFormat('es-AR', {
+  timeZone: 'America/Argentina/Buenos_Aires',
+  day: 'numeric',
+  month: 'numeric',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+});
+
 export default function SuperadminRestaurar({ irAlLogin }) {
   const [archivo, setArchivo] = useState(null);
   const [passwordBackup, setPasswordBackup] = useState('');
@@ -71,7 +84,7 @@ export default function SuperadminRestaurar({ irAlLogin }) {
       {error && <div className="alert alert-danger">{error}</div>}
       {resultado && (
         <div className="alert sa-alert-ok">
-          Backup restaurado: el del {new Date(resultado.creado_en).toLocaleString('es-AR')} (app {resultado.version}), {resultado.tablas} tablas y {resultado.filas}{' '}
+          Backup restaurado: el del {FORMATO_FECHA_HORA.format(new Date(resultado.creado_en))} (app {resultado.version}), {resultado.tablas} tablas y {resultado.filas}{' '}
           filas. Los datos ya son los del archivo.
         </div>
       )}

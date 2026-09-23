@@ -28,6 +28,8 @@ function validarEmailOpcional(valor) {
 }
 
 function validarMontoPositivo(valor, campo) {
+  // Solo número o texto numérico: Number(true) vale 1 y Number([5]) vale 5, y se aceptaban como monto.
+  if (typeof valor !== 'number' && typeof valor !== 'string') throw new ApiError(400, `${campo} tiene que ser un número entero mayor a 0`);
   const n = Number(valor);
   if (!Number.isInteger(n) || n <= 0) throw new ApiError(400, `${campo} tiene que ser un número entero mayor a 0`);
   if (n > MAX_MONTO) throw new ApiError(400, `${campo} no puede superar ${MAX_MONTO.toLocaleString('es-AR')}`);
@@ -35,6 +37,8 @@ function validarMontoPositivo(valor, campo) {
 }
 
 function validarMontoConSigno(valor, campo) {
+  // Solo número o texto numérico: Number(true) vale 1 y Number([5]) vale 5, y se aceptaban como monto.
+  if (typeof valor !== 'number' && typeof valor !== 'string') throw new ApiError(400, `${campo} tiene que ser un número entero distinto de 0`);
   const n = Number(valor);
   if (!Number.isInteger(n) || n === 0) throw new ApiError(400, `${campo} tiene que ser un número entero distinto de 0`);
   if (Math.abs(n) > MAX_MONTO) throw new ApiError(400, `${campo} no puede superar ${MAX_MONTO.toLocaleString('es-AR')} (en valor absoluto)`);

@@ -74,14 +74,29 @@ const PATRON_SQL = new RegExp(
     String.raw`;\s*insert\s+into\b.{0,40}\bvalues\b`,
     String.raw`['"]\s*(or|and)\s+['"]?\w+['"]?\s*=\s*['"]?\w+`,
     String.raw`\b(or|and)\s+\d+\s*=\s*\d+\s*(--|#|/\*|$)`,
-    String.raw`\b(pg_sleep|sleep|benchmark|load_file)\s*\(`,
+    // Solo con sintaxis de ataque: "Sleep (colchón 2 plazas)" o "Benchmark (línea pro)" son
+    // nombres de productos normales y no pueden dejar a un negocio con 403.
+    String.raw`\bpg_sleep\s*\(|\bload_file\s*\(|\bsleep\s*\(\s*\d+(\.\d+)?\s*\)|\bbenchmark\s*\(\s*\d+\s*,`,
     String.raw`\bwaitfor\s+delay\b|xp_cmdshell|\bpg_read_file\b|\bcopy\s+\w+\s+(to|from)\s+program\b`,
     String.raw`/\*\*/`,
   ].join('|'),
   'i'
 );
 
-const PATRON_XSS = /<\s*script|<\s*iframe|<\s*svg[^>]*\bon\w+\s*=|javascript\s*:|\bon(error|load|click|mouseover|focus)\s*=|document\.(cookie|location)|\beval\s*\(/i;
+// Igual que en SQL: "JavaScript: guía completa", "onload = lento" o "Doc: eval (prueba)" son textos
+// normales. Se exige código real: javascript: seguido de una llamada, un manejador de evento dentro
+// de una etiqueta HTML (o fuera de ella, con una llamada) o eval con un argumento de código.
+const PATRON_XSS = new RegExp(
+  [
+    String.raw`<\s*script|<\s*iframe`,
+    String.raw`<[^>]{0,200}\bon[a-z]+\s*=`,
+    String.raw`\bon(error|load|click|mouseover|focus)\s*=\s*['"]?[\w$.]*[(\x60]`,
+    String.raw`javascript\s*:\s*([\w$.]*\(|//|/\*)`,
+    String.raw`document\.(cookie|location)`,
+    String.raw`\beval\s*\(\s*(['"\x60]|atob\b|unescape\b|String\.|document\.|window\.|location\b|[\w$.]+\()`,
+  ].join('|'),
+  'i'
+);
 
 const PATRON_COMANDO = new RegExp(
   [

@@ -30,6 +30,24 @@ async function descartarPendiente() {
   await fs.promises.rm(ruta, { force: true }).catch(() => {});
 }
 
+// Al arrancar: un reinicio con un archivo pendiente (o una subida cortada) lo dejaba para siempre
+// en la carpeta temporal, cifrado pero ocupando disco; el temporizador de 15 minutos no
+// sobrevive al reinicio. Borra todos los *.ceavbak.tmp (por definición, nada queda pendiente).
+export async function barrerTemporales() {
+  let nombres;
+  try {
+    nombres = await fs.promises.readdir(DIR);
+  } catch {
+    return 0; // la carpeta todavía no existe: no hay nada que barrer
+  }
+  let borrados = 0;
+  for (const nombre of nombres) {
+    if (!nombre.endsWith('.ceavbak.tmp')) continue;
+    await fs.promises.rm(path.join(DIR, nombre), { force: true }).then(() => (borrados += 1), () => {});
+  }
+  return borrados;
+}
+
 export async function recibirArchivo(req) {
   if (restaurando) throw new ApiError(409, 'Hay una restauración en curso. Esperá a que termine.');
   const declarado = Number(req.get('content-length'));
