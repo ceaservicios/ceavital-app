@@ -1,6 +1,6 @@
 // El negocio funciona SIEMPRE en hora argentina, sin importar dónde corra el
 // servidor (la VPS está en UTC): "hoy", el día de una venta, del cierre de caja
-// o de un gasto, y la hora del backup programado se resuelven acá. La base
+// o de un gasto se resuelven acá. La base
 // guarda CURRENT_TIMESTAMP en UTC; Argentina no tiene horario de verano, así
 // que la diferencia es siempre de 3 horas.
 export const ZONA_NEGOCIO = 'America/Argentina/Buenos_Aires';
@@ -21,9 +21,6 @@ function partes(fecha) {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
     })
       .formatToParts(fecha)
       .map((p) => [p.type, p.value])
@@ -34,12 +31,6 @@ function partes(fecha) {
 export function hoyNegocio(ahora = new Date()) {
   const p = partes(ahora);
   return `${p.year}-${p.month}-${p.day}`;
-}
-
-// 'HH:MM' de ahora en Argentina.
-export function horaNegocio(ahora = new Date()) {
-  const p = partes(ahora);
-  return `${p.hour}:${p.minute}`;
 }
 
 // Día argentino de un 'AAAA-MM-DD HH:MM:SS' guardado en UTC en la base.

@@ -190,7 +190,6 @@ const SECCIONES = [
     endpoint: '/condiciones-pago',
     singular: 'condición de pago',
   },
-  { clave: 'backups', texto: 'Backups y Seguridad' },
 ];
 
 export default function ConfiguracionPage() {
@@ -220,26 +219,13 @@ export default function ConfiguracionPage() {
         ))}
       </div>
 
-      {seccion.endpoint ? (
-        <SeccionCatalogo
-          key={seccion.clave}
-          titulo={seccion.texto}
-          descripcion={seccion.descripcion}
-          endpoint={seccion.endpoint}
-          singular={seccion.singular}
-        />
-      ) : (
-        <div className="card config-catalogo">
-          <div className="config-seccion-cabecera">
-            <span className="config-seccion-titulo">{seccion.texto}</span>
-            <p className="config-seccion-desc">
-              La configuración de backups (destino, frecuencia, retención) y la restauración ya existen en el backend
-              (<code>/api/configuracion</code>) pero todavía no tienen pantalla propia: se gestionan por ahora vía API o
-              desde la terminal del servidor. Se suma acá cuando haga falta.
-            </p>
-          </div>
-        </div>
-      )}
+      <SeccionCatalogo
+        key={seccion.clave}
+        titulo={seccion.texto}
+        descripcion={seccion.descripcion}
+        endpoint={seccion.endpoint}
+        singular={seccion.singular}
+      />
     </div>
   );
 }

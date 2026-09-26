@@ -2,9 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError, setCsrfSuperadmin } from '../api/client.js';
 import { formatearFecha, formatearFechaHora } from '../utils/format.js';
-import SuperadminBackup from './SuperadminBackup.jsx';
-import SuperadminBackupsAuto from './SuperadminBackupsAuto.jsx';
-import SuperadminRestaurar from './SuperadminRestaurar.jsx';
 import SuperadminSeguridad from './SuperadminSeguridad.jsx';
 import './SuperadminPage.css';
 
@@ -389,11 +386,8 @@ export default function SuperadminPage() {
         )}
       </section>
 
-      {/* Defensa por IP y backup completo: cada uno maneja su propio estado */}
+      {/* Defensa por IP: maneja su propio estado */}
       <SuperadminSeguridad irAlLogin={irAlLogin} />
-      <SuperadminBackupsAuto irAlLogin={irAlLogin} />
-      <SuperadminBackup irAlLogin={irAlLogin} />
-      <SuperadminRestaurar irAlLogin={irAlLogin} />
     </div>
   );
 }

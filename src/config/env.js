@@ -49,7 +49,7 @@ const config = {
     .filter(Boolean),
 
   // Módulos por plan: cuántos segundos se cachea el plan leído de la base (0 = sin
-  // caché, lo usan los tests). Cambiar el plan desde la propia app invalida la caché
+  // caché). Cambiar el plan desde la propia app invalida la caché
   // al instante; un cambio hecho por fuera (npm run set-plan) se nota en este tiempo.
   modulos: {
     cacheSegundos: process.env.PLAN_CACHE_SEGUNDOS === undefined ? 30 : Number(process.env.PLAN_CACHE_SEGUNDOS) || 0,
@@ -84,7 +84,7 @@ const config = {
   // Correo de CEA (remitente admin@ceavital.net) para los avisos de cuota del superadmin.
   // Separado a propósito de `smtp`: en un clon, `smtp` pasa a ser el correo de la empresa
   // para escribirle a sus clientes, y los avisos de CEA no pueden salir con esa identidad.
-  // AVISOS_CUOTA=off apaga la revisión automática de cuotas (la usan los tests).
+  // AVISOS_CUOTA=off apaga la revisión automática de cuotas.
   avisosCuota: process.env.AVISOS_CUOTA !== 'off',
   saSmtp: {
     host: (process.env.SA_SMTP_HOST || '').trim(),
@@ -100,7 +100,6 @@ const config = {
   //  DEFENSA_IP=off               apaga todo (solo para diagnóstico)
   //  DEFENSA_IP_ALERTA_EMAIL      a dónde llega el mail de cada bloqueo (por el correo de CEA, SA_SMTP_*)
   //  DEFENSA_IP_PERMITIDAS        IPs que nunca se bloquean, separadas por coma (ej. la de la oficina de CEA)
-  //  DEFENSA_IP_LOOPBACK=on       bloquea también 127.0.0.1 (lo usan los tests; en producción no hace falta)
   defensa: {
     activa: process.env.DEFENSA_IP !== 'off',
     alertaEmail: (process.env.DEFENSA_IP_ALERTA_EMAIL || '').trim(),
@@ -108,30 +107,6 @@ const config = {
       .split(',')
       .map((ip) => ip.trim())
       .filter(Boolean),
-    bloquearLoopback: process.env.DEFENSA_IP_LOOPBACK === 'on',
-  },
-
-  // Backups automaticos (ver src/bkps/ y Docs/Planes-y-Superadmin.md §5).
-  // En PRODUCCION solo hace falta BACKUP_SYNC_TOKEN (32+ caracteres): habilita que la app de
-  // backups pida el backup. Sin token, esa ruta no existe (404).
-  backupSync: {
-    token: (process.env.BACKUP_SYNC_TOKEN || '').trim(),
-  },
-  // En la APP DE BACKUPS (el mismo codigo, con MODO_BKPS=on y DATABASE_URL apuntando a
-  // ceavital-bd-bkps, NUNCA a la base de produccion).
-  bkps: {
-    activo: process.env.MODO_BKPS === 'on',
-    instanciaUrl: (process.env.BKPS_INSTANCIA_URL || '').trim().replace(/\/+$/, ''),
-    token: (process.env.BKPS_TOKEN || '').trim(), // el mismo valor que BACKUP_SYNC_TOKEN de produccion
-    password: process.env.BKPS_BACKUP_PASSWORD || '', // cifra los archivos; sin ella no se pueden abrir
-    hora: (process.env.BKPS_HORA || '03:00').trim(), // hora argentina
-    dir: (process.env.BKPS_DIR || '/data/backups').trim(),
-    alertaEmail: (process.env.BKPS_ALERTA_EMAIL || '').trim(),
-    drive: {
-      credencialesB64: (process.env.GDRIVE_CREDENCIALES_B64 || '').trim(), // JSON de la cuenta de servicio, en base64
-      carpetaId: (process.env.GDRIVE_CARPETA_ID || '').trim(),
-      apiUrl: (process.env.GDRIVE_API_URL || 'https://www.googleapis.com').trim().replace(/\/+$/, ''),
-    },
   },
 
   session: {

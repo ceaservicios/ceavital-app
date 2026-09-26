@@ -12,14 +12,9 @@ import {
 import { listarAvisosEnviados } from '../services/avisos-cuota.service.js';
 import { correoCeaDisponible } from '../services/mail.service.js';
 import { planActual } from '../services/modulos.service.js';
-import { cerrarSesionSuperadmin, confirmarPasswordSuperadmin, loginSuperadmin } from '../services/superadmin.service.js';
-import { recibirArchivo, restaurarDesdeArchivo } from '../services/restauracion.service.js';
+import { cerrarSesionSuperadmin, loginSuperadmin } from '../services/superadmin.service.js';
 import { origenPermitido } from '../middleware/superadmin-auth.middleware.js';
 import { ApiError } from '../utils/api-error.js';
-import fs from 'node:fs';
-import { generarBackup } from '../services/backup-completo.service.js';
-import { estadoBackupsAutomaticos } from '../services/backup-corridas.service.js';
-import { TOKEN_MIN } from './backup-sync.controller.js';
 import { bloquearManual, desbloquearIp, desbloquearTodas, estadoDefensa } from '../services/defensa-ip.service.js';
 
 // La cookie solo viaja a /api/sa (Path) y nunca en pedidos que vienen de otro sitio
@@ -98,35 +93,6 @@ export async function correoPruebaSuperadminController(req, res) {
   res.json(await enviarCorreoDePrueba());
 }
 
-// ---- Backup completo de la base (descarga cifrada) ----
-// POST y no GET: lleva la contraseña en el cuerpo (no en la URL) y queda protegido por el token CSRF.
-export async function backupSuperadminController(req, res) {
-  const { ruta, nombre } = await generarBackup(req.body?.password);
-  console.log('[backup] el superadmin descargó un backup completo de la base');
-  res.set('Cache-Control', 'no-store');
-  res.download(ruta, nombre, () => {
-    fs.promises.rm(ruta, { force: true }).catch(() => {});
-  });
-}
-
-// ---- Restaurar un backup completo (reemplaza los datos del negocio) ----
-// Paso 1: el navegador sube el .ceavbak tal cual (application/octet-stream).
-export async function subirRestauracionController(req, res) {
-  res.json(await recibirArchivo(req));
-}
-
-// Paso 2: con el id del archivo, la contraseña del backup y la contraseña del superadmin
-// (se vuelve a pedir a propósito: es una acción destructiva).
-export async function restaurarSuperadminController(req, res) {
-  const { archivo_id: archivoId, password_backup: passwordBackup, password_superadmin: passwordSuperadmin } = req.body || {};
-  await confirmarPasswordSuperadmin(req.superadmin.id, passwordSuperadmin);
-  const r = await restaurarDesdeArchivo(archivoId, passwordBackup);
-  const filas = Object.values(r.tablas).reduce((a, b) => a + b, 0);
-  console.log(`[backup] el superadmin restauró un backup del ${r.creado_en} (app ${r.version}): ${Object.keys(r.tablas).length} tablas, ${filas} filas`);
-  res.set('Cache-Control', 'no-store');
-  res.json({ creado_en: r.creado_en, version: r.version, tablas: Object.keys(r.tablas).length, filas });
-}
-
 // ---- Defensa activa por IP ----
 export async function defensaSuperadminController(req, res) {
   res.json(await estadoDefensa());
@@ -146,9 +112,4 @@ export async function bloquearSuperadminController(req, res) {
   const { ip, minutos, detalle } = req.body || {};
   if (typeof ip !== 'string') throw new ApiError(400, 'ip es requerida');
   res.json(await bloquearManual(ip, minutos, detalle));
-}
-
-// Estado de los backups automáticos (los hace la app de backups y le informa a esta instalación).
-export async function backupEstadoSuperadminController(req, res) {
-  res.json(await estadoBackupsAutomaticos(config.backupSync.token.length >= TOKEN_MIN));
 }

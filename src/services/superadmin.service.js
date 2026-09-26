@@ -116,7 +116,7 @@ let hashDeRelleno = null;
 
 // Suma un intento fallido y, al llegar al tope, bloquea la cuenta (lo lanza como 423).
 // Incremento atómico en la propia sentencia (con intentos simultáneos, "leer y escribir +1"
-// pierde cuentas y el bloqueo no se activa). Lo comparten el login y la confirmación de contraseña.
+// pierde cuentas y el bloqueo no se activa).
 async function registrarIntentoFallido(cuentaId) {
   const { intentos_fallidos: intentos } = await db
     .prepare(`UPDATE superadmin SET intentos_fallidos = intentos_fallidos + 1 WHERE id = ? RETURNING intentos_fallidos`)
@@ -127,27 +127,6 @@ async function registrarIntentoFallido(cuentaId) {
       .run(config.login.bloqueoMinutos, cuentaId);
     throw new ApiError(423, `Acceso bloqueado por ${config.login.maxIntentos} intentos fallidos. Reintentá en ${config.login.bloqueoMinutos} minutos.`);
   }
-}
-
-// Vuelve a pedir la contraseña del superadmin antes de una acción destructiva (restaurar un
-// backup). Cuenta como intento fallido igual que en el login, así no sirve para adivinarla.
-// Responde 403 (no 401) porque en /sa un 401 significa "sesión vencida" y manda al login.
-export async function confirmarPasswordSuperadmin(superadminId, passwordPlano) {
-  const cuenta = await db
-    .prepare(
-      `SELECT id, password_hash, (bloqueado_hasta IS NOT NULL AND bloqueado_hasta > LOCALTIMESTAMP) AS bloqueado
-       FROM superadmin WHERE id = ?`
-    )
-    .get(superadminId);
-  if (!cuenta) throw new ApiError(403, 'No se pudo confirmar la contraseña del superadmin');
-  if (cuenta.bloqueado) {
-    throw new ApiError(423, `Acceso bloqueado temporalmente por intentos fallidos. Reintentá en ${config.login.bloqueoMinutos} minutos.`);
-  }
-  if (typeof passwordPlano !== 'string' || !passwordPlano || !(await verifyPassword(passwordPlano, cuenta.password_hash))) {
-    await registrarIntentoFallido(cuenta.id);
-    throw new ApiError(403, 'La contraseña del superadmin no es correcta');
-  }
-  await db.prepare('UPDATE superadmin SET intentos_fallidos = 0 WHERE id = ?').run(cuenta.id);
 }
 
 export async function loginSuperadmin(usuarioLogin, passwordPlano) {

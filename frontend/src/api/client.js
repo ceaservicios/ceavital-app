@@ -45,13 +45,12 @@ function encabezados(path, method, conCuerpo) {
   return Object.keys(h).length ? h : undefined;
 }
 
-// `archivo` (un File/Blob) se sube tal cual, sin JSON: lo usa la restauración de backups.
-async function request(path, { method = 'GET', body, archivo } = {}) {
+async function request(path, { method = 'GET', body } = {}) {
   const res = await fetch(`${BASE}${path}`, {
     method,
     credentials: 'include', // manda/recibe la cookie httpOnly de sesion
-    headers: archivo ? { ...encabezados(path, method, false), 'Content-Type': 'application/octet-stream' } : encabezados(path, method, Boolean(body)),
-    body: archivo ?? (body ? JSON.stringify(body) : undefined),
+    headers: encabezados(path, method, Boolean(body)),
+    body: body ? JSON.stringify(body) : undefined,
   });
 
   const isJson = res.headers.get('content-type')?.includes('application/json');
@@ -69,16 +68,11 @@ async function request(path, { method = 'GET', body, archivo } = {}) {
 
 // Descarga de un archivo (PDF, etc.): devuelve { blob, nombre }. Aparte de
 // request() porque esa siempre espera JSON. Mantiene el mismo manejo de 401.
-async function descargar(path, { method = 'GET', body } = {}) {
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    credentials: 'include',
-    headers: encabezados(path, method, Boolean(body)),
-    body: body ? JSON.stringify(body) : undefined,
-  });
+async function descargar(path) {
+  const res = await fetch(`${BASE}${path}`, { credentials: 'include' });
 
   if (!res.ok) {
-    if (res.status === 401 && !esRutaDelPortal(path) && !esRutaDelSuperadmin(path)) onUnauthorized?.();
+    if (res.status === 401 && !esRutaDelPortal(path)) onUnauthorized?.();
     const isJson = res.headers.get('content-type')?.includes('application/json');
     const data = isJson ? await res.json() : null;
     throw new ApiError(data?.error || 'No se pudo descargar el archivo', res.status);
@@ -92,7 +86,6 @@ export const api = {
   descargar,
   get: (path) => request(path),
   post: (path, body) => request(path, { method: 'POST', body }),
-  subir: (path, archivo) => request(path, { method: 'POST', archivo }),
   patch: (path, body) => request(path, { method: 'PATCH', body }),
   put: (path, body) => request(path, { method: 'PUT', body }),
   delete: (path) => request(path, { method: 'DELETE' }),
