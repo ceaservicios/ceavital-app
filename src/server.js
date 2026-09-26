@@ -16,7 +16,7 @@ import routes from './routes/index.js';
 import { cerrarSesionesInactivas } from './services/session.service.js';
 import { cerrarSesionesClienteInactivas } from './services/clientes-portal.service.js';
 import { defensaCuerpoIp, defensaIp, iniciarDefensa, rutaApiInexistente } from './services/defensa-ip.service.js';
-import { revisarAvisosCuota } from './services/avisos-cuota.service.js';
+import { revisarCuota } from './services/avisos-cuota.service.js';
 import { asegurarSuperadmin, cerrarSesionesSuperadminInactivas } from './services/superadmin.service.js';
 
 function asegurarCertificado() {
@@ -126,10 +126,10 @@ setInterval(async () => {
   }
 }, 5 * 60 * 1000);
 
-// Avisos de cuota por mail (a los 30 s de arrancar y después cada hora). Un mail que no
-// sale se reintenta en la próxima pasada.
-const revisarCuota = () => revisarAvisosCuota().catch((err) => console.error('[cuota] revisión fallida:', err.message));
+// Revisión de la cuota: suspensión automática por cuota impaga y avisos por mail (a los 30 s
+// de arrancar y después cada hora). Un mail que no sale se reintenta en la próxima pasada.
+const revisarCuotaSinFallar = () => revisarCuota().catch((err) => console.error('[cuota] revisión fallida:', err.message));
 if (config.avisosCuota) {
-  setTimeout(revisarCuota, 30_000);
-  setInterval(revisarCuota, 60 * 60 * 1000);
+  setTimeout(revisarCuotaSinFallar, 30_000);
+  setInterval(revisarCuotaSinFallar, 60 * 60 * 1000);
 }

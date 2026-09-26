@@ -98,25 +98,41 @@ export function armarCorreoAcceso({ razonSocial, enlace, usuario, password }) {
 const fechaLegible = (iso) => iso.split('-').reverse().join('/');
 const plural = (n) => `${n} día${n === 1 ? '' : 's'}`;
 
-// Aviso de cuota de CEA a la empresa contratante. tipo: por_vencer | vence_hoy | vencida.
-export function armarCorreoCuota({ tipo, vence, diasRestantes }) {
-  const fecha = fechaLegible(vence);
+// Aviso de cuota de CEA a la empresa contratante. tipo: por_vencer | vence_hoy | vencida |
+// suspension_proxima (necesita suspendeEl) | suspendida | reactivada.
+export function armarCorreoCuota({ tipo, vence, diasRestantes, suspendeEl }) {
+  const fecha = vence ? fechaLegible(vence) : '';
   const casos = {
-    por_vencer: {
+    por_vencer: () => ({
       asunto: `CEAVital: tu cuota vence el ${fecha}`,
       linea: `Tu cuota de CEAVital vence el ${fecha} (faltan ${plural(diasRestantes)}).`,
-    },
-    vence_hoy: {
+    }),
+    vence_hoy: () => ({
       asunto: 'CEAVital: tu cuota vence hoy',
       linea: `Tu cuota de CEAVital vence hoy, ${fecha}.`,
-    },
-    vencida: {
+    }),
+    vencida: () => ({
       asunto: `CEAVital: tu cuota está vencida desde el ${fecha}`,
       linea: `Tu cuota de CEAVital venció el ${fecha} (hace ${plural(-diasRestantes)}).`,
-    },
+    }),
+    suspension_proxima: () => ({
+      asunto: `CEAVital: tu servicio se suspende el ${fechaLegible(suspendeEl)}`,
+      linea: `Tu cuota de CEAVital venció el ${fecha}. Si no se registra el pago, el servicio se suspende el ${fechaLegible(suspendeEl)}.`,
+    }),
+    suspendida: () => ({
+      asunto: 'CEAVital: tu servicio fue suspendido',
+      linea: `Tu servicio de CEAVital fue suspendido por falta de pago de la cuota vencida el ${fecha}. Tus datos se conservan y el servicio se reactiva cuando se registre el pago.`,
+    }),
+    reactivada: () => ({
+      asunto: 'CEAVital: tu servicio está activo de nuevo',
+      linea: 'Tu servicio de CEAVital ya está activo de nuevo: podés ingresar como siempre.',
+    }),
   };
-  const { asunto, linea } = casos[tipo];
-  const cierre = 'Para regularizarla o consultar cualquier duda, respondé este mail o escribinos por WhatsApp.';
+  const { asunto, linea } = casos[tipo]();
+  const cierre =
+    tipo === 'reactivada'
+      ? 'Cualquier duda, respondé este mail o escribinos por WhatsApp.'
+      : 'Para regularizarla o consultar cualquier duda, respondé este mail o escribinos por WhatsApp.';
 
   const texto = ['Hola,', '', linea, cierre, '', 'CEA Servicios - CEAVital'].join('\n');
   const html = `<!doctype html>

@@ -1,7 +1,7 @@
 import db from '../db/connection.js';
 import { ApiError } from '../utils/api-error.js';
-import { hoyNegocio } from '../utils/fecha-negocio.js';
-import { esFechaReal } from './instancia.service.js';
+import { hoyNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
+import { aplicarReactivacion, avisarReactivacion, esFechaReal } from './instancia.service.js';
 
 // Historial de pagos de la cuota que CEA le cobra a la empresa (panel /sa). Se anota a
 // mano: no cobra ni se conecta con ningún medio de pago. Anotar un pago corre el
@@ -75,11 +75,13 @@ export function listarPagos() {
 
 // Anota el pago y corre el vencimiento en la misma transacción. Sin vencimiento cargado,
 // el primer pago cuenta desde su propia fecha y ese día queda como día de vencimiento.
-// No reactiva una instalación suspendida: eso sigue siendo manual.
+// Si la instalación estaba suspendida POR LA CUOTA (la suspendió el sistema) y con el
+// vencimiento nuevo ya no correspondería suspenderla, se reactiva sola y se le avisa a la
+// empresa por mail. Una suspensión manual no se toca.
 export async function registrarPago(datos = {}) {
   const pago = validarPago(datos);
 
-  return db.transaction(async () => {
+  const resultado = await db.transaction(async () => {
     const instancia = await db.prepare('SELECT cuota_vence, cuota_dia_vence FROM instancia WHERE id = 1').get();
     const desde = instancia.cuota_vence ?? pago.fechaPago;
     const dia = (instancia.cuota_vence && instancia.cuota_dia_vence) || Number(desde.slice(8));
@@ -95,13 +97,26 @@ export async function registrarPago(datos = {}) {
       .prepare('UPDATE instancia SET cuota_vence = ?, cuota_dia_vence = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = 1')
       .run(hasta, dia);
 
-    return { id, cuota_vence: hasta };
+    const estado = await db
+      .prepare(
+        `SELECT estado, suspension_por_cuota, (?::date + cuota_suspender_dias) <= ${SQL_HOY_NEGOCIO} AS sigue_para_suspender
+         FROM instancia WHERE id = 1`
+      )
+      .get(hasta);
+    const reactivada = estado.estado === 'suspendida' && estado.suspension_por_cuota && !estado.sigue_para_suspender;
+    if (reactivada) await aplicarReactivacion();
+
+    return { id, cuota_vence: hasta, reactivada };
   });
+
+  return { ...resultado, avisado_a: resultado.reactivada ? await avisarReactivacion() : null };
 }
 
 // Un pago mal cargado no se borra ni se edita: se anula con un motivo y el vencimiento
 // vuelve atrás los meses que había corrido (desde el vencimiento actual, por si después
-// se anotaron otros pagos o se lo cambió a mano).
+// se anotaron otros pagos o se lo cambió a mano). Como ese pago no existió, se olvida la
+// marca de "ya se suspendió sola por este vencimiento": si con el vencimiento de vuelta
+// corresponde, la próxima revisión horaria la suspende de nuevo.
 export async function anularPago(id, motivo) {
   if (typeof motivo !== 'string' || !motivo.trim()) throw new ApiError(400, 'El motivo de la anulación es requerido');
   if (motivo.trim().length > MOTIVO_MAX) throw new ApiError(400, `El motivo no puede superar los ${MOTIVO_MAX} caracteres`);
@@ -119,7 +134,12 @@ export async function anularPago(id, motivo) {
     if (!instancia.cuota_vence) return { cuota_vence: null };
     const dia = instancia.cuota_dia_vence ?? Number(instancia.cuota_vence.slice(8));
     const vence = sumarMeses(instancia.cuota_vence, -pago.meses, dia);
-    await db.prepare('UPDATE instancia SET cuota_vence = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = 1').run(vence);
+    await db
+      .prepare(
+        `UPDATE instancia SET cuota_vence = ?, suspension_auto_vence = NULL, actualizado_en = CURRENT_TIMESTAMP
+         WHERE id = 1`
+      )
+      .run(vence);
     return { cuota_vence: vence };
   });
 }

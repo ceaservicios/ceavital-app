@@ -77,8 +77,8 @@ export async function suspenderSuperadminController(req, res) {
 }
 
 export async function reactivarSuperadminController(req, res) {
-  await reactivarInstancia();
-  res.json({ instancia: await obtenerInstancia() });
+  const { avisado_a: avisadoA } = await reactivarInstancia();
+  res.json({ instancia: await obtenerInstancia(), avisado_a: avisadoA });
 }
 
 export async function fijarCuotaSuperadminController(req, res) {

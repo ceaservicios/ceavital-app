@@ -44,7 +44,9 @@ export default function SuperadminPagos({ pagos, ocupado, ejecutar }) {
         setPago(pagoVacio());
         return r;
       },
-      (r) => `Pago anotado. La cuota ahora vence el ${formatearFecha(r.cuota_vence)}.`
+      (r) =>
+        `Pago anotado. La cuota ahora vence el ${formatearFecha(r.cuota_vence)}.` +
+        (r.reactivada ? ` El servicio se reactivó${r.avisado_a ? ` y se le avisó por mail a ${r.avisado_a}` : ''}.` : '')
     );
   }
 

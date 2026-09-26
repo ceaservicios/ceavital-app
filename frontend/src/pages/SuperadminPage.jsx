@@ -14,7 +14,18 @@ const ETIQUETA_AVISO = {
   por_vencer: 'Por vencer',
   vence_hoy: 'Vence hoy',
   vencida: 'Vencida',
+  suspension_proxima: 'Aviso de suspensión',
+  suspendida: 'Suspendida',
 };
+
+function textoSuspension(instancia) {
+  const { cuota } = instancia;
+  if (!cuota.suspender_dias) return 'No se suspende sola.';
+  if (!cuota.suspende_el || instancia.estado === 'suspendida') return `Se suspende sola a los ${cuota.suspender_dias} días de vencida.`;
+  if (instancia.suspension_auto_vence === cuota.vence) return 'Reactivada a mano sin el pago: no se vuelve a suspender sola por este vencimiento.';
+  if (cuota.dias_para_suspender <= 0) return 'Se suspende sola en la próxima revisión (dentro de una hora).';
+  return `Se suspende sola el ${formatearFecha(cuota.suspende_el)} si no se anota el pago.`;
+}
 
 const ESTADO_CUOTA = {
   sin_definir: { texto: 'Sin cuota definida', clase: 'sa-chip-neutro' },
@@ -45,6 +56,8 @@ export default function SuperadminPage() {
   const [motivo, setMotivo] = useState('');
   const [vence, setVence] = useState('');
   const [avisoDias, setAvisoDias] = useState('15');
+  const [suspenderDias, setSuspenderDias] = useState('');
+  const [avisoSuspension, setAvisoSuspension] = useState('0');
   const [emailEmpresa, setEmailEmpresa] = useState('');
 
   const irAlLogin = useCallback(() => navigate('/login', { replace: true }), [navigate]);
@@ -55,6 +68,8 @@ export default function SuperadminPage() {
     setPlanElegido((actual) => actual || data.plan.id);
     setVence(data.instancia.cuota.vence ?? '');
     setAvisoDias(String(data.instancia.cuota.aviso_dias));
+    setSuspenderDias(data.instancia.cuota.suspender_dias ? String(data.instancia.cuota.suspender_dias) : '');
+    setAvisoSuspension(String(data.instancia.cuota.aviso_suspension_dias));
     setEmailEmpresa(data.instancia.empresa_email ?? '');
   }, []);
 
@@ -159,11 +174,25 @@ export default function SuperadminPage() {
                 <br />
                 Desde: {formatearFechaHora(instancia.suspendida_en)}
               </p>
-              <p className="sa-ayuda">Nadie del negocio ni ningún cliente puede ingresar. Los datos se conservan.</p>
+              <p className="sa-ayuda">
+                Nadie del negocio ni ningún cliente puede ingresar. Los datos se conservan.
+                {instancia.suspension_por_cuota &&
+                  ' La suspendió el sistema por la cuota: anotar el pago la reactiva sola. Si la reactivás a mano sin el pago, no se vuelve a suspender sola por este vencimiento.'}
+              </p>
               {confirmando === 'reactivar' ? (
                 <div className="sa-confirmar">
                   <span>¿Reactivar la instalación?</span>
-                  <button type="button" className="btn btn-primary" disabled={ocupado} onClick={() => ejecutar(() => api.post('/sa/reactivar', {}), 'Instalación reactivada.')}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={ocupado}
+                    onClick={() =>
+                      ejecutar(
+                        () => api.post('/sa/reactivar', {}),
+                        (r) => `Instalación reactivada.${r.avisado_a ? ` Se le avisó por mail a ${r.avisado_a}.` : ''}`
+                      )
+                    }
+                  >
                     Sí, reactivar
                   </button>
                   <button type="button" className="btn" disabled={ocupado} onClick={() => setConfirmando(null)}>
@@ -281,12 +310,25 @@ export default function SuperadminPage() {
               {instancia.cuota.vence ? `${formatearFecha(instancia.cuota.vence)} · ${textoDias(instancia.cuota)}` : ''}
             </span>
           </p>
-          <p className="sa-ayuda">Una cuota vencida solo avisa acá: la suspensión se hace a mano.</p>
+          <p className="sa-detalle">{textoSuspension(instancia)}</p>
+          <p className="sa-ayuda">
+            Con "Suspender a los … días" la instalación se suspende sola esos días después del vencimiento y se le avisa a la
+            empresa por mail (antes, con el aviso previo, y al suspenderse). Vacío = no se suspende sola.
+          </p>
           <form
             className="sa-form-cuota"
             onSubmit={(e) => {
               e.preventDefault();
-              ejecutar(() => api.put('/sa/cuota', { vence: vence || null, aviso_dias: Number(avisoDias) }), 'Cuota guardada.');
+              ejecutar(
+                () =>
+                  api.put('/sa/cuota', {
+                    vence: vence || null,
+                    aviso_dias: Number(avisoDias),
+                    suspender_dias: suspenderDias === '' ? null : Number(suspenderDias),
+                    aviso_suspension_dias: avisoSuspension === '' ? 0 : Number(avisoSuspension),
+                  }),
+                'Cuota guardada.'
+              );
             }}
           >
             <div className="field">
@@ -305,6 +347,33 @@ export default function SuperadminPage() {
                 onChange={(e) => setAvisoDias(e.target.value)}
                 disabled={ocupado}
                 required
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="sa-suspender">Suspender a los (días de vencida)</label>
+              <input
+                id="sa-suspender"
+                type="number"
+                min="1"
+                max="365"
+                step="1"
+                value={suspenderDias}
+                onChange={(e) => setSuspenderDias(e.target.value)}
+                disabled={ocupado}
+                placeholder="No se suspende sola"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="sa-aviso-suspension">Avisar (días antes de suspender)</label>
+              <input
+                id="sa-aviso-suspension"
+                type="number"
+                min="0"
+                max="364"
+                step="1"
+                value={avisoSuspension}
+                onChange={(e) => setAvisoSuspension(e.target.value)}
+                disabled={ocupado || suspenderDias === ''}
               />
             </div>
             <button type="submit" className="btn btn-primary" disabled={ocupado}>
@@ -326,7 +395,7 @@ export default function SuperadminPage() {
         </p>
         <p className="sa-ayuda">
           {panel.correo.disponible
-            ? 'Cuando la cuota entra en el período de aviso, el día que vence y cuando ya está vencida, se le manda un mail a la empresa (uno por etapa).'
+            ? 'Se le manda un mail a la empresa cuando la cuota entra en el período de aviso, el día que vence, cuando ya está vencida, antes de la suspensión automática y al suspenderse (uno por etapa), y cada vez que se reactiva.'
             : 'Faltan las variables SA_SMTP_* en el servidor: hasta cargarlas no se manda ningún mail.'}
         </p>
         <form
