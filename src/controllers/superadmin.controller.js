@@ -10,6 +10,7 @@ import {
   suspenderInstancia,
 } from '../services/instancia.service.js';
 import { listarAvisosEnviados } from '../services/avisos-cuota.service.js';
+import { anularPago, listarPagos, registrarPago } from '../services/pagos-cuota.service.js';
 import { correoCeaDisponible } from '../services/mail.service.js';
 import { planActual } from '../services/modulos.service.js';
 import { cerrarSesionSuperadmin, loginSuperadmin } from '../services/superadmin.service.js';
@@ -59,6 +60,7 @@ export async function panelSuperadminController(req, res) {
     planes: Object.keys(PLANES).map(describirPlan),
     modulos: Object.entries(MODULOS).map(([id, m]) => ({ id, nombre: m.nombre })),
     correo: { disponible: correoCeaDisponible(), avisos: await listarAvisosEnviados() },
+    pagos: await listarPagos(),
   });
 }
 
@@ -91,6 +93,17 @@ export async function empresaEmailSuperadminController(req, res) {
 
 export async function correoPruebaSuperadminController(req, res) {
   res.json(await enviarCorreoDePrueba());
+}
+
+// ---- Historial de pagos de la cuota ----
+export async function registrarPagoSuperadminController(req, res) {
+  res.status(201).json(await registrarPago(req.body || {}));
+}
+
+export async function anularPagoSuperadminController(req, res) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) throw new ApiError(400, 'id inválido');
+  res.json(await anularPago(id, req.body?.motivo));
 }
 
 // ---- Defensa activa por IP ----

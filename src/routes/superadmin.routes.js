@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  anularPagoSuperadminController,
   bloquearSuperadminController,
   cambiarPlanSuperadminController,
   correoPruebaSuperadminController,
@@ -12,6 +13,7 @@ import {
   meSuperadminController,
   panelSuperadminController,
   reactivarSuperadminController,
+  registrarPagoSuperadminController,
   suspenderSuperadminController,
 } from '../controllers/superadmin.controller.js';
 import { requireSuperadmin } from '../middleware/superadmin-auth.middleware.js';
@@ -33,6 +35,8 @@ router.put('/plan', cambiarPlanSuperadminController);
 router.put('/cuota', fijarCuotaSuperadminController);
 router.put('/empresa-email', empresaEmailSuperadminController);
 router.post('/correo-prueba', correoPruebaSuperadminController);
+router.post('/pagos', registrarPagoSuperadminController);
+router.post('/pagos/:id/anular', anularPagoSuperadminController);
 router.post('/suspender', suspenderSuperadminController);
 router.post('/reactivar', reactivarSuperadminController);
 router.get('/defensa', defensaSuperadminController);

@@ -10,6 +10,14 @@ import { correoCeaDisponible, enviarCorreo } from './mail.service.js';
 const MOTIVO_MAX = 500;
 const FECHA_ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
 
+// true si es 'AAAA-MM-DD' y además una fecha que existe (no 2026-02-30).
+export function esFechaReal(valor) {
+  const m = typeof valor === 'string' ? FECHA_ISO.exec(valor) : null;
+  if (!m) return false;
+  const real = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return real.getUTCFullYear() === +m[1] && real.getUTCMonth() === +m[2] - 1 && real.getUTCDate() === +m[3];
+}
+
 export async function obtenerInstancia() {
   const fila = await db
     .prepare(
@@ -92,13 +100,12 @@ export async function reactivarInstancia() {
 }
 
 // vence: 'AAAA-MM-DD' o null (sin cuota definida). avisoDias: cuántos días antes del
-// vencimiento la cuota pasa a "por vencer".
+// vencimiento la cuota pasa a "por vencer". El día de la fecha elegida pasa a ser el
+// día fijo de vencimiento con el que los pagos corren la cuota (pagos-cuota.service).
 export async function fijarCuota({ vence, aviso_dias: avisoDias }) {
   let fecha = null;
   if (vence !== null && vence !== undefined && vence !== '') {
-    const m = typeof vence === 'string' ? FECHA_ISO.exec(vence) : null;
-    const real = m && new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
-    if (!m || real.getUTCFullYear() !== +m[1] || real.getUTCMonth() !== +m[2] - 1 || real.getUTCDate() !== +m[3]) {
+    if (!esFechaReal(vence)) {
       throw new ApiError(400, 'La fecha de vencimiento tiene que ser una fecha real con formato AAAA-MM-DD');
     }
     fecha = vence;
@@ -114,8 +121,11 @@ export async function fijarCuota({ vence, aviso_dias: avisoDias }) {
   }
 
   await db
-    .prepare('UPDATE instancia SET cuota_vence = ?, cuota_aviso_dias = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = 1')
-    .run(fecha, aviso);
+    .prepare(
+      `UPDATE instancia SET cuota_vence = ?, cuota_dia_vence = COALESCE(?, cuota_dia_vence), cuota_aviso_dias = ?,
+              actualizado_en = CURRENT_TIMESTAMP WHERE id = 1`
+    )
+    .run(fecha, fecha ? Number(fecha.slice(8)) : null, aviso);
 }
 
 // Cambio de plan hecho por el superadmin: el mismo cambiarPlan de siempre (bloquea si

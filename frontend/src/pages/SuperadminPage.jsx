@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError, setCsrfSuperadmin } from '../api/client.js';
 import { formatearFecha, formatearFechaHora } from '../utils/format.js';
+import SuperadminPagos from './SuperadminPagos.jsx';
 import SuperadminSeguridad from './SuperadminSeguridad.jsx';
 import './SuperadminPage.css';
 
-// Panel de CEA sobre esta instalación (/sa): plan y módulos, suspensión, cuota,
-// versión y avisos de cuota. Sesión propia (cookie sa_token + token CSRF en
+// Panel de CEA sobre esta instalación (/sa): plan y módulos, suspensión, cuota y sus
+// pagos, versión y avisos de cuota. Sesión propia (cookie sa_token + token CSRF en
 // memoria), completamente aparte del sistema del negocio.
 
 const ETIQUETA_AVISO = {
@@ -78,6 +79,7 @@ export default function SuperadminPage() {
   }, [cargar, irAlLogin]);
 
   // Toda acción que escribe pasa por acá: una a la vez, recarga el panel y maneja la sesión vencida.
+  // mensajeOk puede ser una función que arma el mensaje con lo que devolvió la acción.
   async function ejecutar(accion, mensajeOk) {
     if (guardia.current) return;
     guardia.current = true;
@@ -85,10 +87,10 @@ export default function SuperadminPage() {
     setError(null);
     setAviso(null);
     try {
-      await accion();
+      const resultado = await accion();
       await cargar();
       setConfirmando(null);
-      setAviso(mensajeOk);
+      setAviso(typeof mensajeOk === 'function' ? mensajeOk(resultado) : mensajeOk);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) return irAlLogin();
       setError(err instanceof ApiError ? err.message : 'No se pudo completar la acción. Probá de nuevo.');
@@ -311,6 +313,8 @@ export default function SuperadminPage() {
           </form>
         </section>
       </div>
+
+      <SuperadminPagos pagos={panel.pagos} ocupado={ocupado} ejecutar={ejecutar} />
 
       {/* Avisos de cuota por mail */}
       <section className="card sa-card">

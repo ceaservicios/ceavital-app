@@ -174,6 +174,41 @@
   flex: 1 1 260px;
 }
 
+.sa-form-pago {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+.sa-form-pago .sa-pago-nota {
+  grid-column: span 2;
+}
+.sa-tabla-pagos {
+  min-width: 820px;
+}
+.sa-tabla-pagos td:nth-child(3) {
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+.sa-tabla .sa-monto {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sa-pago-accion {
+  width: 1%;
+  white-space: nowrap;
+}
+.sa-pago-accion .sa-confirmar {
+  flex-wrap: nowrap;
+}
+.sa-pago-accion .sa-confirmar input {
+  width: 160px;
+}
+.sa-pago-anulado td:not(.sa-pago-accion) {
+  color: var(--text-tertiary);
+  text-decoration: line-through;
+}
+
 .sa-tabla-scroll {
   overflow-x: auto;
 }
@@ -249,5 +284,8 @@
   }
   .sa-form-cuota {
     grid-template-columns: 1fr;
+  }
+  .sa-form-pago .sa-pago-nota {
+    grid-column: 1 / -1;
   }
 }

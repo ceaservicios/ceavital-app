@@ -11,8 +11,7 @@ const appRoot = path.resolve(__dirname, '../..');
 // app -> Sistema
 const sistemaRoot = path.resolve(appRoot, '..');
 
-// Versión instalada: APP_VERSION (la etiqueta de la rama `stable`, si el deploy la fija)
-// o, si no, la del package.json.
+// Versión instalada: APP_VERSION (si el deploy la fija) o, si no, la del package.json.
 const versionPaquete = JSON.parse(fs.readFileSync(path.join(appRoot, 'package.json'), 'utf8')).version;
 
 const config = {
