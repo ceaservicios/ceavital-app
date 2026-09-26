@@ -89,10 +89,12 @@ async function obtenerUnidadMedidaActiva(unidadMedidaId) {
   return fila;
 }
 
+// El código de barras no distingue mayúsculas ("abc123" = "ABC123"; índice único
+// sobre LOWER(codigo_barras), migración 009).
 async function verificarCodigoBarrasLibre(codigoBarras, excluirProductoId = null) {
   if (!codigoBarras) return;
   const existente = await db
-    .prepare(`SELECT id FROM productos WHERE codigo_barras = ? AND eliminado_en IS NULL AND id != ?`)
+    .prepare(`SELECT id FROM productos WHERE LOWER(codigo_barras) = LOWER(?) AND eliminado_en IS NULL AND id != ?`)
     .get(codigoBarras, excluirProductoId ?? -1);
   if (existente) throw new ApiError(409, 'Ya existe un producto activo con ese código de barras');
 }
@@ -143,7 +145,7 @@ export async function listarProductos({ rol, buscar, codigoBarras }) {
   const params = [];
 
   if (codigoBarras) {
-    condiciones.push('p.codigo_barras = ?');
+    condiciones.push('LOWER(p.codigo_barras) = LOWER(?)');
     params.push(codigoBarras);
   } else if (buscar) {
     condiciones.push('(p.nombre ILIKE ? OR p.codigo_barras ILIKE ?)');

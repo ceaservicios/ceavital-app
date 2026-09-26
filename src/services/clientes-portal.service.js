@@ -77,12 +77,13 @@ async function aAcceso(fila) {
 }
 
 const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_ENVIOS_ACCESO_POR_HORA = 5;
 
 // Manda por mail los datos de acceso al email que el cliente ya tiene cargado
 // en su ficha (nunca a una dirección que llegue en el pedido). La contraseña en
 // texto plano solo la conoce quien acaba de definirla: se recibe para armar el
 // mail, se comprueba que sea la vigente (así no se manda una que ya cambió) y
-// no se guarda en ningún lado.
+// no se guarda en ningún lado. Hasta 5 envíos por cliente y por hora.
 export async function enviarAccesoPorCorreo(clienteEmpresaId, { password, enlace }) {
   const cliente = await obtenerClienteActivoParaAcceso(clienteEmpresaId);
   if (!cliente.portal_usuario || !cliente.tiene_password) {
@@ -108,7 +109,33 @@ export async function enviarAccesoPorCorreo(clienteEmpresaId, { password, enlace
     usuario: cliente.portal_usuario,
     password,
   });
-  await enviarCorreo({ para: cliente.email, asunto, texto, html });
+
+  // El envío se reserva antes de mandarlo, en una transacción: dos clicks
+  // simultáneos con 4 ya enviados no pueden pasar los dos. El mail sale fuera
+  // de la transacción (se reintenta ante conflictos, no puede tener efectos
+  // afuera de la base); si el SMTP falla, la reserva queda marcada y no cuenta.
+  const reserva = await db.transaction(async () => {
+    const { enviados } = await db
+      .prepare(
+        `SELECT COUNT(*) AS enviados FROM envios_acceso_portal
+         WHERE cliente_empresa_id = ? AND fallido_en IS NULL AND enviado_en > LOCALTIMESTAMP - INTERVAL '1 hour'`
+      )
+      .get(clienteEmpresaId);
+    if (enviados >= MAX_ENVIOS_ACCESO_POR_HORA) {
+      throw new ApiError(
+        429,
+        `Ya se enviaron ${MAX_ENVIOS_ACCESO_POR_HORA} mails de acceso a este cliente en la última hora. Esperá un rato y volvé a intentar.`
+      );
+    }
+    return db.prepare('INSERT INTO envios_acceso_portal (cliente_empresa_id) VALUES (?) RETURNING id').get(clienteEmpresaId);
+  });
+
+  try {
+    await enviarCorreo({ para: cliente.email, asunto, texto, html });
+  } catch (err) {
+    await db.prepare('UPDATE envios_acceso_portal SET fallido_en = CURRENT_TIMESTAMP WHERE id = ?').run(reserva.id);
+    throw err;
+  }
   return { enviado_a: cliente.email };
 }
 

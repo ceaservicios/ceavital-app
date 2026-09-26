@@ -108,7 +108,7 @@ export default function StockPage() {
     const texto = busqueda.trim().toLowerCase();
     if (!texto) return productos;
     return productos.filter(
-      (p) => p.nombre.toLowerCase().includes(texto) || (p.codigo_barras ?? '').includes(texto)
+      (p) => p.nombre.toLowerCase().includes(texto) || (p.codigo_barras ?? '').toLowerCase().includes(texto)
     );
   }, [productos, busqueda]);
 
