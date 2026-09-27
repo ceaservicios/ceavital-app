@@ -2,7 +2,9 @@ import config from '../config/env.js';
 import { MODULOS, PLANES } from '../config/modulos.js';
 import {
   cambiarPlanComoSuperadmin,
+  cuposPorRol,
   enviarCorreoDePrueba,
+  fijarCupos,
   fijarCuota,
   fijarEmpresaEmail,
   obtenerInstancia,
@@ -11,7 +13,7 @@ import {
 } from '../services/instancia.service.js';
 import { listarAvisosEnviados } from '../services/avisos-cuota.service.js';
 import { anularPago, listarPagos, registrarPago } from '../services/pagos-cuota.service.js';
-import { correoCeaDisponible } from '../services/mail.service.js';
+import { correoCeaDisponible, correoDisponible } from '../services/mail.service.js';
 import { planActual } from '../services/modulos.service.js';
 import { cerrarSesionSuperadmin, loginSuperadmin } from '../services/superadmin.service.js';
 import { origenPermitido } from '../middleware/superadmin-auth.middleware.js';
@@ -61,7 +63,15 @@ export async function panelSuperadminController(req, res) {
     modulos: Object.entries(MODULOS).map(([id, m]) => ({ id, nombre: m.nombre })),
     correo: { disponible: correoCeaDisponible(), avisos: await listarAvisosEnviados() },
     pagos: await listarPagos(),
+    // Usuarios del negocio: topes por rol y si el correo de la empresa (SMTP_*) está
+    // configurado, sin el cual no se pueden crear usuarios ni mandar los códigos de ingreso.
+    usuarios: { cupos: await cuposPorRol(), correo_empresa: correoDisponible() },
   });
+}
+
+export async function fijarCuposSuperadminController(req, res) {
+  await fijarCupos(req.body || {});
+  res.json({ cupos: await cuposPorRol() });
 }
 
 export async function cambiarPlanSuperadminController(req, res) {

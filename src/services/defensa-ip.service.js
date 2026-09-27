@@ -341,8 +341,9 @@ async function rechazar(req, res, ip, tipo) {
   return res.status(403).json({ error: 'Acceso denegado' });
 }
 
-// Ingresos por usuario/contraseña del negocio, del superadmin y del portal.
-const RUTAS_DE_LOGIN = /^\/api\/(auth|portal)\/login$/;
+// Ingresos por usuario/contraseña del negocio, del superadmin y del portal, y el código de
+// ingreso por mail (un código incorrecto cuenta como ingreso fallido).
+const RUTAS_DE_LOGIN = /^\/api\/((auth|portal)\/login|auth\/codigo)$/;
 const RESPUESTAS_DE_FALLO = new Set([401, 423, 429]);
 
 // Primer middleware de la app (después de trust proxy): corta a las IPs bloqueadas y a lo

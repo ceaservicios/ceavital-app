@@ -28,6 +28,15 @@
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
+/* Lugares libres del rol (topes que carga CEA en el superadmin). */
+.usuarios-kpi-cupo {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+.usuarios-kpi-cupo-lleno {
+  color: var(--text-tertiary);
+}
 
 .usuarios-body {
   flex: 1;
@@ -141,6 +150,45 @@
 }
 .usuarios-dot-bloqueado {
   background: var(--color-danger);
+}
+.usuarios-dot-pendiente {
+  background: var(--text-tertiary);
+}
+.usuarios-fila-email {
+  min-width: 0;
+  padding-right: 8px;
+  overflow-wrap: anywhere;
+}
+.usuarios-estado {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13.5px;
+}
+.usuarios-2fa {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: #dde4f1;
+  color: #22428c;
+  font-size: 11px;
+  font-weight: 700;
+}
+.usuarios-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.usuarios-check input {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  accent-color: var(--color-primary);
 }
 
 .usuarios-panel {

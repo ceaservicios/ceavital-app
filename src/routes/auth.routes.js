@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { loginController, logoutController, meController } from '../controllers/auth.controller.js';
+import {
+  codigoController,
+  loginController,
+  logoutController,
+  meController,
+  reenviarCodigoController,
+} from '../controllers/auth.controller.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { asyncHandler } from '../utils/async-handler.js';
 
@@ -22,7 +28,19 @@ const loginLimiter = rateLimit({
 // -- ver src/utils/async-handler.js. logoutController y meController son
 // sync (no `async function`), asi que un throw ahi ya lo captura Express 4
 // en su try/catch interno de handlers sincronos; no necesitan el wrapper.
+// Código de ingreso por mail (verificar el email la primera vez, o 2FA): además de los 5
+// intentos por código que controla el servicio, un tope por IP.
+const codigoLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos, esperá unos minutos.' },
+});
+
 router.post('/login', loginLimiter, asyncHandler(loginController));
+router.post('/codigo', codigoLimiter, asyncHandler(codigoController));
+router.post('/codigo/reenviar', codigoLimiter, asyncHandler(reenviarCodigoController));
 router.post('/logout', requireAuth(), logoutController);
 router.get('/me', requireAuth(), meController);
 

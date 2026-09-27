@@ -3,6 +3,7 @@ import config from '../config/env.js';
 import { verifyPassword } from '../utils/password.js';
 import { crearSesion, cerrarSesion } from './session.service.js';
 import { asegurarInstanciaActiva } from './instancia.service.js';
+import { confirmarCodigo, iniciarDesafio, necesitaCodigo, recordarDispositivo } from './codigo-ingreso.service.js';
 
 export class AuthError extends Error {
   constructor(mensaje, codigo) {
@@ -11,7 +12,13 @@ export class AuthError extends Error {
   }
 }
 
-export async function login(usuarioLogin, passwordPlano) {
+const datosPublicos = (usuario) => ({ id: usuario.id, nombre: usuario.nombre, usuario: usuario.usuario, rol: usuario.rol });
+
+// Paso 1 del ingreso: usuario y contraseña. Si el usuario tiene que confirmar un código por
+// mail (email sin verificar, o 2FA en un dispositivo no confiable) no se abre la sesión:
+// devuelve { requiereCodigo, desafio, email } y la sesión se abre en confirmarIngreso.
+// `dispositivo`: identificador del navegador (cookie), para el 2FA de una vez por día.
+export async function login(usuarioLogin, passwordPlano, { dispositivo } = {}) {
   await asegurarInstanciaActiva();
 
   // El flag "bloqueado" se calcula en SQL (datetime('now')) para evitar
@@ -67,13 +74,22 @@ export async function login(usuarioLogin, passwordPlano) {
     `UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`
   ).run(usuario.id);
 
-  const { token, expulsada } = await crearSesion(usuario);
+  if (await necesitaCodigo(usuario, dispositivo)) {
+    return { requiereCodigo: true, ...(await iniciarDesafio(usuario)) };
+  }
 
-  return {
-    token,
-    expulsada,
-    usuario: { id: usuario.id, nombre: usuario.nombre, usuario: usuario.usuario, rol: usuario.rol },
-  };
+  const { token, expulsada } = await crearSesion(usuario);
+  return { token, expulsada, usuario: datosPublicos(usuario) };
+}
+
+// Paso 2: el código que llegó por mail. Abre la sesión y, si el usuario tiene 2FA, deja
+// este navegador como confiable por 24 h (devuelve su identificador para la cookie).
+export async function confirmarIngreso(desafio, codigo, { dispositivo } = {}) {
+  await asegurarInstanciaActiva();
+  const usuario = await confirmarCodigo(desafio, codigo);
+  const { token, expulsada } = await crearSesion(usuario);
+  const dispositivoConfiable = usuario.dos_fa ? await recordarDispositivo(usuario.id, dispositivo) : null;
+  return { token, expulsada, usuario: datosPublicos(usuario), dispositivo: dispositivoConfiable };
 }
 
 export async function logout(sesionId) {

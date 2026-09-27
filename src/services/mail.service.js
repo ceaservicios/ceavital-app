@@ -95,6 +95,34 @@ export function armarCorreoAcceso({ razonSocial, enlace, usuario, password }) {
   return { asunto, texto, html };
 }
 
+// Código de ingreso de un usuario del negocio (verificar su email la primera vez, o 2FA).
+// Sale por el correo de la empresa.
+export function armarCorreoCodigo({ nombre, codigo, minutos }) {
+  const asunto = `CEAVital: tu código de ingreso es ${codigo}`;
+  const texto = [
+    `Hola${nombre ? ` ${nombre}` : ''},`,
+    '',
+    `Tu código para ingresar a CEAVital es: ${codigo}`,
+    `Vence en ${minutos} minutos.`,
+    '',
+    'Si no fuiste vos, avisale al administrador de tu negocio: alguien conoce tu contraseña.',
+  ].join('\n');
+  const html = `<!doctype html>
+<html lang="es"><body style="margin:0;padding:24px;background:#ebecee;font-family:Arial,Helvetica,sans-serif;color:#1b2622;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;">
+    <tr><td style="background:#0e4b38;padding:18px 24px;color:#ffffff;font-size:20px;font-weight:bold;">CEAVital</td></tr>
+    <tr><td style="padding:24px;font-size:15px;line-height:1.5;">
+      <p style="margin:0 0 12px;">Hola${nombre ? ` ${escaparHtml(nombre)}` : ''},</p>
+      <p style="margin:0 0 12px;">Tu código para ingresar a CEAVital es:</p>
+      <p style="margin:0 0 12px;font-family:Consolas,monospace;font-size:30px;font-weight:bold;letter-spacing:6px;">${escaparHtml(codigo)}</p>
+      <p style="margin:0 0 18px;color:#3a4642;">Vence en ${minutos} minutos.</p>
+      <p style="margin:0;color:#6b7672;font-size:13px;">Si no fuiste vos, avisale al administrador de tu negocio: alguien conoce tu contraseña.</p>
+    </td></tr>
+  </table>
+</body></html>`;
+  return { asunto, texto, html };
+}
+
 const fechaLegible = (iso) => iso.split('-').reverse().join('/');
 const plural = (n) => `${n} día${n === 1 ? '' : 's'}`;
 

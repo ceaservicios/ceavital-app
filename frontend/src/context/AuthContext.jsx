@@ -48,14 +48,7 @@ export function AuthProvider({ children }) {
     return () => setUnauthorizedHandler(null);
   }, []);
 
-  const login = useCallback(async (usuarioLogin, password) => {
-    const data = await api.post('/auth/login', { usuario: usuarioLogin, password });
-    // El superadmin de CEA entra por el mismo login: no es un usuario del negocio, su
-    // sesión es aparte (cookie propia) y la pantalla lo lleva a su panel.
-    if (data.tipo === 'superadmin') {
-      setCsrfSuperadmin(data.csrf_token);
-      return data;
-    }
+  const guardarUsuario = useCallback((data) => {
     setUsuario({
       usuarioId: data.usuario.id,
       usuario: data.usuario.usuario,
@@ -64,6 +57,28 @@ export function AuthProvider({ children }) {
     });
     return data;
   }, []);
+
+  const login = useCallback(
+    async (usuarioLogin, password) => {
+      const data = await api.post('/auth/login', { usuario: usuarioLogin, password });
+      // El superadmin de CEA entra por el mismo login: no es un usuario del negocio, su
+      // sesión es aparte (cookie propia) y la pantalla lo lleva a su panel.
+      if (data.tipo === 'superadmin') {
+        setCsrfSuperadmin(data.csrf_token);
+        return data;
+      }
+      // Falta el código que le llegó por mail (email sin verificar o 2FA): la sesión
+      // se abre recién en confirmarCodigo.
+      if (data.requiere_codigo) return data;
+      return guardarUsuario(data);
+    },
+    [guardarUsuario]
+  );
+
+  const confirmarCodigo = useCallback(
+    async (desafio, codigo) => guardarUsuario(await api.post('/auth/codigo', { desafio, codigo })),
+    [guardarUsuario]
+  );
 
   const logout = useCallback(async () => {
     try {
@@ -81,6 +96,7 @@ export function AuthProvider({ children }) {
         modulos: modulos ?? [],
         moduloActivo: (modulo) => Boolean(modulos?.includes(modulo)),
         login,
+        confirmarCodigo,
         logout,
       }}
     >

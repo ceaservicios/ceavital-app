@@ -53,3 +53,43 @@
   width: 100%;
   padding: 13px 20px;
 }
+
+/* Paso del código por mail (verificación del email / 2FA). */
+.login-codigo-texto {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.login-codigo-input {
+  font-size: 22px;
+  letter-spacing: 8px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.login-aviso {
+  background: rgba(14, 75, 56, 0.08);
+  color: var(--color-primary);
+  border: 1px solid rgba(14, 75, 56, 0.25);
+}
+.login-codigo-acciones {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.login-link {
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+.login-link:disabled {
+  color: var(--text-tertiary);
+  cursor: default;
+}

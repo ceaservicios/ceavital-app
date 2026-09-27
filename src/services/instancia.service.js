@@ -217,6 +217,36 @@ export async function fijarCuota(datos) {
   });
 }
 
+// Topes de usuarios por rol que carga el superadmin al armar la empresa (sin cargar = no se
+// pueden crear usuarios de ese rol). Devuelve, por rol, el tope, los usuarios activos y los
+// lugares libres. Bajar un tope por debajo de lo que ya hay no borra a nadie: solo impide
+// crear más.
+export const ROLES_CON_TOPE = ['admin', 'encargado', 'cajero'];
+
+export async function cuposPorRol() {
+  const topes = await db.prepare('SELECT cupo_admin, cupo_encargado, cupo_cajero FROM instancia WHERE id = 1').get();
+  const filas = await db.prepare('SELECT rol, COUNT(*) AS n FROM usuarios WHERE eliminado_en IS NULL GROUP BY rol').all();
+  const usados = Object.fromEntries(filas.map((f) => [f.rol, f.n]));
+  return ROLES_CON_TOPE.map((rol) => {
+    const tope = topes[`cupo_${rol}`] ?? null;
+    const enUso = usados[rol] ?? 0;
+    return { rol, tope, usados: enUso, libres: Math.max(0, (tope ?? 0) - enUso) };
+  });
+}
+
+// datos: { admin, encargado, cajero }, cada uno un entero de 0 a 999 o vacío (sin cargar).
+export async function fijarCupos(datos) {
+  const valores = ROLES_CON_TOPE.map((rol) =>
+    vacio(datos[rol]) ? null : enteroEntre(datos[rol], 0, 999, 'Cada tope tiene que ser un número entero entre 0 y 999')
+  );
+  await db
+    .prepare(
+      `UPDATE instancia SET cupo_admin = ?, cupo_encargado = ?, cupo_cajero = ?, actualizado_en = CURRENT_TIMESTAMP
+       WHERE id = 1`
+    )
+    .run(...valores);
+}
+
 // Cambio de plan hecho por el superadmin: el mismo cambiarPlan de siempre (bloquea si
 // hay pedidos pendientes, cierra sesiones del portal).
 export async function cambiarPlanComoSuperadmin(plan) {

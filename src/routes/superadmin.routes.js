@@ -8,6 +8,7 @@ import {
   desbloquearSuperadminController,
   desbloquearTodasSuperadminController,
   empresaEmailSuperadminController,
+  fijarCuposSuperadminController,
   fijarCuotaSuperadminController,
   logoutSuperadminController,
   meSuperadminController,
@@ -34,6 +35,7 @@ router.get('/panel', panelSuperadminController);
 router.put('/plan', cambiarPlanSuperadminController);
 router.put('/cuota', fijarCuotaSuperadminController);
 router.put('/empresa-email', empresaEmailSuperadminController);
+router.put('/cupos', fijarCuposSuperadminController);
 router.post('/correo-prueba', correoPruebaSuperadminController);
 router.post('/pagos', registrarPagoSuperadminController);
 router.post('/pagos/:id/anular', anularPagoSuperadminController);

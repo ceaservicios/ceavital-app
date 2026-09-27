@@ -1,5 +1,7 @@
 import { ApiError } from '../utils/api-error.js';
 import * as usuariosService from '../services/usuarios.service.js';
+import { cuposPorRol } from '../services/instancia.service.js';
+import { correoDisponible } from '../services/mail.service.js';
 
 function parsearId(valor, campo = 'id') {
   const id = Number(valor);
@@ -7,8 +9,14 @@ function parsearId(valor, campo = 'id') {
   return id;
 }
 
+// Además de la lista: los lugares libres por rol (topes del superadmin) y si el correo de
+// la empresa está configurado (sin él no se pueden crear usuarios ni activar el 2FA).
 export async function listarUsuariosController(req, res) {
-  res.json({ usuarios: await usuariosService.listarUsuarios() });
+  res.json({
+    usuarios: await usuariosService.listarUsuarios(),
+    cupos: await cuposPorRol(),
+    correo_disponible: correoDisponible(),
+  });
 }
 
 export async function obtenerUsuarioController(req, res) {

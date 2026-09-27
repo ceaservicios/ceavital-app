@@ -27,6 +27,8 @@ function textoSuspension(instancia) {
   return `Se suspende sola el ${formatearFecha(cuota.suspende_el)} si no se anota el pago.`;
 }
 
+const ETIQUETA_ROL = { admin: 'Administrador', encargado: 'Encargado', cajero: 'Cajero' };
+
 const ESTADO_CUOTA = {
   sin_definir: { texto: 'Sin cuota definida', clase: 'sa-chip-neutro' },
   vigente: { texto: 'Vigente', clase: 'sa-chip-ok' },
@@ -59,6 +61,7 @@ export default function SuperadminPage() {
   const [suspenderDias, setSuspenderDias] = useState('');
   const [avisoSuspension, setAvisoSuspension] = useState('0');
   const [emailEmpresa, setEmailEmpresa] = useState('');
+  const [topes, setTopes] = useState({ admin: '', encargado: '', cajero: '' });
 
   const irAlLogin = useCallback(() => navigate('/login', { replace: true }), [navigate]);
 
@@ -71,6 +74,7 @@ export default function SuperadminPage() {
     setSuspenderDias(data.instancia.cuota.suspender_dias ? String(data.instancia.cuota.suspender_dias) : '');
     setAvisoSuspension(String(data.instancia.cuota.aviso_suspension_dias));
     setEmailEmpresa(data.instancia.empresa_email ?? '');
+    setTopes(Object.fromEntries(data.usuarios.cupos.map((c) => [c.rol, c.tope === null ? '' : String(c.tope)])));
   }, []);
 
   useEffect(() => {
@@ -378,6 +382,48 @@ export default function SuperadminPage() {
             </div>
             <button type="submit" className="btn btn-primary" disabled={ocupado}>
               Guardar cuota
+            </button>
+          </form>
+        </section>
+
+        {/* Usuarios del negocio: topes por rol */}
+        <section className="card sa-card">
+          <h2 className="sa-h2">Usuarios del negocio</h2>
+          <p>
+            <span className={`sa-chip ${panel.usuarios.correo_empresa ? 'sa-chip-ok' : 'sa-chip-alerta'}`}>
+              {panel.usuarios.correo_empresa ? 'Correo de la empresa configurado' : 'Correo de la empresa sin configurar'}
+            </span>
+          </p>
+          <p className="sa-ayuda">
+            Cuántos usuarios de cada rol puede crear el Admin del negocio. Vacío = no puede crear usuarios de ese rol.
+            {!panel.usuarios.correo_empresa &&
+              ' Sin el correo de la empresa (variables SMTP_*) tampoco puede crear usuarios: los códigos de ingreso salen de ahí.'}
+          </p>
+          <form
+            className="sa-form-topes"
+            onSubmit={(e) => {
+              e.preventDefault();
+              ejecutar(() => api.put('/sa/cupos', topes), 'Topes guardados.');
+            }}
+          >
+            {panel.usuarios.cupos.map((c) => (
+              <div className="field" key={c.rol}>
+                <label htmlFor={`sa-tope-${c.rol}`}>{ETIQUETA_ROL[c.rol]}</label>
+                <input
+                  id={`sa-tope-${c.rol}`}
+                  type="number"
+                  min="0"
+                  max="999"
+                  step="1"
+                  value={topes[c.rol] ?? ''}
+                  onChange={(e) => setTopes({ ...topes, [c.rol]: e.target.value })}
+                  disabled={ocupado}
+                />
+                <span className="sa-detalle-fila">En uso: {c.usados}</span>
+              </div>
+            ))}
+            <button type="submit" className="btn btn-primary" disabled={ocupado}>
+              Guardar topes
             </button>
           </form>
         </section>

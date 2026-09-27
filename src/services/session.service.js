@@ -7,17 +7,18 @@ function generarToken() {
 }
 
 /**
- * Crea una sesion activa para el usuario, expulsando automaticamente
- * cualquier sesion activa previa del mismo rol (regla de concurrencia:
- * nunca dos sesiones activas del mismo rol a la vez).
+ * Crea una sesion activa para el usuario, expulsando automaticamente su
+ * sesion activa previa si la tenia (regla de concurrencia desde 2026-09-26:
+ * una sesion por USUARIO; antes era una por rol, de cuando el sistema iba a
+ * ser local, y con varios cajeros el segundo expulsaba al primero).
  */
 export async function crearSesion(usuario) {
   const token = generarToken();
 
   return db.transaction(async () => {
     const activaPrevia = await db
-      .prepare(`SELECT id FROM sesiones_activas WHERE rol = ? AND estado = 'activa'`)
-      .get(usuario.rol);
+      .prepare(`SELECT id FROM sesiones_activas WHERE usuario_id = ? AND estado = 'activa'`)
+      .get(usuario.id);
 
     if (activaPrevia) {
       await db

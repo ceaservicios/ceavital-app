@@ -19,6 +19,12 @@ export function setUnauthorizedHandler(fn) {
   onUnauthorized = fn;
 }
 
+// El ingreso (contraseña y código por mail): un 401 ahí es "dato incorrecto", no "se venció
+// la sesión"; lo maneja LoginPage.
+function esRutaDeIngreso(path) {
+  return path === '/auth/login' || path.startsWith('/auth/codigo');
+}
+
 // El portal del cliente tiene su propia sesión: un 401 ahí (contraseña
 // incorrecta, sesión vencida) lo maneja la pantalla del portal, no debe
 // tratarse como "se venció la sesión interna".
@@ -57,7 +63,7 @@ async function request(path, { method = 'GET', body } = {}) {
   const data = isJson ? await res.json() : null;
 
   if (!res.ok) {
-    if (res.status === 401 && path !== '/auth/login' && !esRutaDelPortal(path) && !esRutaDelSuperadmin(path)) {
+    if (res.status === 401 && !esRutaDeIngreso(path) && !esRutaDelPortal(path) && !esRutaDelSuperadmin(path)) {
       onUnauthorized?.();
     }
     throw new ApiError(data?.error || 'Ocurrió un error inesperado', res.status);
