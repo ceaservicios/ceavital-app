@@ -12,11 +12,13 @@ export const MODULOS = {
   portal: { nombre: 'Portal del cliente', dependeDe: ['pedidos'] },
 };
 
-// Contenido y nombres a confirmar con el usuario (2026-09-19). Cambiarlos acá es
+// Nombres comerciales confirmados por el usuario (2026-10-01), los mismos de
+// Docs/Planes-y-Precios.md. El id ("comercio"/"empresas") es el valor guardado en
+// configuracion.plan: no se cambia sin migrar ese valor. Cambiar un nombre acá es
 // lo único necesario: nada más en el código nombra un plan.
 export const PLANES = {
-  comercio: { nombre: 'Comercio', modulos: ['nucleo'] },
-  empresas: { nombre: 'Empresas', modulos: ['nucleo', 'clientes_empresa', 'pedidos', 'portal'] },
+  comercio: { nombre: 'Plan Comercio', modulos: ['nucleo'] },
+  empresas: { nombre: 'Plan Empresa', modulos: ['nucleo', 'clientes_empresa', 'pedidos', 'portal'] },
 };
 
 // Plan de una instalación que todavía no tiene ninguno guardado. Es "empresas"

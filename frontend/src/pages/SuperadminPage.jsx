@@ -257,7 +257,7 @@ export default function SuperadminPage() {
         <section className="card sa-card">
           <h2 className="sa-h2">Plan y módulos</h2>
           <p className="sa-ayuda">
-            Plan actual: <strong>{panel.plan.nombre}</strong>. Los módulos que se apagan se ocultan; sus datos no se borran.
+            Actual: <strong>{panel.plan.nombre}</strong>. Los módulos que se apagan se ocultan; sus datos no se borran.
           </p>
           <div className="sa-planes" role="radiogroup" aria-label="Plan">
             {panel.planes.map((p) => (

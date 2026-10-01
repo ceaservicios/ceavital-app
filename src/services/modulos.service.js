@@ -64,7 +64,7 @@ export async function cambiarPlan(plan) {
       if (pendientes > 0) {
         throw new ApiError(
           409,
-          `No se puede pasar al plan "${PLANES[plan].nombre}": hay ${pendientes} pedido(s) de clientes pendiente(s). Aprobalos o rechazalos antes.`
+          `No se puede pasar a ${PLANES[plan].nombre}: hay ${pendientes} pedido(s) de clientes pendiente(s). Aprobalos o rechazalos antes.`
         );
       }
     }
