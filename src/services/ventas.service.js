@@ -76,13 +76,15 @@ async function obtenerVentaConItems(ventaId) {
   return { ...venta, items };
 }
 
+// creado_en guarda segundos: dos ventas del mismo segundo se desempatan por id,
+// así la primera es siempre la última registrada ("Anular último ticket" en Caja).
 export function listarVentas({ fecha } = {}) {
   if (fecha) {
     return db
-      .prepare(`SELECT * FROM ventas WHERE ${sqlDiaNegocio('creado_en')} = ?::date ORDER BY creado_en DESC`)
+      .prepare(`SELECT * FROM ventas WHERE ${sqlDiaNegocio('creado_en')} = ?::date ORDER BY creado_en DESC, id DESC`)
       .all(fecha);
   }
-  return db.prepare('SELECT * FROM ventas ORDER BY creado_en DESC').all();
+  return db.prepare('SELECT * FROM ventas ORDER BY creado_en DESC, id DESC').all();
 }
 
 export function obtenerVenta(id) {
