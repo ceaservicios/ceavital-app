@@ -9,7 +9,6 @@ import selfsigned from 'selfsigned';
 
 import config from './config/env.js';
 import { runMigrations } from './db/migrate.js';
-import { importarDesdeSqlite } from './db/importar-sqlite.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { buildCorsMiddleware, helmetMiddleware } from './middleware/security.middleware.js';
 import routes from './routes/index.js';
@@ -53,14 +52,6 @@ process.on('unhandledRejection', (motivo) => {
 await runMigrations();
 await asegurarSuperadmin();
 await iniciarDefensa();
-
-// Pase a produccion desde SQLite: una sola vez, solo si PostgreSQL esta vacio.
-// Si falla, el servidor NO arranca (no se sirve una base vacia con datos sin migrar).
-if (config.importarSqlite) {
-  const resultado = await importarDesdeSqlite(config.importarSqlite);
-  if (resultado.importado) console.log('[importar] datos importados desde SQLite:', resultado.filas);
-  else console.log(`[importar] omitido: ${resultado.motivo}`);
-}
 
 const app = express();
 

@@ -14,8 +14,7 @@
     "set-plan": "node src/db/set-plan.js",
     "reset-admin-password": "node src/db/reset-admin-password.js",
     "reset-superadmin-password": "node src/db/reset-superadmin-password.js",
-    "desbloquear-ip": "node src/db/desbloquear-ip.js",
-    "importar:sqlite": "node src/db/importar-sqlite.js"
+    "desbloquear-ip": "node src/db/desbloquear-ip.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

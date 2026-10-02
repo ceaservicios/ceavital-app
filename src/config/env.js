@@ -8,8 +8,6 @@ dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // src/config -> src -> app
 const appRoot = path.resolve(__dirname, '../..');
-// app -> Sistema
-const sistemaRoot = path.resolve(appRoot, '..');
 
 // Versión instalada: APP_VERSION (si el deploy la fija) o, si no, la del package.json.
 const versionPaquete = JSON.parse(fs.readFileSync(path.join(appRoot, 'package.json'), 'utf8')).version;
@@ -28,18 +26,12 @@ const config = {
   // el cliente real, no la IP interna del proxy).
   httpsMode: process.env.HTTPS_MODE === 'proxy' ? 'proxy' : 'selfsigned',
 
-  // Codigo (app) y datos (data) separados desde el dia uno: una actualizacion
-  // futura solo reemplaza app/, nunca toca data/ (ver CLAUDE.md > "Actualizaciones en produccion").
-  dataDir: path.join(sistemaRoot, 'data'),
-
   // Base de datos: PostgreSQL (desde 2026-09; antes SQLite embebida).
   // Ej.: postgres://usuario:clave@host:5432/ceavital?sslmode=disable
   databaseUrl: (process.env.DATABASE_URL || '').trim(),
   db: {
     poolMax: Number(process.env.DB_POOL_MAX) || 10,
   },
-  // Ruta de un ceavital.db de SQLite a importar UNA vez al arrancar (ver db/importar-sqlite.js).
-  importarSqlite: (process.env.IMPORTAR_SQLITE || '').trim(),
   certsDir: path.join(appRoot, 'certs'),
 
   allowedOrigins: (process.env.ALLOWED_ORIGINS || '')

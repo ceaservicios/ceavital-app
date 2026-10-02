@@ -19,8 +19,8 @@ ENV HTTPS_MODE=proxy
 ENV PORT=3000
 
 # La base de datos es PostgreSQL (variable DATABASE_URL, ver .env.example).
-# /data solo conserva el archivo SQLite de la epoca anterior, que se importa una
-# unica vez con IMPORTAR_SQLITE=/data/ceavital.db (no se modifica ni se borra).
+# /data solo conserva los archivos SQLite de la epoca anterior (pasados a
+# PostgreSQL el 2026-09-19); la app ya no los usa.
 VOLUME ["/data"]
 
 EXPOSE 3000
