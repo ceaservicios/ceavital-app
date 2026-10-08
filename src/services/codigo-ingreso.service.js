@@ -63,25 +63,26 @@ export async function iniciarDesafio(usuario) {
   return { desafio, email: enmascararEmail(usuario.email) };
 }
 
-// Valida el código y lo consume. Devuelve el usuario para abrirle la sesión. Un código
-// incorrecto suma un intento (a los 5 hay que volver a empezar desde la contraseña).
+// Valida el código y lo consume. Devuelve el usuario para abrirle la sesión. Cada intento
+// (correcto o no) se anota ANTES de comparar, en un solo UPDATE atómico con el tope en el
+// WHERE: así 30 pedidos simultáneos no pasan todos el "intentos < 5" (a los 5 incorrectos
+// hay que volver a empezar desde la contraseña).
 export async function confirmarCodigo(desafio, codigo) {
   const fila = await db
     .prepare(
-      `SELECT c.id, c.codigo_hash, c.enviado_a,
-              u.id AS usuario_id, u.nombre, u.usuario, u.rol, u.email, u.dos_fa
-       FROM codigos_ingreso c JOIN usuarios u ON u.id = c.usuario_id
-       WHERE c.desafio_hash = ? AND c.usado_en IS NULL AND c.expira_en > LOCALTIMESTAMP AND c.intentos < ?
-         AND u.eliminado_en IS NULL`
+      `UPDATE codigos_ingreso c SET intentos = c.intentos + 1
+       FROM usuarios u
+       WHERE u.id = c.usuario_id AND u.eliminado_en IS NULL
+         AND c.desafio_hash = ? AND c.usado_en IS NULL AND c.expira_en > LOCALTIMESTAMP AND c.intentos < ?
+       RETURNING c.id, c.codigo_hash, c.enviado_a, c.intentos,
+                 u.id AS usuario_id, u.nombre, u.usuario, u.rol, u.email, u.dos_fa`
     )
     .get(hash(desafio), MAX_INTENTOS);
   if (!fila) throw new ApiError(401, MENSAJE_VENCIDO);
 
   const correcto = crypto.timingSafeEqual(Buffer.from(fila.codigo_hash, 'hex'), Buffer.from(hashCodigo(desafio, codigo), 'hex'));
   if (!correcto) {
-    const { intentos } = await db
-      .prepare('UPDATE codigos_ingreso SET intentos = intentos + 1 WHERE id = ? RETURNING intentos')
-      .get(fila.id);
+    const { intentos } = fila;
     if (intentos >= MAX_INTENTOS) {
       throw new ApiError(401, 'Demasiados intentos con un código incorrecto. Volvé a ingresar con tu contraseña.');
     }

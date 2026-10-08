@@ -7,8 +7,11 @@ import './UsuariosPage.css';
 const ROLES = ['admin', 'encargado', 'cajero'];
 const ETIQUETA_KPI = { admin: 'Dueño / Administrador', encargado: 'Encargado / Supervisor', cajero: 'Empleado / Cajero' };
 
+// bloqueado_hasta viene en UTC sin zona ('YYYY-MM-DD HH:MM:SS'): sin la 'Z' el navegador lo
+// leía como hora local y un bloqueo de 15 min se veía 3 h de más (mismo criterio que
+// formatearFechaHora en utils/format.js).
 function estaBloqueado(usuario) {
-  return usuario.bloqueado_hasta && new Date(usuario.bloqueado_hasta) > new Date();
+  return usuario.bloqueado_hasta && new Date(`${usuario.bloqueado_hasta.replace(' ', 'T')}Z`) > new Date();
 }
 
 // Los usuarios nuevos entran con su email; los anteriores a eso, con un usuario aparte.

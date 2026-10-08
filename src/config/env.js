@@ -18,8 +18,8 @@ const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   appRoot,
 
-  // 'selfsigned' (default, instalacion LAN): certificado propio generado al
-  // primer arranque, ver server.js > asegurarCertificado. 'proxy' (VPS detras
+  // 'selfsigned' (default, solo para desarrollo en la propia PC): certificado propio
+  // generado al primer arranque, ver server.js > asegurarCertificado. 'proxy' (VPS detras
   // de un reverse proxy tipo Traefik/Easypanel que ya termina TLS con un
   // dominio real): el server escucha HTTP plano y confia en los headers
   // X-Forwarded-* del proxy (necesario para que rate-limit/req.ip reflejen
@@ -51,9 +51,11 @@ const config = {
   // del proxy de Easypanel, donde el Host es el dominio real).
   publicUrl: (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, ''),
 
-  // Envío de mails (datos de acceso al portal). Es OPCIONAL y usa internet: sin
-  // SMTP_HOST el sistema funciona igual y la ficha ofrece abrir el mail en el
-  // programa de correo del usuario. Puerto 465 = conexión segura desde el inicio.
+  // Correo de la empresa: códigos de ingreso de los usuarios del negocio y datos de
+  // acceso al portal. NECESARIO para los usuarios: sin SMTP_HOST no se pueden crear
+  // usuarios, cambiar emails ni activar 2FA, y quien necesita código no puede entrar
+  // (el acceso al portal sí cae a abrir el mail en el programa de correo del usuario).
+  // Puerto 465 = conexión segura desde el inicio.
   smtp: {
     host: (process.env.SMTP_HOST || '').trim(),
     port: Number(process.env.SMTP_PORT) || 587,

@@ -165,17 +165,20 @@ function enteroEntre(valor, minimo, maximo, mensaje) {
   return n;
 }
 
-// vence: 'AAAA-MM-DD' o null (sin cuota definida). aviso_dias: cuántos días antes del
-// vencimiento la cuota pasa a "por vencer". El día de la fecha elegida pasa a ser el
-// día fijo de vencimiento con el que los pagos corren la cuota (pagos-cuota.service).
-// suspender_dias: a los cuántos días de vencida se suspende sola (vacío = nunca);
-// aviso_suspension_dias: cuántos días antes de esa suspensión sale el mail de aviso
-// (0 = sin aviso previo; tiene que ser menor que suspender_dias, así cae con la cuota
-// ya vencida). Un campo que no viene en el pedido conserva su valor.
+// vence: 'AAAA-MM-DD', o vacío/null para quitar la cuota (sin cuota definida). aviso_dias:
+// cuántos días antes del vencimiento la cuota pasa a "por vencer". El día de la fecha
+// elegida pasa a ser el día fijo de vencimiento con el que los pagos corren la cuota
+// (pagos-cuota.service). suspender_dias: a los cuántos días de vencida se suspende sola
+// (vacío = nunca); aviso_suspension_dias: cuántos días antes de esa suspensión sale el
+// mail de aviso (0 = sin aviso previo; tiene que ser menor que suspender_dias, así cae
+// con la cuota ya vencida). Un campo que no viene en el pedido conserva su valor
+// (también vence: antes un pedido sin vence borraba el vencimiento y apagaba la
+// suspensión automática).
 export async function fijarCuota(datos) {
   const { vence, aviso_dias: avisoDias, suspender_dias: suspenderDias, aviso_suspension_dias: avisoSuspension } = datos;
+  const cambiaVence = 'vence' in datos;
   let fecha = null;
-  if (!vacio(vence)) {
+  if (cambiaVence && !vacio(vence)) {
     if (!esFechaReal(vence)) {
       throw new ApiError(400, 'La fecha de vencimiento tiene que ser una fecha real con formato AAAA-MM-DD');
     }
@@ -184,8 +187,9 @@ export async function fijarCuota(datos) {
 
   await db.transaction(async () => {
     const actual = await db
-      .prepare('SELECT cuota_aviso_dias, cuota_suspender_dias, cuota_aviso_suspension_dias FROM instancia WHERE id = 1')
+      .prepare('SELECT cuota_vence, cuota_aviso_dias, cuota_suspender_dias, cuota_aviso_suspension_dias FROM instancia WHERE id = 1')
       .get();
+    if (!cambiaVence) fecha = actual.cuota_vence;
 
     const aviso = vacio(avisoDias)
       ? actual.cuota_aviso_dias
@@ -213,7 +217,9 @@ export async function fijarCuota(datos) {
                 cuota_suspender_dias = ?, cuota_aviso_suspension_dias = ?, actualizado_en = CURRENT_TIMESTAMP
          WHERE id = 1`
       )
-      .run(fecha, fecha ? Number(fecha.slice(8)) : null, aviso, suspender, avisoPrevio);
+      // Si vence no cambió, el día fijo tampoco (puede no coincidir con el día de cuota_vence:
+      // un día 31 vence el 30 en los meses de 30 días).
+      .run(fecha, cambiaVence && fecha ? Number(fecha.slice(8)) : null, aviso, suspender, avisoPrevio);
   });
 }
 

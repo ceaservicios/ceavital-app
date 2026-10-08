@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api, ApiError } from '../api/client.js';
@@ -17,6 +17,10 @@ export default function LoginPage() {
   // Paso 2 del ingreso: el código que llegó por mail (email sin verificar o 2FA).
   const [desafio, setDesafio] = useState(null); // { desafio, email }
   const [codigo, setCodigo] = useState('');
+  // Guardia sincrónica de Ingresar / Confirmar código / Mandarme otro código: `disabled={enviando}`
+  // no alcanza contra dos clicks en el mismo tick (mandaba 2 mails con códigos distintos o abría
+  // 2 sesiones). Mismo patrón que UsuariosPage.
+  const enviandoRef = useRef(false);
 
   if (!cargandoSesion && usuario) {
     const destino = location.state?.from ?? '/caja';
@@ -29,6 +33,8 @@ export default function LoginPage() {
 
   async function ingresar(e) {
     e.preventDefault();
+    if (enviandoRef.current) return;
+    enviandoRef.current = true;
     setError(null);
     setEnviando(true);
     try {
@@ -43,12 +49,15 @@ export default function LoginPage() {
     } catch (err) {
       mostrarError(err);
     } finally {
+      enviandoRef.current = false;
       setEnviando(false);
     }
   }
 
   async function confirmar(e) {
     e.preventDefault();
+    if (enviandoRef.current) return;
+    enviandoRef.current = true;
     setError(null);
     setAviso(null);
     setEnviando(true);
@@ -58,11 +67,14 @@ export default function LoginPage() {
     } catch (err) {
       mostrarError(err);
     } finally {
+      enviandoRef.current = false;
       setEnviando(false);
     }
   }
 
   async function reenviar() {
+    if (enviandoRef.current) return;
+    enviandoRef.current = true;
     setError(null);
     setAviso(null);
     setEnviando(true);
@@ -73,6 +85,7 @@ export default function LoginPage() {
     } catch (err) {
       mostrarError(err);
     } finally {
+      enviandoRef.current = false;
       setEnviando(false);
     }
   }

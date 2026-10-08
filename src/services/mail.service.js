@@ -2,10 +2,12 @@ import nodemailer from 'nodemailer';
 import config from '../config/env.js';
 import { ApiError } from '../utils/api-error.js';
 
-// Envío de mails por SMTP. Opcional: el sistema funciona 100% sin esto (regla
-// "sin internet"); solo se usa para mandarle al cliente los datos de acceso.
-// Dos canales: 'empresa' (SMTP_*: la empresa a sus clientes) y 'cea' (SA_SMTP_*: los
-// avisos del superadmin, remitente de CEA).
+// Envío de mails por SMTP. Dos canales: 'empresa' (SMTP_*: el correo de la empresa, que
+// manda los códigos de ingreso de los usuarios del negocio y los datos de acceso al portal
+// de sus clientes) y 'cea' (SA_SMTP_*: los avisos del superadmin, remitente de CEA).
+// SMTP_* no es opcional para los usuarios: sin él no se pueden crear usuarios, cambiar
+// emails ni activar 2FA, y quien necesita código no puede entrar (usuarios.service,
+// codigo-ingreso.service). Sin SA_SMTP_* no sale ningún aviso de CEA.
 const CANALES = { empresa: () => config.smtp, cea: () => config.saSmtp };
 const transportes = {};
 
