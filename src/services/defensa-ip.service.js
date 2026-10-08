@@ -2,7 +2,10 @@ import net from 'node:net';
 import db from '../db/connection.js';
 import config from '../config/env.js';
 import { ApiError } from '../utils/api-error.js';
+import { obtenerSesionClienteValida } from './clientes-portal.service.js';
 import { correoCeaDisponible, enviarCorreo, escaparHtml } from './mail.service.js';
+import { obtenerSesionActivaValida } from './session.service.js';
+import { obtenerSesionSuperadminValida } from './superadmin.service.js';
 
 // Defensa activa por IP. Detecta ataques conocidos, bloquea la IP en el acto (403 en todo
 // lo que pida después, sin tocar la lógica de negocio) y avisa por mail. Modelo tomado del
@@ -26,6 +29,11 @@ import { correoCeaDisponible, enviarCorreo, escaparHtml } from './mail.service.j
 // cuenta (5 intentos, 15 min) y el tope de 20 fallidos por IP que solo frena el ingreso
 // (middleware/ingreso-limiter.middleware.js). Hasta esa fecha existía "fuerza_bruta" (15 fallidos
 // en 10 min bloqueaban toda la app, con reincidencia); su motivo queda para mostrar bloqueos viejos.
+//
+// Quien ya tiene una sesión abierta y válida (negocio, portal o superadmin) sigue trabajando
+// aunque su IP esté bloqueada, y lo que pide nunca dispara un bloqueo (regla del usuario,
+// 2026-10-08): una IP pública puede ser compartida (CGNAT) con quien ataca. La sesión se
+// consulta solo en el momento en que se cortaría el pedido, no en cada pedido.
 
 const MINUTO = 60_000;
 const DURACIONES_MINUTOS = [60, 24 * 60, 7 * 24 * 60]; // 1.er, 2.º y 3.er bloqueo (o más) en 30 días
@@ -340,26 +348,71 @@ export function detectarEnCuerpo(req) {
   return clasificarTexto(textoDeCuerpo(req.body));
 }
 
-async function rechazar(req, res, ip, tipo) {
+// ---------- Sesiones abiertas: nunca se cortan ----------
+
+const TOKEN_DE_SESION = /^[0-9a-f]{64}$/;
+const COOKIES_DE_SESION = [
+  ['sesion_token', obtenerSesionActivaValida], // usuarios del negocio
+  ['portal_token', obtenerSesionClienteValida], // clientes en el portal
+  // Superadmin: su cookie solo viaja a /api/sa (las pantallas de /sa no la llevan; para la
+  // oficina de CEA está DEFENSA_IP_PERMITIDAS y, de emergencia, npm run desbloquear-ip).
+  ['sa_token', obtenerSesionSuperadminValida],
+];
+
+// defensaIp y defensaCuerpoIp corren antes de cookie-parser: si hace falta, se lee a mano.
+function cookieDe(req, nombre) {
+  if (req.cookies) return req.cookies[nombre];
+  for (const parte of String(req.headers?.cookie ?? '').split(';')) {
+    const i = parte.indexOf('=');
+    if (i > 0 && parte.slice(0, i).trim() === nombre) return parte.slice(i + 1).trim();
+  }
+  return undefined;
+}
+
+// ¿El pedido trae una sesión abierta y válida (negocio, portal o superadmin)? Solo lectura: no
+// marca actividad. Si la base falla, responde que no y la defensa sigue como siempre.
+export async function tieneSesionValida(req) {
+  for (const [nombre, validar] of COOKIES_DE_SESION) {
+    const token = cookieDe(req, nombre);
+    if (!TOKEN_DE_SESION.test(token ?? '')) continue;
+    try {
+      if (await validar(token)) return true;
+    } catch (err) {
+      console.error('[defensa] no se pudo comprobar la sesión:', err.message);
+    }
+  }
+  return false;
+}
+
+// Corta el pedido y bloquea la IP, salvo que traiga una sesión abierta válida: ahí el pedido
+// sigue y la IP no se bloquea (no deja afuera a la empresa de esa persona). Queda en el log.
+async function rechazar(req, res, next, ip, tipo) {
+  if (await tieneSesionValida(req)) {
+    console.warn(`[defensa] ${tipo} desde ${ip} con sesión abierta: no se bloquea (${req.method} ${String(req.originalUrl).slice(0, 120)})`);
+    return next();
+  }
   await bloquearIp(ip, tipo, { detalle: `${req.method} ${req.originalUrl}`.slice(0, 200), metodo: req.method, ruta: req.originalUrl, userAgent: req.get('user-agent') });
   return res.status(403).json({ error: 'Acceso denegado' });
 }
 
 // Primer middleware de la app (después de trust proxy): corta a las IPs bloqueadas y a lo
 // que trae un ataque en la URL o el User-Agent, y cuenta ráfagas. Los ingresos fallidos no
-// se cuentan acá (ver el comentario del principio).
+// se cuentan acá (ver el comentario del principio). Una sesión abierta válida pasa siempre.
 export async function defensaIp(req, res, next) {
   if (!config.defensa.activa) return next();
   const ip = ipDe(req);
   if (esExenta(ip)) return next();
 
-  if (estaBloqueada(ip)) return res.status(403).json({ error: 'Acceso denegado' });
+  if (estaBloqueada(ip)) {
+    if (await tieneSesionValida(req)) return next();
+    return res.status(403).json({ error: 'Acceso denegado' });
+  }
 
   const ataque = detectarEnPedido(req);
-  if (ataque) return rechazar(req, res, ip, ataque);
+  if (ataque) return rechazar(req, res, next, ip, ataque);
 
   if (req.path.startsWith('/api') && contar(`rafaga:${ip}`, LIMITES.rafaga.ventanaMs) > LIMITES.rafaga.cantidad) {
-    return rechazar(req, res, ip, 'rafaga');
+    return rechazar(req, res, next, ip, 'rafaga');
   }
   next();
 }
@@ -370,16 +423,17 @@ export async function defensaCuerpoIp(req, res, next) {
   const ip = ipDe(req);
   if (esExenta(ip)) return next();
   const ataque = detectarEnCuerpo(req);
-  if (ataque) return rechazar(req, res, ip, ataque);
+  if (ataque) return rechazar(req, res, next, ip, ataque);
   next();
 }
 
-// Último manejador de /api: una ruta que no existe. Muchas seguidas = alguien mapeando la API.
+// Último manejador de /api: una ruta que no existe. Muchas seguidas = alguien mapeando la API
+// (con una sesión abierta válida no se bloquea: puede ser una pestaña vieja después de un deploy).
 export async function rutaApiInexistente(req, res) {
   const ip = ipDe(req);
   if (config.defensa.activa && !esExenta(ip) && !estaBloqueada(ip)) {
     const { cantidad, ventanaMs } = LIMITES.enumeracion;
-    if (contar(`404:${ip}`, ventanaMs) >= cantidad) {
+    if (contar(`404:${ip}`, ventanaMs) >= cantidad && !(await tieneSesionValida(req))) {
       await bloquearIp(ip, 'enumeracion', { detalle: `${cantidad} rutas inexistentes en 5 min`, metodo: req.method, ruta: req.originalUrl, userAgent: req.get('user-agent') });
       return res.status(403).json({ error: 'Acceso denegado' });
     }

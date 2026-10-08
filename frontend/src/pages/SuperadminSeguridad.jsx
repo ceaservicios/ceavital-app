@@ -93,7 +93,8 @@ export default function SuperadminSeguridad({ irAlLogin }) {
         Se bloquea sola, en el acto, la IP que sondea archivos (.env, wp-admin…), intenta inyecciones o comandos, usa herramientas de hacking,
         mapea la API (15 rutas inexistentes en 5 min) o hace ráfagas de pedidos. Bloqueo de 1 hora; si reincide en 30 días, 24 horas y
         después 7 días. Las contraseñas o códigos mal puestos nunca bloquean la IP: cada cuenta se bloquea a los 5 intentos (15 min) y, con 20
-        intentos fallidos desde una misma IP en 15 min, esa IP espera para volver a intentar (quien ya tiene sesión sigue trabajando).{' '}
+        intentos fallidos desde una misma IP en 15 min, esa IP espera para volver a intentar. Quien ya tiene una sesión abierta nunca queda
+        bloqueado (aunque su IP lo esté) y lo que hace nunca bloquea su IP.{' '}
         {estado.alerta_email
           ? estado.correo_disponible
             ? `Cada bloqueo avisa por mail a ${estado.alerta_email}.`
