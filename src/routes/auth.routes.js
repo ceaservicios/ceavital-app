@@ -8,20 +8,15 @@ import {
   reenviarCodigoController,
 } from '../controllers/auth.controller.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
+import { ingresoLimiter } from '../middleware/ingreso-limiter.middleware.js';
 import { asyncHandler } from '../utils/async-handler.js';
 
 const router = Router();
 
-// El login es alcanzable desde cualquier lugar de internet (el sistema es online) --
-// rate limit por IP ademas del bloqueo por usuario que ya aplica auth.service
-// (defensa en dos capas contra fuerza bruta).
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiados intentos de login, esperá unos minutos.' },
-});
+// El login y el código por mail son alcanzables desde cualquier lugar de internet (el
+// sistema es online): además del bloqueo por cuenta (5 intentos, 15 min) que aplican
+// auth.service y codigo-ingreso.service, el tope de intentos FALLIDOS por IP compartido
+// con el portal (ingreso-limiter.middleware.js: 20 en 15 min).
 
 // Todos los controladores de auth son async: en Express 4 un reject sin capturar no
 // llega solo a errorHandler. Los de login y código van con asyncHandler
@@ -29,19 +24,19 @@ const loginLimiter = rateLimit({
 // porque express-async-errors (importado al inicio de server.js) ya pasa sus rejects
 // a errorHandler.
 
-// Código de ingreso por mail (verificar el email la primera vez, o 2FA): además de los 5
-// intentos por código que controla el servicio, un tope por IP.
-const codigoLimiter = rateLimit({
+// Reenviar el código no es un intento de ingreso (cada desafío ya tiene sus topes: 5 envíos,
+// uno por minuto): solo un tope por IP para que no se use para mandar mails sin fin.
+const reenvioLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Demasiados intentos, esperá unos minutos.' },
+  message: { error: 'Demasiados pedidos de código, esperá unos minutos.' },
 });
 
-router.post('/login', loginLimiter, asyncHandler(loginController));
-router.post('/codigo', codigoLimiter, asyncHandler(codigoController));
-router.post('/codigo/reenviar', codigoLimiter, asyncHandler(reenviarCodigoController));
+router.post('/login', ingresoLimiter, asyncHandler(loginController));
+router.post('/codigo', ingresoLimiter, asyncHandler(codigoController));
+router.post('/codigo/reenviar', reenvioLimiter, asyncHandler(reenviarCodigoController));
 router.post('/logout', requireAuth(), logoutController);
 router.get('/me', requireAuth(), meController);
 

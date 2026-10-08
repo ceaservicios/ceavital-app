@@ -11,20 +11,15 @@ import {
   obtenerPedidoPortalController,
   resumenPortalController,
 } from '../controllers/portal.controller.js';
+import { ingresoLimiter } from '../middleware/ingreso-limiter.middleware.js';
 import { requirePortalAuth } from '../middleware/portal-auth.middleware.js';
 import { asyncHandler } from '../utils/async-handler.js';
 
 const router = Router();
 
-// Este login sí es alcanzable desde internet (modalidad online): tope por IP
-// además del bloqueo por cliente que ya aplica el servicio.
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiados intentos de ingreso, esperá unos minutos.' },
-});
+// El login del portal: además del bloqueo por cliente que ya aplica el servicio (5 intentos,
+// 15 min), el tope de intentos FALLIDOS por IP compartido con el login del negocio
+// (ingreso-limiter.middleware.js: 20 en 15 min, los correctos no cuentan).
 
 // Tope por IP para armar pedidos: cada pedido pendiente reserva stock real.
 const pedidosLimiter = rateLimit({
@@ -35,7 +30,7 @@ const pedidosLimiter = rateLimit({
   message: { error: 'Demasiados pedidos en poco tiempo, esperá unos minutos.' },
 });
 
-router.post('/login', loginLimiter, asyncHandler(loginPortalController));
+router.post('/login', ingresoLimiter, asyncHandler(loginPortalController));
 router.post('/logout', requirePortalAuth, logoutPortalController);
 router.get('/cuenta', requirePortalAuth, cuentaPortalController);
 router.get('/resumen', requirePortalAuth, resumenPortalController);

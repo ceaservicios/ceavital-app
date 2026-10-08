@@ -89,7 +89,8 @@ const config = {
   },
 
   // Defensa activa por IP (services/defensa-ip.service.js): detecta sondeos de archivos, inyecciones,
-  // herramientas de hacking, enumeración de rutas y fuerza bruta, y bloquea la IP.
+  // herramientas de hacking, enumeración de rutas y ráfagas, y bloquea la IP. Los intentos fallidos
+  // de ingreso no bloquean la IP (los frena middleware/ingreso-limiter.middleware.js).
   //  DEFENSA_IP=off               apaga todo (solo para diagnóstico)
   //  DEFENSA_IP_ALERTA_EMAIL      a dónde llega el mail de cada bloqueo (por el correo de CEA, SA_SMTP_*)
   //  DEFENSA_IP_PERMITIDAS        IPs que nunca se bloquean, separadas por coma (ej. la de la oficina de CEA)

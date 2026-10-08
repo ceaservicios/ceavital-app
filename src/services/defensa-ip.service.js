@@ -18,9 +18,14 @@ import { correoCeaDisponible, enviarCorreo, escaparHtml } from './mail.service.j
 //   comando       cat /etc/passwd, whoami, wget http..., bash -c, etc.
 //   herramienta   User-Agent de sqlmap, nikto, nmap, nuclei, burp, zap...
 //   enumeracion   15 o más rutas de /api inexistentes en 5 minutos (mapeo/clonado de la API)
-//   fuerza_bruta  15 ingresos fallidos en 10 minutos desde la misma IP (cualquier cuenta)
 //   rafaga        más de 1200 pedidos por minuto (scraping / clonado masivo / DoS simple)
 //   manual        bloqueada a mano desde el panel del superadmin
+//
+// Los intentos fallidos de ingreso NO bloquean la IP (regla del usuario, 2026-10-08: nunca dejar
+// afuera a una empresa cliente, y no se puede pedir IP fija): de eso se encargan el bloqueo por
+// cuenta (5 intentos, 15 min) y el tope de 20 fallidos por IP que solo frena el ingreso
+// (middleware/ingreso-limiter.middleware.js). Hasta esa fecha existía "fuerza_bruta" (15 fallidos
+// en 10 min bloqueaban toda la app, con reincidencia); su motivo queda para mostrar bloqueos viejos.
 
 const MINUTO = 60_000;
 const DURACIONES_MINUTOS = [60, 24 * 60, 7 * 24 * 60]; // 1.er, 2.º y 3.er bloqueo (o más) en 30 días
@@ -30,7 +35,6 @@ const MAX_MAILS_POR_HORA = 10; // tope global: un atacante no puede usarnos para
 
 const LIMITES = {
   enumeracion: { cantidad: 15, ventanaMs: 5 * MINUTO },
-  fuerza_bruta: { cantidad: 15, ventanaMs: 10 * MINUTO },
   rafaga: { cantidad: 1200, ventanaMs: MINUTO },
 };
 
@@ -42,7 +46,7 @@ export const MOTIVOS = {
   comando: 'Inyección de comandos',
   herramienta: 'Herramienta de hacking',
   enumeracion: 'Enumeración de rutas (mapeo o clonado de la API)',
-  fuerza_bruta: 'Fuerza bruta de credenciales',
+  fuerza_bruta: 'Fuerza bruta de credenciales', // ya no se aplica (2026-10-08): bloqueos viejos
   rafaga: 'Ráfaga de pedidos (scraping / clonado masivo)',
   manual: 'Bloqueo manual del superadmin',
 };
@@ -341,13 +345,9 @@ async function rechazar(req, res, ip, tipo) {
   return res.status(403).json({ error: 'Acceso denegado' });
 }
 
-// Ingresos por usuario/contraseña del negocio, del superadmin y del portal, y el código de
-// ingreso por mail (un código incorrecto cuenta como ingreso fallido).
-const RUTAS_DE_LOGIN = /^\/api\/((auth|portal)\/login|auth\/codigo)$/;
-const RESPUESTAS_DE_FALLO = new Set([401, 423, 429]);
-
 // Primer middleware de la app (después de trust proxy): corta a las IPs bloqueadas y a lo
-// que trae un ataque en la URL o el User-Agent, y cuenta ráfagas e ingresos fallidos.
+// que trae un ataque en la URL o el User-Agent, y cuenta ráfagas. Los ingresos fallidos no
+// se cuentan acá (ver el comentario del principio).
 export async function defensaIp(req, res, next) {
   if (!config.defensa.activa) return next();
   const ip = ipDe(req);
@@ -360,15 +360,6 @@ export async function defensaIp(req, res, next) {
 
   if (req.path.startsWith('/api') && contar(`rafaga:${ip}`, LIMITES.rafaga.ventanaMs) > LIMITES.rafaga.cantidad) {
     return rechazar(req, res, ip, 'rafaga');
-  }
-
-  if (req.method === 'POST' && RUTAS_DE_LOGIN.test(req.path)) {
-    res.on('finish', () => {
-      if (!RESPUESTAS_DE_FALLO.has(res.statusCode)) return;
-      if (contar(`login:${ip}`, LIMITES.fuerza_bruta.ventanaMs) >= LIMITES.fuerza_bruta.cantidad) {
-        bloquearIp(ip, 'fuerza_bruta', { detalle: `${LIMITES.fuerza_bruta.cantidad} ingresos fallidos en 10 min`, metodo: req.method, ruta: req.path, userAgent: req.get('user-agent') }).catch(() => {});
-      }
-    });
   }
   next();
 }
