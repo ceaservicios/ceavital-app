@@ -3,6 +3,7 @@ import { ApiError } from '../utils/api-error.js';
 import { existeClienteActivo } from './clientes-empresa.service.js';
 import { stockDisponible } from './reservas.service.js';
 import { obtenerVentaConItems, registrarVentaEnTransaccion } from './ventas.service.js';
+import { armarLinea, COLUMNAS_PRESENTACION, juntarLineas, validarPresentacion } from './presentacion.js';
 
 // Pedidos de clientes-empresa (B2B Fase 2). Los arma el cliente desde su
 // portal; el negocio (Admin + Encargado) los aprueba o rechaza.
@@ -27,35 +28,40 @@ function textoOpcional(valor, campo) {
   return limpio || null;
 }
 
-// Junta las líneas repetidas de un mismo producto en una sola, así la validación
-// de stock compara contra la cantidad total pedida de ese producto.
+// Junta las líneas repetidas de un mismo producto y presentación (unidad o pack) en
+// una sola; la validación de stock suma después las unidades de todo el producto.
 function validarItems(items) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new ApiError(400, 'El pedido tiene que tener al menos un producto');
   }
   if (items.length > MAX_ITEMS) throw new ApiError(400, `Un pedido no puede tener más de ${MAX_ITEMS} líneas`);
 
-  const porProducto = new Map();
-  items.forEach((item, i) => {
-    const productoId = Number(item?.producto_id);
-    const cantidad = Number(item?.cantidad);
-    if (!Number.isInteger(productoId) || productoId <= 0) throw new ApiError(400, `items[${i}].producto_id inválido`);
-    if (!Number.isInteger(cantidad) || cantidad < 1) {
-      throw new ApiError(400, `items[${i}].cantidad tiene que ser un número entero mayor a 0`);
-    }
-    porProducto.set(productoId, (porProducto.get(productoId) ?? 0) + cantidad);
-  });
+  const lineas = juntarLineas(
+    items.map((item, i) => {
+      const productoId = Number(item?.producto_id);
+      const cantidad = Number(item?.cantidad);
+      if (!Number.isInteger(productoId) || productoId <= 0) throw new ApiError(400, `items[${i}].producto_id inválido`);
+      if (!Number.isInteger(cantidad) || cantidad < 1) {
+        throw new ApiError(400, `items[${i}].cantidad tiene que ser un número entero mayor a 0`);
+      }
+      return { producto_id: productoId, cantidad, presentacion: validarPresentacion(item?.presentacion, `items[${i}].presentacion`) };
+    })
+  );
 
-  for (const cantidad of porProducto.values()) {
+  for (const { cantidad } of lineas) {
     if (cantidad > MAX_CANTIDAD) throw new ApiError(400, `La cantidad de un producto no puede superar ${MAX_CANTIDAD}`);
   }
-  return [...porProducto.entries()].map(([producto_id, cantidad]) => ({ producto_id, cantidad }));
+  return lineas;
 }
 
+// cantidad es SIEMPRE en unidades (reserva stock); cantidad_presentacion es la que eligió
+// el cliente (unidades, o packs si la línea es por pack).
 function itemsDe(pedidoId) {
   return db
     .prepare(
-      `SELECT i.id, i.producto_id, p.nombre AS producto_nombre, i.cantidad, i.precio_unitario, i.subtotal
+      `SELECT i.id, i.producto_id, p.nombre AS producto_nombre, i.cantidad, i.precio_unitario, i.subtotal,
+              i.pack_nombre, i.pack_unidades, i.precio_cantidad_desde,
+              CASE WHEN i.pack_unidades IS NULL THEN i.cantidad ELSE i.cantidad / i.pack_unidades END AS cantidad_presentacion
        FROM pedido_cliente_items i
        JOIN productos p ON p.id = i.producto_id
        WHERE i.pedido_id = ?
@@ -115,13 +121,22 @@ export async function aprobarPedido(id, { usuarioId }) {
       {
         medio_pago: 'cta_cte',
         cliente_empresa_id: pedido.cliente_empresa_id,
-        items: items.map(({ producto_id, cantidad }) => ({ producto_id, cantidad })),
+        items: [],
       },
       {
         usuarioId,
         pedidoId: id,
-        // El cliente paga el precio que vio al pedir, aunque haya cambiado desde entonces.
-        preciosCongelados: new Map(items.map((i) => [i.producto_id, i.precio_unitario])),
+        // El cliente paga el precio que vio al pedir (y con el pack que vio), aunque el
+        // producto haya cambiado desde entonces. Las unidades son las que quedaron reservadas.
+        lineasCongeladas: items.map((i) => ({
+          producto_id: i.producto_id,
+          unidades: i.cantidad,
+          precio_unitario: i.precio_unitario,
+          subtotal: i.subtotal,
+          pack_nombre: i.pack_nombre,
+          pack_unidades: i.pack_unidades,
+          precio_cantidad_desde: i.precio_cantidad_desde,
+        })),
       }
     );
 
@@ -183,20 +198,31 @@ export async function crearPedidoDelCliente(clienteId, { items, observaciones })
 
     let total = 0;
     const armadas = [];
-    for (const { producto_id, cantidad } of lineas) {
-      const producto = await db
-        .prepare('SELECT id, nombre, precio_venta FROM productos WHERE id = ? AND eliminado_en IS NULL')
-        .get(producto_id);
-      if (!producto) throw new ApiError(404, `El producto ${producto_id} ya no está disponible`);
-
-      const disponible = await stockDisponible(producto_id);
-      if (cantidad > disponible) {
-        throw new ApiError(409, `No hay stock suficiente de "${producto.nombre}" (disponible: ${disponible})`);
+    const productos = new Map();
+    const unidadesPorProducto = new Map();
+    for (const linea of lineas) {
+      let producto = productos.get(linea.producto_id);
+      if (!producto) {
+        producto = await db
+          .prepare(`SELECT id, nombre, precio_venta, ${COLUMNAS_PRESENTACION} FROM productos WHERE id = ? AND eliminado_en IS NULL`)
+          .get(linea.producto_id);
+        if (!producto) throw new ApiError(404, `El producto ${linea.producto_id} ya no está disponible`);
+        productos.set(linea.producto_id, producto);
       }
 
-      const subtotal = cantidad * producto.precio_venta;
-      total += subtotal;
-      armadas.push({ producto_id, cantidad, precio_unitario: producto.precio_venta, subtotal });
+      const armada = armarLinea(producto, linea);
+      total += armada.subtotal;
+      armadas.push(armada);
+      unidadesPorProducto.set(linea.producto_id, (unidadesPorProducto.get(linea.producto_id) ?? 0) + armada.unidades);
+    }
+
+    // El stock se mira por producto, sumando las unidades de sus líneas (unidad y pack).
+    for (const [productoId, unidades] of unidadesPorProducto) {
+      const disponible = await stockDisponible(productoId);
+      if (unidades > disponible) {
+        const { nombre } = productos.get(productoId);
+        throw new ApiError(409, `No hay stock suficiente de "${nombre}" (disponible: ${disponible} unidades)`);
+      }
     }
 
     const { lastInsertRowid } = await db
@@ -204,11 +230,15 @@ export async function crearPedidoDelCliente(clienteId, { items, observaciones })
       .run(clienteId, total, obs);
 
     const insertarItem = db.prepare(
-      `INSERT INTO pedido_cliente_items (pedido_id, producto_id, cantidad, precio_unitario, subtotal)
-       VALUES (?, ?, ?, ?, ?)`
+      `INSERT INTO pedido_cliente_items
+         (pedido_id, producto_id, cantidad, precio_unitario, subtotal, pack_nombre, pack_unidades, precio_cantidad_desde)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     );
     for (const l of armadas) {
-      await insertarItem.run(lastInsertRowid, l.producto_id, l.cantidad, l.precio_unitario, l.subtotal);
+      await insertarItem.run(
+        lastInsertRowid, l.producto_id, l.unidades, l.precio_unitario, l.subtotal,
+        l.pack_nombre, l.pack_unidades, l.precio_cantidad_desde
+      );
     }
 
     return lastInsertRowid;
@@ -229,11 +259,15 @@ function soloParaElCliente(pedido) {
     creado_en: pedido.creado_en,
     resuelto_en: pedido.resuelto_en,
     ...(pedido.items && {
-      items: pedido.items.map(({ producto_nombre, cantidad, precio_unitario, subtotal }) => ({
-        producto_nombre,
-        cantidad,
-        precio_unitario,
-        subtotal,
+      items: pedido.items.map((i) => ({
+        producto_nombre: i.producto_nombre,
+        cantidad: i.cantidad,
+        cantidad_presentacion: i.cantidad_presentacion,
+        pack_nombre: i.pack_nombre,
+        pack_unidades: i.pack_unidades,
+        precio_cantidad_desde: i.precio_cantidad_desde,
+        precio_unitario: i.precio_unitario,
+        subtotal: i.subtotal,
       })),
     }),
   };

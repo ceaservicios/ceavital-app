@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
 import { formatearMonto } from '../utils/format.js';
+import { etiquetaPack, tienePack } from '../utils/presentacion.js';
 import './CostosPage.css';
 
 export default function CostosPage() {
@@ -84,6 +85,13 @@ export default function CostosPage() {
             <div className="costos-fila" key={p.id}>
               <span style={{ flex: 2 }} className="costos-fila-nombre">
                 {p.nombre}
+                {/* Venta por pack (2026-10-11): el costo es por unidad, el del pack es costo × unidades. */}
+                {tienePack(p) && (
+                  <span className="costos-fila-pack">
+                    {etiquetaPack(p.pack_nombre, p.pack_unidades)}: {formatearMonto(p.precio_pack)} · margen{" "}
+                    {formatearMonto(p.precio_pack - p.precio_costo * p.pack_unidades)}
+                  </span>
+                )}
               </span>
               <span style={{ flex: 1, textAlign: 'right' }} className="costos-fila-muted">
                 {formatearMonto(p.precio_costo)}

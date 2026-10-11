@@ -3,6 +3,13 @@ import { useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatearFecha, formatearMonto, fechaHoyISO } from '../utils/format.js';
+import { describirPacks, describirStock, etiquetaPack, tienePack } from '../utils/presentacion.js';
+import PresentacionCampos, {
+  faltaEnPresentacion,
+  PRESENTACION_VACIA,
+  presentacionDesdeProducto,
+  presentacionParaApi,
+} from '../components/PresentacionCampos.jsx';
 import './StockPage.css';
 
 const PUEDE_EDITAR = new Set(['admin', 'encargado']);
@@ -24,7 +31,23 @@ const PRODUCTO_VACIO = {
 // ("Ingreso de Nuevo Lote" -- pensado para reponer stock de un producto YA
 // existente), cargar el primer lote. Cantidad vacía = producto creado sin
 // stock todavía, sigue siendo válido.
-const LOTE_INICIAL_VACIO = { cantidad: '', fecha_ingreso: '', fecha_vencimiento: '' };
+const LOTE_INICIAL_VACIO = { cantidad: '', en_packs: false, fecha_ingreso: '', fecha_vencimiento: '' };
+const LOTE_NUEVO_VACIO = () => ({ cantidad: '', en_packs: false, fecha_ingreso: fechaHoyISO(), fecha_vencimiento: '' });
+
+// Selector "Unidades / Packs" del ingreso de mercadería (2026-10-11): en packs, el servidor
+// guarda cantidad × unidades del pack.
+function SelectorEnPacks({ enPacks, onChange, packNombre }) {
+  return (
+    <div className="stock-en-packs" role="group" aria-label="Cargar en">
+      <button type="button" className={!enPacks ? 'activo' : ''} onClick={() => onChange(false)}>
+        Unidades
+      </button>
+      <button type="button" className={enPacks ? 'activo' : ''} onClick={() => onChange(true)}>
+        {packNombre || 'Packs'}
+      </button>
+    </div>
+  );
+}
 
 export default function StockPage() {
   const { usuario } = useAuth();
@@ -45,7 +68,9 @@ export default function StockPage() {
   const [edicion, setEdicion] = useState(null); // copia editable del detalle
   const [nuevoProducto, setNuevoProducto] = useState(PRODUCTO_VACIO);
   const [loteInicial, setLoteInicial] = useState(LOTE_INICIAL_VACIO);
-  const [nuevoLote, setNuevoLote] = useState({ cantidad: '', fecha_ingreso: fechaHoyISO(), fecha_vencimiento: '' });
+  const [nuevoLote, setNuevoLote] = useState(LOTE_NUEVO_VACIO);
+  const [presNuevo, setPresNuevo] = useState(PRESENTACION_VACIA);
+  const [presEdicion, setPresEdicion] = useState(PRESENTACION_VACIA);
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [panelError, setPanelError] = useState(null);
@@ -60,6 +85,7 @@ export default function StockPage() {
   const guardandoRef = useRef(false);
 
   const mapaProveedores = useMemo(() => new Map(proveedores.map((p) => [p.id, p.nombre])), [proveedores]);
+  const nombreUnidad = (id) => unidadesMedida.find((u) => String(u.id) === String(id))?.nombre?.toLowerCase() || 'unidad';
 
   async function cargarProductos() {
     setCargando(true);
@@ -108,7 +134,10 @@ export default function StockPage() {
     const texto = busqueda.trim().toLowerCase();
     if (!texto) return productos;
     return productos.filter(
-      (p) => p.nombre.toLowerCase().includes(texto) || (p.codigo_barras ?? '').toLowerCase().includes(texto)
+      (p) =>
+        p.nombre.toLowerCase().includes(texto) ||
+        (p.codigo_barras ?? '').toLowerCase().includes(texto) ||
+        (p.codigo_barras_pack ?? '').toLowerCase().includes(texto)
     );
   }, [productos, busqueda]);
 
@@ -139,7 +168,8 @@ export default function StockPage() {
         stock_minimo: data.stock_minimo,
         dias_aviso_vencimiento: data.dias_aviso_vencimiento ?? '',
       });
-      setNuevoLote({ cantidad: '', fecha_ingreso: fechaHoyISO(), fecha_vencimiento: '' });
+      setPresEdicion(presentacionDesdeProducto(data));
+      setNuevoLote(LOTE_NUEVO_VACIO());
     } catch (err) {
       setPanelError(err instanceof ApiError ? err.message : 'No se pudo cargar el producto.');
     }
@@ -149,6 +179,7 @@ export default function StockPage() {
     setPanel('nuevo-producto');
     setNuevoProducto(PRODUCTO_VACIO);
     setLoteInicial({ ...LOTE_INICIAL_VACIO, fecha_ingreso: fechaHoyISO() });
+    setPresNuevo(PRESENTACION_VACIA);
     setPanelError(null);
     setPanelExito(null);
   }
@@ -166,8 +197,12 @@ export default function StockPage() {
     guardandoRef.current = true;
     setGuardando(true);
     setPanelError(null);
-    if (esAdmin && (edicion.precio_costo === '' || edicion.precio_venta === '')) {
-      setPanelError('Completá el precio de costo y el de venta.');
+    const faltaEdicion =
+      esAdmin && (edicion.precio_costo === '' || edicion.precio_venta === '')
+        ? 'Completá el precio de costo y el de venta.'
+        : esAdmin && faltaEnPresentacion(presEdicion);
+    if (faltaEdicion) {
+      setPanelError(faltaEdicion);
       guardandoRef.current = false;
       setGuardando(false);
       return;
@@ -188,6 +223,8 @@ export default function StockPage() {
       if (esAdmin) {
         payload.precio_costo = Number(edicion.precio_costo);
         payload.precio_venta = Number(edicion.precio_venta);
+        // El pack y el precio por cantidad también son precios: solo el Admin.
+        Object.assign(payload, presentacionParaApi(presEdicion));
       }
 
       const actualizado = await api.patch(`/productos/${detalle.id}`, payload);
@@ -227,8 +264,12 @@ export default function StockPage() {
     setGuardando(true);
     setPanelError(null);
     // Un precio en blanco no se manda (Number('') es 0 y quedaba guardado como $0).
-    if (nuevoProducto.precio_costo === '' || nuevoProducto.precio_venta === '') {
-      setPanelError('Completá el precio de costo y el de venta.');
+    const faltaNuevo =
+      nuevoProducto.precio_costo === '' || nuevoProducto.precio_venta === ''
+        ? 'Completá el precio de costo y el de venta.'
+        : faltaEnPresentacion(presNuevo);
+    if (faltaNuevo) {
+      setPanelError(faltaNuevo);
       guardandoRef.current = false;
       setGuardando(false);
       return;
@@ -245,10 +286,12 @@ export default function StockPage() {
         stock_minimo: Number(nuevoProducto.stock_minimo || 0),
         dias_aviso_vencimiento:
           nuevoProducto.dias_aviso_vencimiento === '' ? null : Number(nuevoProducto.dias_aviso_vencimiento),
+        ...presentacionParaApi(presNuevo),
       };
       if (loteInicial.cantidad) {
         payload.lote_inicial = {
           cantidad: Number(loteInicial.cantidad),
+          en_packs: presNuevo.pack.activo && loteInicial.en_packs,
           fecha_ingreso: loteInicial.fecha_ingreso || fechaHoyISO(),
           fecha_vencimiento: loteInicial.fecha_vencimiento || null,
         };
@@ -273,10 +316,11 @@ export default function StockPage() {
     try {
       await api.post(`/productos/${detalle.id}/lotes`, {
         cantidad: Number(nuevoLote.cantidad),
+        en_packs: tienePack(detalle) && nuevoLote.en_packs,
         fecha_ingreso: nuevoLote.fecha_ingreso,
         fecha_vencimiento: nuevoLote.fecha_vencimiento || null,
       });
-      setNuevoLote({ cantidad: '', fecha_ingreso: fechaHoyISO(), fecha_vencimiento: '' });
+      setNuevoLote(LOTE_NUEVO_VACIO());
       setPanelExito('Lote registrado.');
       abrirDetalle(detalle.id);
       cargarProductos();
@@ -378,6 +422,7 @@ export default function StockPage() {
                     className={p.alerta_stock_bajo ? 'stock-valor-alerta' : ''}
                   >
                     {p.stock_total}
+                    {describirPacks(p.stock_total, p) && <span className="stock-fila-packs">{describirPacks(p.stock_total, p)}</span>}
                   </span>
                   <span style={{ flex: 1, textAlign: 'right', paddingRight: 20 }}>{formatearMonto(p.precio_venta)}</span>
                   <span style={{ flex: 1.4 }} className="stock-fila-muted">
@@ -479,6 +524,13 @@ export default function StockPage() {
                   />
                 </div>
               </div>
+              <span className="stock-hint">El stock y los precios van por {nombreUnidad(nuevoProducto.unidad_medida_id)}.</span>
+              <PresentacionCampos
+                valor={presNuevo}
+                onChange={setPresNuevo}
+                editable
+                unidadNombre={nombreUnidad(nuevoProducto.unidad_medida_id)}
+              />
               <div className="field">
                 <label>Proveedor</label>
                 <select
@@ -516,8 +568,19 @@ export default function StockPage() {
 
               <div className="stock-lote-inicial">
                 <span className="stock-section-label">Lote inicial (opcional)</span>
+                {presNuevo.pack.activo && Number(presNuevo.pack.unidades) >= 2 && (
+                  <SelectorEnPacks
+                    enPacks={loteInicial.en_packs}
+                    packNombre={presNuevo.pack.nombre.trim()}
+                    onChange={(v) => setLoteInicial({ ...loteInicial, en_packs: v })}
+                  />
+                )}
                 <div className="field">
-                  <label>Cantidad</label>
+                  <label>
+                    {presNuevo.pack.activo && loteInicial.en_packs
+                      ? `Cantidad (en ${etiquetaPack(presNuevo.pack.nombre.trim() || 'Pack', presNuevo.pack.unidades)})`
+                      : 'Cantidad (unidades)'}
+                  </label>
                   <input
                     type="number"
                     min="0"
@@ -666,6 +729,14 @@ export default function StockPage() {
                   )}
                 </div>
               </div>
+              {(esAdmin || tienePack(detalle) || detalle.precio_cantidad_desde != null) && (
+                <PresentacionCampos
+                  valor={presEdicion}
+                  onChange={setPresEdicion}
+                  editable={esAdmin}
+                  unidadNombre={detalle.unidad_medida}
+                />
+              )}
               <div className="field">
                 <label>Proveedor</label>
                 {puedeEditar ? (
@@ -720,7 +791,7 @@ export default function StockPage() {
                 {detalle.lotes.length === 0 && <div className="stock-lotes-vacio">Sin lotes cargados.</div>}
                 {detalle.lotes.map((lote) => (
                   <div className="stock-lote-row" key={lote.id}>
-                    <span className="stock-lote-cantidad">{lote.cantidad}</span>
+                    <span className="stock-lote-cantidad">{describirStock(lote.cantidad, detalle)}</span>
                     <span className="stock-lote-fechas">
                       Ingresó {formatearFecha(lote.fecha_ingreso)}
                       {lote.fecha_vencimiento && ` · Vence ${formatearFecha(lote.fecha_vencimiento)}`}
@@ -742,8 +813,19 @@ export default function StockPage() {
               {puedeEditar && (
                 <form className="stock-nuevo-lote" onSubmit={agregarLote}>
                   <span className="stock-section-label">Ingreso de Nuevo Lote</span>
+                  {tienePack(detalle) && (
+                    <SelectorEnPacks
+                      enPacks={nuevoLote.en_packs}
+                      packNombre={detalle.pack_nombre}
+                      onChange={(v) => setNuevoLote({ ...nuevoLote, en_packs: v })}
+                    />
+                  )}
                   <div className="field">
-                    <label>Cantidad que ingresa</label>
+                    <label>
+                      {tienePack(detalle) && nuevoLote.en_packs
+                        ? `Cantidad que ingresa (en ${etiquetaPack(detalle.pack_nombre, detalle.pack_unidades)})`
+                        : 'Cantidad que ingresa (unidades)'}
+                    </label>
                     <input
                       required
                       type="number"

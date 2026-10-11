@@ -90,13 +90,65 @@ async function obtenerUnidadMedidaActiva(unidadMedidaId) {
 }
 
 // El código de barras no distingue mayúsculas ("abc123" = "ABC123"; índice único
-// sobre LOWER(codigo_barras), migración 009).
+// sobre LOWER(codigo_barras), migración 009). Desde la venta por pack (migración 018)
+// un código no puede repetirse ni como código de unidad ni como código de pack de
+// ningún producto activo: al escanearlo en Caja tiene que haber una sola respuesta.
 async function verificarCodigoBarrasLibre(codigoBarras, excluirProductoId = null) {
   if (!codigoBarras) return;
   const existente = await db
-    .prepare(`SELECT id FROM productos WHERE LOWER(codigo_barras) = LOWER(?) AND eliminado_en IS NULL AND id != ?`)
-    .get(codigoBarras, excluirProductoId ?? -1);
-  if (existente) throw new ApiError(409, 'Ya existe un producto activo con ese código de barras');
+    .prepare(
+      `SELECT id FROM productos
+       WHERE (LOWER(codigo_barras) = LOWER(?) OR LOWER(codigo_barras_pack) = LOWER(?))
+         AND eliminado_en IS NULL AND id != ?`
+    )
+    .get(codigoBarras, codigoBarras, excluirProductoId ?? -1);
+  if (existente) throw new ApiError(409, `Ya existe un producto activo con el código de barras "${codigoBarras}"`);
+}
+
+function verificarCodigosDistintos(codigoUnidad, codigoPack) {
+  if (codigoUnidad && codigoPack && codigoUnidad.toLowerCase() === codigoPack.toLowerCase()) {
+    throw new ApiError(400, 'El código de barras del pack tiene que ser distinto al de la unidad');
+  }
+}
+
+// Venta por pack (2026-10-11): `pack` = null (no se vende por pack) o
+// { nombre, unidades, precio, codigo_barras }. Todo junto o nada (CHECK de la migración 018).
+function validarPack(pack) {
+  if (pack === null) {
+    return { pack_nombre: null, pack_unidades: null, precio_pack: null, codigo_barras_pack: null };
+  }
+  if (typeof pack !== 'object' || Array.isArray(pack)) throw new ApiError(400, 'pack tiene que ser un objeto o null');
+  const unidades = validarEntero(pack.unidades, 'Unidades que trae el pack', { minimo: 2 });
+  if (unidades > 100000) throw new ApiError(400, 'Unidades que trae el pack no puede superar 100000');
+  return {
+    pack_nombre: validarString(pack.nombre, 'Nombre del pack', { maxLength: 20 }),
+    pack_unidades: unidades,
+    precio_pack: validarEntero(pack.precio, 'Precio del pack', { minimo: 0 }),
+    codigo_barras_pack: validarString(pack.codigo_barras, 'Código de barras del pack', { requerido: false, maxLength: MAX_CODIGO_BARRAS }),
+  };
+}
+
+// Precio por cantidad: null o { desde, precio } (desde N unidades de este producto, toda la
+// línea sale a `precio`). Solo para la venta por unidad.
+function validarPrecioCantidad(valor) {
+  if (valor === null) return { precio_cantidad_desde: null, precio_cantidad: null };
+  if (typeof valor !== 'object' || Array.isArray(valor)) throw new ApiError(400, 'precio_cantidad tiene que ser un objeto o null');
+  const desde = validarEntero(valor.desde, 'A partir de cuántas', { minimo: 2 });
+  if (desde > 100000) throw new ApiError(400, 'A partir de cuántas no puede superar 100000');
+  return {
+    precio_cantidad_desde: desde,
+    precio_cantidad: validarEntero(valor.precio, 'Precio por cantidad', { minimo: 0 }),
+  };
+}
+
+// Cantidad de un lote: en unidades o, con `en_packs`, en packs del producto (se guarda en
+// unidades). Ingreso de mercadería en packs, decisión del usuario del 2026-10-11.
+function unidadesDelLote(cantidad, enPacks, packUnidades) {
+  if (enPacks !== true) return cantidad;
+  if (!packUnidades) throw new ApiError(400, 'Este producto no tiene pack: cargá la cantidad en unidades');
+  const unidades = cantidad * packUnidades;
+  if (unidades > 1_000_000) throw new ApiError(400, 'La cantidad no puede superar 1.000.000 de unidades');
+  return unidades;
 }
 
 async function obtenerProductoActivo(productoId) {
@@ -127,6 +179,8 @@ const SELECT_PRODUCTOS_CON_STOCK = `
     p.eliminado_en, p.creado_en, p.actualizado_en,
     p.categoria_id, c.nombre AS categoria,
     p.unidad_medida_id, u.nombre AS unidad_medida,
+    p.pack_nombre, p.pack_unidades, p.precio_pack, p.codigo_barras_pack,
+    p.precio_cantidad_desde, p.precio_cantidad,
     COALESCE(SUM(l.cantidad), 0) AS stock_total,
     COALESCE(SUM(CASE WHEN l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= ${SQL_HOY_NEGOCIO} THEN l.cantidad ELSE 0 END), 0) AS stock_vendible,
     COALESCE((
@@ -145,17 +199,28 @@ export async function listarProductos({ rol, buscar, codigoBarras }) {
   const params = [];
 
   if (codigoBarras) {
-    condiciones.push('LOWER(p.codigo_barras) = LOWER(?)');
-    params.push(codigoBarras);
+    condiciones.push('(LOWER(p.codigo_barras) = LOWER(?) OR LOWER(p.codigo_barras_pack) = LOWER(?))');
+    params.push(codigoBarras, codigoBarras);
   } else if (buscar) {
-    condiciones.push('(p.nombre ILIKE ? OR p.codigo_barras ILIKE ?)');
-    params.push(`%${buscar}%`, `%${buscar}%`);
+    condiciones.push('(p.nombre ILIKE ? OR p.codigo_barras ILIKE ? OR p.codigo_barras_pack ILIKE ?)');
+    params.push(`%${buscar}%`, `%${buscar}%`, `%${buscar}%`);
   }
 
   const sql = `${SELECT_PRODUCTOS_CON_STOCK} WHERE ${condiciones.join(' AND ')} GROUP BY p.id, c.id, u.id ORDER BY LOWER(p.nombre)`;
   const productos = await db.prepare(sql).all(...params);
 
-  return productos.map((p) => ocultarCosto(conAlerta(p), rol));
+  // coincide_codigo: si lo buscado es exactamente el código de la unidad o el del pack.
+  // Caja lo usa al escanear: el código del pack agrega un pack sin preguntar.
+  const texto = (codigoBarras || buscar || '').trim().toLowerCase();
+  return productos.map((p) => ({
+    ...ocultarCosto(conAlerta(p), rol),
+    coincide_codigo:
+      texto && p.codigo_barras?.toLowerCase() === texto
+        ? 'unidad'
+        : texto && p.codigo_barras_pack?.toLowerCase() === texto
+          ? 'pack'
+          : null,
+  }));
 }
 
 export async function obtenerProducto(id, { rol }) {
@@ -197,6 +262,11 @@ export async function crearProducto(datos, { rol }) {
     datos.dias_aviso_vencimiento != null
       ? validarEntero(datos.dias_aviso_vencimiento, 'dias_aviso_vencimiento', { minimo: 0 })
       : null;
+  // Pack y precio por cantidad (opcionales): el Encargado también los carga al crear,
+  // igual que el precio de venta inicial.
+  const pack = validarPack(datos.pack ?? null);
+  const precioCantidad = validarPrecioCantidad(datos.precio_cantidad ?? null);
+  verificarCodigosDistintos(codigoBarras, pack.codigo_barras_pack);
 
   // Lote inicial opcional, directo en la misma alta (corrección 2026-09-15:
   // antes había que crear el producto y recién en un segundo paso separado
@@ -215,7 +285,11 @@ export async function crearProducto(datos, { rol }) {
     const sinLote = cantidadCargada == null || cantidadCargada === '' || Number(cantidadCargada) === 0;
     if (!sinLote) {
       loteInicial = {
-        cantidad: validarEntero(datos.lote_inicial.cantidad, 'lote_inicial.cantidad', { minimo: 1 }),
+        cantidad: unidadesDelLote(
+          validarEntero(datos.lote_inicial.cantidad, 'lote_inicial.cantidad', { minimo: 1 }),
+          datos.lote_inicial.en_packs,
+          pack.pack_unidades
+        ),
         fecha_ingreso:
           datos.lote_inicial.fecha_ingreso != null
             ? validarFecha(datos.lote_inicial.fecha_ingreso, 'lote_inicial.fecha_ingreso')
@@ -233,17 +307,23 @@ export async function crearProducto(datos, { rol }) {
   const productoId = await db.transaction(async () => {
     await verificarProveedorActivo(proveedorId);
     await verificarCodigoBarrasLibre(codigoBarras);
+    await verificarCodigoBarrasLibre(pack.codigo_barras_pack);
     await obtenerCategoriaActiva(categoriaId);
     await obtenerUnidadMedidaActiva(unidadMedidaId);
 
     const producto = await db
       .prepare(
         `INSERT INTO productos
-           (nombre, codigo_barras, precio_costo, precio_venta, categoria_id, unidad_medida_id, proveedor_id, stock_minimo, dias_aviso_vencimiento)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           (nombre, codigo_barras, precio_costo, precio_venta, categoria_id, unidad_medida_id, proveedor_id, stock_minimo, dias_aviso_vencimiento,
+            pack_nombre, pack_unidades, precio_pack, codigo_barras_pack, precio_cantidad_desde, precio_cantidad)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING id`
       )
-      .get(nombre, codigoBarras, precioCosto, precioVenta, categoriaId, unidadMedidaId, proveedorId, stockMinimo, diasAviso);
+      .get(
+        nombre, codigoBarras, precioCosto, precioVenta, categoriaId, unidadMedidaId, proveedorId, stockMinimo, diasAviso,
+        pack.pack_nombre, pack.pack_unidades, pack.precio_pack, pack.codigo_barras_pack,
+        precioCantidad.precio_cantidad_desde, precioCantidad.precio_cantidad
+      );
 
     if (loteInicial) {
       await db
@@ -259,7 +339,9 @@ export async function crearProducto(datos, { rol }) {
 export async function editarProducto(id, datos, { rol }) {
   // "Precios (costo/venta) -- Editar" es exclusivo del Admin (distinto de
   // "Stock -- Editar: alta, lotes, ajustes", que incluye tambien al Encargado).
-  const tocaPrecios = CAMPOS_PRECIO.some((c) => datos[c] !== undefined);
+  // El pack y el precio por cantidad son precios: también solo el Admin (2026-10-11).
+  const tocaPrecios = CAMPOS_PRECIO.some((c) => datos[c] !== undefined)
+    || datos.pack !== undefined || datos.precio_cantidad !== undefined;
 
   await db.transaction(async () => {
     await obtenerProductoActivo(id);
@@ -302,6 +384,20 @@ export async function editarProducto(id, datos, { rol }) {
     if (datos.precio_venta !== undefined) {
       actualizaciones.precio_venta = validarEntero(datos.precio_venta, 'precio_venta', { minimo: 0 });
     }
+    if (datos.pack !== undefined) {
+      Object.assign(actualizaciones, validarPack(datos.pack));
+      await verificarCodigoBarrasLibre(actualizaciones.codigo_barras_pack, id);
+    }
+    if (datos.precio_cantidad !== undefined) {
+      Object.assign(actualizaciones, validarPrecioCantidad(datos.precio_cantidad));
+    }
+    if (datos.codigo_barras !== undefined || datos.pack !== undefined) {
+      const actual = await db.prepare('SELECT codigo_barras, codigo_barras_pack FROM productos WHERE id = ?').get(id);
+      verificarCodigosDistintos(
+        'codigo_barras' in actualizaciones ? actualizaciones.codigo_barras : actual.codigo_barras,
+        'codigo_barras_pack' in actualizaciones ? actualizaciones.codigo_barras_pack : actual.codigo_barras_pack
+      );
+    }
 
     const claves = Object.keys(actualizaciones);
     if (claves.length === 0) throw new ApiError(400, 'No se envió ningún campo para actualizar');
@@ -322,8 +418,9 @@ export async function eliminarProducto(id) {
   await db.prepare('UPDATE productos SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
 }
 
+// `en_packs: true`: la cantidad viene en packs del producto y se guarda en unidades.
 export async function crearLote(productoId, datos) {
-  const cantidad = validarEntero(datos.cantidad, 'cantidad', { minimo: 1 });
+  const cantidadCargada = validarEntero(datos.cantidad, 'cantidad', { minimo: 1 });
   const fechaIngreso =
     datos.fecha_ingreso !== undefined && datos.fecha_ingreso !== null
       ? validarFecha(datos.fecha_ingreso, 'fecha_ingreso')
@@ -332,6 +429,8 @@ export async function crearLote(productoId, datos) {
 
   return db.transaction(async () => {
     await obtenerProductoActivo(productoId);
+    const { pack_unidades: packUnidades } = await db.prepare('SELECT pack_unidades FROM productos WHERE id = ?').get(productoId);
+    const cantidad = unidadesDelLote(cantidadCargada, datos.en_packs, packUnidades);
     return db
       .prepare(
         `INSERT INTO lotes (producto_id, cantidad, fecha_ingreso, fecha_vencimiento) VALUES (?, ?, ?, ?) RETURNING *`

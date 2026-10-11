@@ -1,4 +1,5 @@
 import { formatearMonto } from '../utils/format.js';
+import { describirCantidadLinea } from '../utils/presentacion.js';
 
 export const ETIQUETA_ESTADO = {
   pendiente: 'Pendiente',
@@ -11,7 +12,9 @@ export function EstadoPedido({ estado }) {
   return <span className={`pedido-estado pedido-estado-${estado}`}>{ETIQUETA_ESTADO[estado] ?? estado}</span>;
 }
 
-// Tabla de líneas de un pedido, igual para el negocio y para el cliente.
+// Tabla de líneas de un pedido, igual para el negocio y para el cliente. Con la venta por
+// pack (2026-10-11), la cantidad se muestra como se pidió ("2 Pack x 24") y el precio es el
+// de esa presentación.
 export function ItemsPedido({ items, total }) {
   return (
     <table className="pedido-items">
@@ -26,8 +29,13 @@ export function ItemsPedido({ items, total }) {
       <tbody>
         {items.map((i, idx) => (
           <tr key={i.id ?? idx}>
-            <td>{i.producto_nombre}</td>
-            <td className="num">{i.cantidad}</td>
+            <td>
+              {i.producto_nombre}
+              {i.precio_cantidad_desde && (
+                <span className="pedido-cantidad-pack">Precio por cantidad (desde {i.precio_cantidad_desde})</span>
+              )}
+            </td>
+            <td className="num">{describirCantidadLinea(i)}</td>
             <td className="num">{formatearMonto(i.precio_unitario)}</td>
             <td className="num">{formatearMonto(i.subtotal)}</td>
           </tr>

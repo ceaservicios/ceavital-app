@@ -94,3 +94,11 @@
   background: #dde4f1;
   color: #22428c;
 }
+
+/* Venta por pack (2026-10-11): precio y margen del pack debajo del nombre. */
+.costos-fila-pack {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}

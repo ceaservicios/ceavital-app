@@ -451,3 +451,54 @@
 .caja-cart-list > .caja-cart-empty {
   min-width: 0;
 }
+
+/* Venta por pack y precio por cantidad (2026-10-11). Un producto con pack muestra en la
+   búsqueda dos botones, Unidad y Pack, cada uno con su precio. */
+.caja-search-item-pack {
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  cursor: default;
+}
+.caja-search-opciones {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.caja-search-opciones button {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.caja-search-opciones button:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.caja-search-opciones strong {
+  color: var(--text-primary);
+}
+.caja-cart-presentacion {
+  align-self: flex-start;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--color-primary);
+  background: rgba(14, 75, 56, 0.08);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+}
+.caja-cart-promo {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+.caja-cart-promo-hint {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}

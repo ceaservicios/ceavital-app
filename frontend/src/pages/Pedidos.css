@@ -400,3 +400,55 @@
     text-align: center;
   }
 }
+
+/* Venta por pack y precio por cantidad (2026-10-11): un producto con pack muestra una fila
+   por presentación (unidad y pack), cada una con su precio y su cantidad. */
+.pedido-prod-promo {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+.pedido-prod-pack {
+  align-items: flex-start;
+}
+.pedido-opciones {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.pedido-opcion {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.pedido-opcion-nombre {
+  width: 150px;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.pedido-cantidad-pack {
+  display: block;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+@media (max-width: 700px) {
+  .pedido-opciones {
+    flex: 1 1 100%;
+  }
+  .pedido-opcion {
+    gap: 10px;
+  }
+  .pedido-opcion-nombre {
+    width: auto;
+    flex: 1;
+  }
+  .pedido-opcion .pedido-prod-precio {
+    width: auto;
+    flex: none;
+  }
+}

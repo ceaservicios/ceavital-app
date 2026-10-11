@@ -312,3 +312,60 @@
   gap: 8px;
   justify-content: center;
 }
+
+/* Venta por pack y precio por cantidad (2026-10-11): casillas del producto y selector
+   "Unidades / Packs" del ingreso de mercadería. */
+.stock-presentacion {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+}
+.stock-presentacion-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.stock-presentacion-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+}
+.stock-presentacion .field input {
+  background: var(--bg-surface);
+}
+.stock-en-packs {
+  display: inline-flex;
+  align-self: flex-start;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.stock-en-packs button {
+  border: none;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 16px;
+  cursor: pointer;
+}
+.stock-en-packs button.activo {
+  background: var(--color-primary);
+  color: #fff;
+}
+.stock-fila-packs {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}

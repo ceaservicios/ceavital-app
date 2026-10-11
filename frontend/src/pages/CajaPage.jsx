@@ -2,6 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatearMonto, fechaHoyISO } from '../utils/format.js';
+import {
+  etiquetaPack,
+  faltanParaPrecioCantidad,
+  precioLinea,
+  tienePack,
+  tienePrecioCantidad,
+  unidadesDeLinea,
+} from '../utils/presentacion.js';
 import './CajaPage.css';
 
 const MEDIOS_PAGO = [
@@ -230,20 +238,24 @@ export default function CajaPage() {
     return () => clearTimeout(timeoutId);
   }, [query]);
 
-  function agregarAlCarrito(producto) {
+  // Venta por pack (2026-10-11): cada línea del carrito es un producto en una presentación
+  // ('unidad' o 'pack'); el mismo producto puede ir en dos líneas. `producto` guarda los
+  // precios y el pack para calcular el precio de la línea (el servidor decide el real).
+  function agregarAlCarrito(producto, presentacion = 'unidad') {
+    const clave = `${producto.id}:${presentacion}`;
     setCarrito((prev) => {
-      const existente = prev.find((item) => item.producto_id === producto.id);
+      const existente = prev.find((item) => item.clave === clave);
       if (existente) {
-        return prev.map((item) =>
-          item.producto_id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item
-        );
+        return prev.map((item) => (item.clave === clave ? { ...item, cantidad: item.cantidad + 1 } : item));
       }
       return [
         ...prev,
         {
+          clave,
           producto_id: producto.id,
+          presentacion,
           nombre: producto.nombre,
-          precio_venta: producto.precio_venta,
+          producto,
           stock_vendible: producto.stock_disponible, // lo que Caja puede vender: vendible menos lo reservado por pedidos de clientes
           cantidad: 1,
         },
@@ -255,28 +267,36 @@ export default function CajaPage() {
     searchInputRef.current?.focus();
   }
 
+  // Enter con un solo resultado (el lector de código de barras tipea el código + Enter):
+  // el código del pack agrega un pack y el de la unidad, una unidad, sin preguntar. Si se
+  // buscó por nombre un producto con pack, se elige Unidad o Pack en la lista.
   function handleSearchKeyDown(e) {
-    if (e.key === 'Enter' && resultados.length === 1) {
-      e.preventDefault();
-      agregarAlCarrito(resultados[0]);
-    }
+    if (e.key !== 'Enter' || resultados.length !== 1) return;
+    e.preventDefault();
+    const [producto] = resultados;
+    if (producto.coincide_codigo === 'pack' && tienePack(producto)) agregarAlCarrito(producto, 'pack');
+    else if (producto.coincide_codigo === 'unidad' || !tienePack(producto)) agregarAlCarrito(producto, 'unidad');
   }
 
-  function cambiarCantidad(productoId, delta) {
+  function cambiarCantidad(clave, delta) {
     setCarrito((prev) =>
       prev
-        .map((item) =>
-          item.producto_id === productoId ? { ...item, cantidad: item.cantidad + delta } : item
-        )
+        .map((item) => (item.clave === clave ? { ...item, cantidad: item.cantidad + delta } : item))
         .filter((item) => item.cantidad > 0)
     );
   }
 
-  function quitarDelCarrito(productoId) {
-    setCarrito((prev) => prev.filter((item) => item.producto_id !== productoId));
+  function quitarDelCarrito(clave) {
+    setCarrito((prev) => prev.filter((item) => item.clave !== clave));
   }
 
-  const total = carrito.reduce((acc, item) => acc + item.precio_venta * item.cantidad, 0);
+  const precioDe = (item) => precioLinea(item.producto, item.cantidad, item.presentacion);
+  // Unidades pedidas de cada producto, sumando sus líneas por unidad y por pack.
+  const unidadesPorProducto = carrito.reduce((mapa, item) => {
+    const unidades = unidadesDeLinea(item.producto, item.cantidad, item.presentacion);
+    return mapa.set(item.producto_id, (mapa.get(item.producto_id) ?? 0) + unidades);
+  }, new Map());
+  const total = carrito.reduce((acc, item) => acc + precioDe(item).precio * item.cantidad, 0);
   const recibidoNumerico = Number(montoRecibido) || 0;
   const vuelto = recibidoNumerico - total;
 
@@ -290,7 +310,11 @@ export default function CajaPage() {
       const venta = await api.post('/ventas', {
         medio_pago: medioPago,
         ...(medioPago === 'cta_cte' ? { cliente_empresa_id: Number(clienteEmpresaId) } : {}),
-        items: carrito.map((item) => ({ producto_id: item.producto_id, cantidad: item.cantidad })),
+        items: carrito.map((item) => ({
+          producto_id: item.producto_id,
+          cantidad: item.cantidad,
+          presentacion: item.presentacion,
+        })),
       });
       setExito(`Venta #${venta.id} registrada por ${formatearMonto(venta.total)}.`);
       setCarrito([]);
@@ -375,17 +399,32 @@ export default function CajaPage() {
                     {errorBusqueda ? 'No se pudo conectar con el servidor. Probá de nuevo en unos segundos.' : 'Sin resultados'}
                   </div>
                 )}
-                {resultados.map((producto) => (
-                  <button
-                    type="button"
-                    key={producto.id}
-                    className="caja-search-item"
-                    onClick={() => agregarAlCarrito(producto)}
-                  >
-                    <span>{producto.nombre}</span>
-                    <span className="caja-search-item-precio">{formatearMonto(producto.precio_venta)}</span>
-                  </button>
-                ))}
+                {resultados.map((producto) =>
+                  tienePack(producto) ? (
+                    <div key={producto.id} className="caja-search-item caja-search-item-pack">
+                      <span>{producto.nombre}</span>
+                      <span className="caja-search-opciones">
+                        <button type="button" onClick={() => agregarAlCarrito(producto, 'unidad')}>
+                          Unidad <strong>{formatearMonto(producto.precio_venta)}</strong>
+                        </button>
+                        <button type="button" onClick={() => agregarAlCarrito(producto, 'pack')}>
+                          {etiquetaPack(producto.pack_nombre, producto.pack_unidades)}{' '}
+                          <strong>{formatearMonto(producto.precio_pack)}</strong>
+                        </button>
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      key={producto.id}
+                      className="caja-search-item"
+                      onClick={() => agregarAlCarrito(producto)}
+                    >
+                      <span>{producto.nombre}</span>
+                      <span className="caja-search-item-precio">{formatearMonto(producto.precio_venta)}</span>
+                    </button>
+                  )
+                )}
               </div>
             )}
           </div>
@@ -402,32 +441,49 @@ export default function CajaPage() {
                   <span style={{ flex: 1, textAlign: 'right' }}>Subtotal</span>
                   <span style={{ width: 32 }} />
                 </div>
-                {carrito.map((item) => (
-                  <div className="caja-cart-row" key={item.producto_id}>
+                {carrito.map((item) => {
+                  const { precio, aplicaPrecioCantidad } = precioDe(item);
+                  const porPack = item.presentacion === 'pack';
+                  const faltan = porPack ? 0 : faltanParaPrecioCantidad(item.producto, item.cantidad);
+                  return (
+                  <div className="caja-cart-row" key={item.clave}>
                     <span style={{ flex: 2.4 }} className="caja-cart-nombre">
                       {item.nombre}
-                      {item.cantidad > item.stock_vendible && (
-                        <span className="caja-cart-warning">Solo hay {item.stock_vendible} disponible</span>
+                      {porPack && (
+                        <span className="caja-cart-presentacion">
+                          {etiquetaPack(item.producto.pack_nombre, item.producto.pack_unidades)}
+                        </span>
+                      )}
+                      {aplicaPrecioCantidad && (
+                        <span className="caja-cart-promo">Precio por cantidad (desde {item.producto.precio_cantidad_desde})</span>
+                      )}
+                      {!porPack && !aplicaPrecioCantidad && tienePrecioCantidad(item.producto) && faltan <= 5 && (
+                        <span className="caja-cart-promo-hint">
+                          Llevando {faltan} más: {formatearMonto(item.producto.precio_cantidad)} c/u
+                        </span>
+                      )}
+                      {unidadesPorProducto.get(item.producto_id) > item.stock_vendible && (
+                        <span className="caja-cart-warning">Solo hay {item.stock_vendible} unidades disponibles</span>
                       )}
                     </span>
                     <span style={{ flex: 1.2 }} className="caja-cart-cantidad">
-                      <button type="button" onClick={() => cambiarCantidad(item.producto_id, -1)}>
+                      <button type="button" onClick={() => cambiarCantidad(item.clave, -1)}>
                         –
                       </button>
                       <span>{item.cantidad}</span>
-                      <button type="button" onClick={() => cambiarCantidad(item.producto_id, 1)}>
+                      <button type="button" onClick={() => cambiarCantidad(item.clave, 1)}>
                         +
                       </button>
                     </span>
-                    <span style={{ flex: 1, textAlign: 'right' }}>{formatearMonto(item.precio_venta)}</span>
+                    <span style={{ flex: 1, textAlign: 'right' }}>{formatearMonto(precio)}</span>
                     <span style={{ flex: 1, textAlign: 'right', fontWeight: 700 }}>
-                      {formatearMonto(item.precio_venta * item.cantidad)}
+                      {formatearMonto(precio * item.cantidad)}
                     </span>
                     <span style={{ width: 32, display: 'flex', justifyContent: 'center' }}>
                       <button
                         type="button"
                         className="caja-cart-remove"
-                        onClick={() => quitarDelCarrito(item.producto_id)}
+                        onClick={() => quitarDelCarrito(item.clave)}
                         title="Quitar"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -438,7 +494,8 @@ export default function CajaPage() {
                       </button>
                     </span>
                   </div>
-                ))}
+                  );
+                })}
               </>
             )}
           </div>

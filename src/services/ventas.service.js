@@ -4,6 +4,7 @@ import { existeClienteActivo, registrarAjustePorAnulacion, registrarCargoPorVent
 import { stockDisponible } from './reservas.service.js';
 import { sqlDiaNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
 import { mediosPagoPermitidos } from './modulos.service.js';
+import { armarLinea, COLUMNAS_PRESENTACION, juntarLineas, validarPresentacion } from './presentacion.js';
 
 // 'cta_cte' (B2B Fase 1) es distinto de 'fiado' -- 'fiado' sigue siendo la
 // venta fiada informal, sin cliente ni ledger (decisión confirmada con el
@@ -30,15 +31,20 @@ function validarItems(items) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new ApiError(400, 'items es requerido y tiene que tener al menos un producto');
   }
-  return items.map((item, i) => ({
-    producto_id: validarEntero(item?.producto_id, `items[${i}].producto_id`, { minimo: 1 }),
-    cantidad: validarEntero(item?.cantidad, `items[${i}].cantidad`, { minimo: 1 }),
-  }));
+  // presentacion: 'unidad' (por defecto) o 'pack' (venta por pack, 2026-10-11). Las líneas
+  // repetidas del mismo producto y presentación se juntan (el precio por cantidad mira el total).
+  return juntarLineas(
+    items.map((item, i) => ({
+      producto_id: validarEntero(item?.producto_id, `items[${i}].producto_id`, { minimo: 1 }),
+      cantidad: validarEntero(item?.cantidad, `items[${i}].cantidad`, { minimo: 1 }),
+      presentacion: validarPresentacion(item?.presentacion, `items[${i}].presentacion`),
+    }))
+  );
 }
 
 async function obtenerProductoActivo(productoId) {
   const producto = await db
-    .prepare('SELECT id, nombre, precio_venta FROM productos WHERE id = ? AND eliminado_en IS NULL')
+    .prepare(`SELECT id, nombre, precio_venta, ${COLUMNAS_PRESENTACION} FROM productos WHERE id = ? AND eliminado_en IS NULL`)
     .get(productoId);
   if (!producto) throw new ApiError(404, `Producto ${productoId} no encontrado`);
   return producto;
@@ -118,13 +124,29 @@ async function validarClienteEmpresa(medioPago, clienteEmpresaId) {
 // registrarVentaEnTransaccion tiene que correr DENTRO de un db.transaction()
 // de quien la llama (registrarVenta, o la aprobación de un pedido, que además
 // de la venta tiene que actualizar el pedido en la misma transacción).
+//
+// Venta por pack (2026-10-11): cada línea se arma con armarLinea (presentacion.js): las
+// unidades de stock que mueve, el precio de esa presentación (unidad, pack o precio por
+// cantidad) y la copia del pack. `lineasCongeladas`: al aprobar un pedido, las líneas tal
+// como quedaron al pedir (presentación, precio y unidades), en vez de armarlas de nuevo.
 export async function registrarVentaEnTransaccion(
   { medio_pago, items, cliente_empresa_id },
-  { usuarioId, pedidoId = null, preciosCongelados = null }
+  { usuarioId, pedidoId = null, lineasCongeladas = null }
 ) {
   const medioPago = await validarMedioPago(medio_pago);
   const clienteEmpresaId = await validarClienteEmpresa(medioPago, cliente_empresa_id);
-  const itemsValidados = validarItems(items);
+
+  const lineas = [];
+  if (lineasCongeladas) {
+    for (const linea of lineasCongeladas) {
+      lineas.push({ ...linea, producto: await obtenerProductoActivo(linea.producto_id) });
+    }
+  } else {
+    for (const item of validarItems(items)) {
+      const producto = await obtenerProductoActivo(item.producto_id);
+      lineas.push({ ...armarLinea(producto, item), producto });
+    }
+  }
 
   const ventaResult = await db
     .prepare('INSERT INTO ventas (usuario_id, medio_pago, cliente_empresa_id, total) VALUES (?, ?, ?, 0) RETURNING id')
@@ -133,16 +155,19 @@ export async function registrarVentaEnTransaccion(
 
   let total = 0;
 
-  for (const { producto_id, cantidad } of itemsValidados) {
-    const producto = await obtenerProductoActivo(producto_id);
-    const precio = preciosCongelados?.get(producto_id) ?? producto.precio_venta;
+  // Las líneas se descuentan de a una: la segunda línea del mismo producto (unidad y pack)
+  // ya ve el stock que se llevó la primera, porque los lotes se actualizan en esta transacción.
+  for (const linea of lineas) {
+    const { producto, producto_id, unidades } = linea;
 
     const disponible = await stockDisponible(producto_id, { excluirPedidoId: pedidoId });
-    if (cantidad > disponible) {
-      throw new ApiError(409, `Stock insuficiente para "${producto.nombre}" (faltan ${cantidad - disponible} unidad/es)`);
+    if (unidades > disponible) {
+      throw new ApiError(409, `Stock insuficiente para "${producto.nombre}" (faltan ${unidades - disponible} unidad/es)`);
     }
 
-    let restante = cantidad;
+    let restante = unidades;
+    let tomadas = 0;
+    let cobrado = 0;
 
     for (const lote of await lotesVendiblesFefo(producto_id)) {
       if (restante <= 0) break;
@@ -152,13 +177,23 @@ export async function registrarVentaEnTransaccion(
         .prepare('UPDATE lotes SET cantidad = cantidad - ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?')
         .run(tomar, lote.id);
 
-      const subtotal = tomar * precio;
+      // El subtotal de la línea se reparte entre los lotes en proporción a las unidades,
+      // redondeando sobre lo acumulado: la suma de las filas da siempre el subtotal exacto
+      // (un pack de $1.000 partido 1 + 2 unidades da $333 + $667). Por unidad da tomar × precio.
+      tomadas += tomar;
+      const subtotal = Math.round((linea.subtotal * tomadas) / unidades) - cobrado;
+      cobrado += subtotal;
+
       await db
         .prepare(
-          `INSERT INTO venta_items (venta_id, producto_id, lote_id, cantidad, precio_unitario, subtotal)
-           VALUES (?, ?, ?, ?, ?, ?)`
+          `INSERT INTO venta_items
+             (venta_id, producto_id, lote_id, cantidad, precio_unitario, subtotal, pack_nombre, pack_unidades, precio_cantidad_desde)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
-        .run(ventaId, producto_id, lote.id, tomar, precio, subtotal);
+        .run(
+          ventaId, producto_id, lote.id, tomar, linea.precio_unitario, subtotal,
+          linea.pack_nombre, linea.pack_unidades, linea.precio_cantidad_desde
+        );
 
       total += subtotal;
       restante -= tomar;
