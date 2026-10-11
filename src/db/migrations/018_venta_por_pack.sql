@@ -12,7 +12,7 @@ ALTER TABLE productos ADD COLUMN pack_nombre VARCHAR(20);
 ALTER TABLE productos ADD COLUMN pack_unidades INTEGER CHECK (pack_unidades BETWEEN 2 AND 100000);
 ALTER TABLE productos ADD COLUMN precio_pack BIGINT CHECK (precio_pack >= 0);
 ALTER TABLE productos ADD COLUMN codigo_barras_pack TEXT;
-ALTER TABLE productos ADD CONSTRAINT productos_pack_check CHECK (
+ALTER TABLE productos ADD CONSTRAINT productos_pack_completo_check CHECK (
   (pack_nombre IS NULL AND pack_unidades IS NULL AND precio_pack IS NULL AND codigo_barras_pack IS NULL)
   OR (pack_nombre IS NOT NULL AND pack_unidades IS NOT NULL AND precio_pack IS NOT NULL)
 );
@@ -25,7 +25,7 @@ CREATE UNIQUE INDEX idx_productos_codigo_barras_pack_activo ON productos (LOWER(
 -- sale al precio menor. Solo para la venta por unidad (no por pack). Los dos o ninguno.
 ALTER TABLE productos ADD COLUMN precio_cantidad_desde INTEGER CHECK (precio_cantidad_desde BETWEEN 2 AND 100000);
 ALTER TABLE productos ADD COLUMN precio_cantidad BIGINT CHECK (precio_cantidad >= 0);
-ALTER TABLE productos ADD CONSTRAINT productos_precio_cantidad_check CHECK (
+ALTER TABLE productos ADD CONSTRAINT productos_precio_cantidad_completo_check CHECK (
   (precio_cantidad_desde IS NULL) = (precio_cantidad IS NULL)
 );
 
