@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { api, setCsrfSuperadmin, setUnauthorizedHandler } from '../api/client.js';
 
 const AuthContext = createContext(null);
@@ -10,20 +11,39 @@ export function AuthProvider({ children }) {
   // null = todavía cargando; si el pedido falla se muestra solo el núcleo.
   const [modulos, setModulos] = useState(null);
 
-  useEffect(() => {
-    let cancelado = false;
-    api
-      .get('/modulos')
-      .then((data) => {
-        if (!cancelado) setModulos(data.modulos);
-      })
-      .catch(() => {
-        if (!cancelado) setModulos(['nucleo']);
-      });
-    return () => {
-      cancelado = true;
-    };
+  // Si el superadmin cambia el plan con la app abierta, los módulos se muestran u ocultan
+  // solos (pedido del usuario 2026-10-11): se vuelven a pedir al cambiar de pantalla, al
+  // volver a la pestaña del navegador y cada minuto. Un fallo en una de esas consultas
+  // conserva la lista que ya había (solo la primera carga cae al núcleo).
+  const { pathname } = useLocation();
+  const cargarModulos = useCallback(async () => {
+    try {
+      const data = await api.get('/modulos');
+      setModulos((anteriores) =>
+        anteriores && anteriores.join() === data.modulos.join() ? anteriores : data.modulos
+      );
+    } catch {
+      setModulos((anteriores) => anteriores ?? ['nucleo']);
+    }
   }, []);
+
+  useEffect(() => {
+    cargarModulos();
+  }, [pathname, cargarModulos]);
+
+  useEffect(() => {
+    const alVolver = () => {
+      if (document.visibilityState === 'visible') cargarModulos();
+    };
+    const intervalo = setInterval(alVolver, 60_000);
+    window.addEventListener('focus', alVolver);
+    document.addEventListener('visibilitychange', alVolver);
+    return () => {
+      clearInterval(intervalo);
+      window.removeEventListener('focus', alVolver);
+      document.removeEventListener('visibilitychange', alVolver);
+    };
+  }, [cargarModulos]);
 
   useEffect(() => {
     let cancelado = false;

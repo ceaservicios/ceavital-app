@@ -362,7 +362,7 @@ export default function CajaPage() {
             <input
               ref={searchInputRef}
               type="text"
-              placeholder="Escaneá el código de barras o buscá un producto…"
+              placeholder="Buscá un producto…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleSearchKeyDown}
@@ -392,7 +392,7 @@ export default function CajaPage() {
 
           <div className="caja-cart-list">
             {carrito.length === 0 ? (
-              <div className="caja-cart-empty">El carrito está vacío. Escaneá o buscá un producto para empezar.</div>
+              <div className="caja-cart-empty">El carrito está vacío. Buscá un producto para empezar.</div>
             ) : (
               <>
                 <div className="caja-cart-head">
