@@ -34,6 +34,26 @@ const PRODUCTO_VACIO = {
 const LOTE_INICIAL_VACIO = { cantidad: '', en_packs: false, fecha_ingreso: '', fecha_vencimiento: '' };
 const LOTE_NUEVO_VACIO = () => ({ cantidad: '', en_packs: false, fecha_ingreso: fechaHoyISO(), fecha_vencimiento: '' });
 
+// "¿Cómo se vende?" (2026-10-11): las unidades de medida del catálogo como botones en vez de
+// un desplegable, para que no se lea como una cantidad ni se confunda con el pack de abajo.
+function SelectorUnidad({ unidades, valor, onChange }) {
+  return (
+    <div className="stock-unidades" role="group" aria-label="Cómo se vende">
+      {unidades.map((u) => (
+        <button
+          key={u.id}
+          type="button"
+          className={String(u.id) === String(valor) ? 'activo' : ''}
+          aria-pressed={String(u.id) === String(valor)}
+          onClick={() => onChange(String(u.id))}
+        >
+          {u.nombre}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // Selector "Unidades / Packs" del ingreso de mercadería (2026-10-11): en packs, el servidor
 // guarda cantidad × unidades del pack.
 function SelectorEnPacks({ enPacks, onChange, packNombre }) {
@@ -86,6 +106,9 @@ export default function StockPage() {
 
   const mapaProveedores = useMemo(() => new Map(proveedores.map((p) => [p.id, p.nombre])), [proveedores]);
   const nombreUnidad = (id) => unidadesMedida.find((u) => String(u.id) === String(id))?.nombre?.toLowerCase() || 'unidad';
+  // Segunda línea de las etiquetas de precio: "por kg". Sin unidad elegida, nada.
+  const porUnidad = (id) =>
+    id === '' || id == null ? null : <span className="stock-label-unidad">por {nombreUnidad(id)}</span>;
 
   async function cargarProductos() {
     setCargando(true);
@@ -265,9 +288,11 @@ export default function StockPage() {
     setPanelError(null);
     // Un precio en blanco no se manda (Number('') es 0 y quedaba guardado como $0).
     const faltaNuevo =
-      nuevoProducto.precio_costo === '' || nuevoProducto.precio_venta === ''
-        ? 'Completá el precio de costo y el de venta.'
-        : faltaEnPresentacion(presNuevo);
+      nuevoProducto.unidad_medida_id === ''
+        ? 'Elegí cómo se vende el producto.'
+        : nuevoProducto.precio_costo === '' || nuevoProducto.precio_venta === ''
+          ? 'Completá el precio de costo y el de venta.'
+          : faltaEnPresentacion(presNuevo);
     if (faltaNuevo) {
       setPanelError(faltaNuevo);
       guardandoRef.current = false;
@@ -483,28 +508,19 @@ export default function StockPage() {
                 />
               </div>
               <div className="field">
-                <label>Unidad de medida</label>
-                <select
-                  required
-                  value={nuevoProducto.unidad_medida_id}
-                  onChange={(e) => setNuevoProducto({ ...nuevoProducto, unidad_medida_id: e.target.value })}
-                >
-                  <option value="" disabled>
-                    Elegí una unidad…
-                  </option>
-                  {unidadesMedida.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.nombre}
-                    </option>
-                  ))}
-                </select>
+                <label>¿Cómo se vende?</label>
+                <SelectorUnidad
+                  unidades={unidadesMedida}
+                  valor={nuevoProducto.unidad_medida_id}
+                  onChange={(id) => setNuevoProducto({ ...nuevoProducto, unidad_medida_id: id })}
+                />
                 {unidadesMedida.length === 0 && (
                   <span className="stock-hint">Todavía no hay unidades de medida cargadas -- se crean en Configuración.</span>
                 )}
               </div>
               <div className="stock-form-grid2">
                 <div className="field">
-                  <label>Precio costo</label>
+                  <label>Precio costo{porUnidad(nuevoProducto.unidad_medida_id)}</label>
                   <input
                     required
                     type="number"
@@ -514,7 +530,7 @@ export default function StockPage() {
                   />
                 </div>
                 <div className="field">
-                  <label>Precio venta</label>
+                  <label>Precio venta{porUnidad(nuevoProducto.unidad_medida_id)}</label>
                   <input
                     required
                     type="number"
@@ -524,7 +540,6 @@ export default function StockPage() {
                   />
                 </div>
               </div>
-              <span className="stock-hint">El stock y los precios van por {nombreUnidad(nuevoProducto.unidad_medida_id)}.</span>
               <PresentacionCampos
                 valor={presNuevo}
                 onChange={setPresNuevo}
@@ -676,32 +691,24 @@ export default function StockPage() {
               </div>
               {puedeEditar && (
                 <div className="field">
-                  <label>Unidad de medida</label>
-                  <select
-                    value={edicion.unidad_medida_id}
-                    onChange={(e) => setEdicion({ ...edicion, unidad_medida_id: e.target.value })}
-                  >
-                    <option value="" disabled>
-                      Elegí una unidad…
-                    </option>
-                    {unidadesMedida.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.nombre}
-                      </option>
-                    ))}
-                  </select>
+                  <label>¿Cómo se vende?</label>
+                  <SelectorUnidad
+                    unidades={unidadesMedida}
+                    valor={edicion.unidad_medida_id}
+                    onChange={(id) => setEdicion({ ...edicion, unidad_medida_id: id })}
+                  />
                 </div>
               )}
               {!puedeEditar && (
                 <div className="field">
-                  <label>Unidad de medida</label>
+                  <label>¿Cómo se vende?</label>
                   <div className="stock-campo-oculto">{detalle.unidad_medida || '—'}</div>
                 </div>
               )}
               <div className="stock-form-grid2">
                 {esAdmin ? (
                   <div className="field">
-                    <label>Precio costo</label>
+                    <label>Precio costo{porUnidad(edicion.unidad_medida_id)}</label>
                     <input
                       type="number"
                       min="0"
@@ -716,7 +723,7 @@ export default function StockPage() {
                   </div>
                 )}
                 <div className="field">
-                  <label>Precio venta</label>
+                  <label>Precio venta{porUnidad(edicion.unidad_medida_id)}</label>
                   <input
                     type="number"
                     min="0"

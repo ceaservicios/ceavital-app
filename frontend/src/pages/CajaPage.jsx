@@ -297,6 +297,7 @@ export default function CajaPage() {
     return mapa.set(item.producto_id, (mapa.get(item.producto_id) ?? 0) + unidades);
   }, new Map());
   const total = carrito.reduce((acc, item) => acc + precioDe(item).precio * item.cantidad, 0);
+  const articulos = carrito.reduce((acc, item) => acc + item.cantidad, 0);
   const recibidoNumerico = Number(montoRecibido) || 0;
   const vuelto = recibidoNumerico - total;
 
@@ -572,7 +573,12 @@ export default function CajaPage() {
 
           <div className="caja-total-block">
             <div className="caja-total-row">
-              <span>Total</span>
+              <span className="caja-total-label">
+                Total a cobrar
+                <span className="caja-total-detalle">
+                  {articulos === 0 ? 'Sin productos' : articulos === 1 ? '1 artículo' : `${articulos} artículos`}
+                </span>
+              </span>
               <span className="caja-total-value">{formatearMonto(total)}</span>
             </div>
             <button

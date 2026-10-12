@@ -1,4 +1,4 @@
-// Casillas "También se vende por pack o caja" y "Precio más barato llevando cierta cantidad"
+// Casillas "También se vende en pack o caja" y "Precio especial por cantidad"
 // del alta y la edición de un producto (2026-10-11, modelo de ProductoForm de Somnia, con
 // los precios en el producto porque CEAVital no tiene listas de precios).
 
@@ -62,15 +62,39 @@ export default function PresentacionCampos({ valor, onChange, editable, unidadNo
   return (
     <>
       <div className="stock-presentacion">
-        <label className="stock-presentacion-check">
-          <input
-            type="checkbox"
-            disabled={!editable}
-            checked={pack.activo}
-            onChange={(e) => fijarPack({ activo: e.target.checked })}
-          />
-          También se vende por pack o caja
-        </label>
+        {/* La cantidad que trae va en la misma frase, para que se lea como una presentación
+            extra del producto y no como otra unidad de medida. */}
+        <div className="stock-presentacion-fila">
+          <label className="stock-presentacion-check">
+            <input
+              type="checkbox"
+              disabled={!editable}
+              checked={pack.activo}
+              onChange={(e) => fijarPack({ activo: e.target.checked })}
+            />
+            {pack.activo
+              ? `También se vende en ${(pack.nombre.trim() || 'pack').toLowerCase()}`
+              : 'También se vende en pack o caja'}
+          </label>
+          {pack.activo && (
+            <span className="stock-presentacion-check">
+              de
+              <input
+                className="stock-presentacion-cantidad"
+                required
+                type="number"
+                min="2"
+                step="1"
+                disabled={!editable}
+                placeholder="24"
+                aria-label="Unidades que trae el pack"
+                value={pack.unidades}
+                onChange={(e) => fijarPack({ unidades: e.target.value })}
+              />
+              unidades
+            </span>
+          )}
+        </div>
         {pack.activo && (
           <>
             <div className="stock-form-grid2">
@@ -85,21 +109,6 @@ export default function PresentacionCampos({ valor, onChange, editable, unidadNo
                   onChange={(e) => fijarPack({ nombre: e.target.value })}
                 />
               </div>
-              <div className="field">
-                <label>Unidades que trae</label>
-                <input
-                  required
-                  type="number"
-                  min="2"
-                  step="1"
-                  disabled={!editable}
-                  placeholder="ej: 24"
-                  value={pack.unidades}
-                  onChange={(e) => fijarPack({ unidades: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="stock-form-grid2">
               <div className="field">
                 <label>Precio del pack</label>
                 <input
@@ -137,7 +146,7 @@ export default function PresentacionCampos({ valor, onChange, editable, unidadNo
             checked={precioCantidad.activo}
             onChange={(e) => fijarPc({ activo: e.target.checked })}
           />
-          Tiene un precio más barato llevando cierta cantidad
+          Precio especial por cantidad (ej: desde 3, $500 c/u)
         </label>
         {precioCantidad.activo && (
           <>

@@ -63,6 +63,8 @@
   .caja-cobro {
     grid-column: 2;
     grid-row: 2 / 4;
+    /* Si igual no entra, scrollea dentro de la tarjeta en vez de salirse de ella. */
+    overflow-y: auto;
   }
 }
 
@@ -331,23 +333,44 @@
   flex-direction: column;
   gap: 2px;
 }
+/* Total a cobrar en un recuadro propio (2026-10-11, "está muy pegado a la tarjeta"):
+   fondo verde suave, aire alrededor y el monto en el verde de marca. */
 .caja-total-row {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-default);
-  margin-bottom: 14px;
+  align-items: center;
+  gap: 12px;
+  margin: 2px 0 12px;
+  padding: 13px 18px;
+  border-radius: var(--radius-card);
+  background: linear-gradient(135deg, rgba(14, 75, 56, 0.09) 0%, rgba(14, 75, 56, 0.04) 100%);
+  border: 1px solid rgba(14, 75, 56, 0.16);
 }
-.caja-total-row span:first-child {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-secondary);
+.caja-total-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
+.caja-total-detalle {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-tertiary);
 }
 .caja-total-value {
-  font-size: 32px;
+  font-size: 34px;
   font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--color-primary);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .caja-anular {
@@ -501,4 +524,26 @@
   font-size: 11.5px;
   font-weight: 500;
   color: var(--text-tertiary);
+}
+
+/* Ventanas bajas (notebook con la barra de Chrome): el cobro se compacta para que el
+   total y "Confirmar y Cobrar" entren en la tarjeta (2026-10-11). Va al final para
+   pisar los estilos base de arriba. */
+@media (min-width: 1201px) and (max-height: 800px) {
+  .caja-cobro {
+    padding: 16px 20px;
+    gap: 10px;
+  }
+  .caja-total-row {
+    margin-bottom: 10px;
+  }
+  .caja-medio-btn {
+    flex-direction: row;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px;
+  }
+  .caja-total-value {
+    font-size: 30px;
+  }
 }

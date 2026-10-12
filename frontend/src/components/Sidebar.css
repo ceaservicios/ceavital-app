@@ -1,4 +1,4 @@
-/* Menú lateral "isla flotante": tarjeta blanca redondeada, separada 12px del borde,
+/* Menú lateral "isla flotante": tarjeta verde de marca redondeada, separada 12px del borde,
    que con el margen ocupa los mismos 240px de ancho que el menú anterior. */
 .sidebar {
   width: 216px;
@@ -17,11 +17,16 @@
   overflow: auto;
 }
 
+/* La marca va en una tarjetita blanca: el isotipo y "CEA" son verdes y no se verían sobre el verde. */
 .sidebar-brand {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 6px;
+  padding: 9px 10px;
+  border-radius: 13px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: 0 4px 12px rgba(4, 22, 16, 0.25);
 }
 .sidebar-brand-logo {
   width: 46px;
@@ -50,7 +55,7 @@
   margin-top: 3px;
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--sidebar-text-faint);
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
@@ -79,7 +84,7 @@
 .sidebar-item,
 a.sidebar-item,
 a.sidebar-item:hover {
-  color: var(--text-secondary);
+  color: var(--sidebar-text);
 }
 .sidebar-item {
   display: flex;
@@ -119,34 +124,34 @@ a.sidebar-item:hover {
 }
 a.sidebar-item:hover {
   background: var(--sidebar-item-hover-bg);
-  color: var(--text-primary);
+  color: var(--sidebar-text-strong);
 }
 a.sidebar-item:hover .sidebar-item-icon {
-  background: rgba(14, 75, 56, 0.09);
-  color: var(--color-primary);
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--sidebar-text-strong);
 }
 a.sidebar-item:focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid #ffffff;
   outline-offset: 2px;
 }
 a.sidebar-item.sidebar-item-active,
 a.sidebar-item.sidebar-item-active:hover {
   background: var(--sidebar-item-active-bg);
-  color: #ffffff;
+  color: var(--sidebar-item-active-text);
   font-weight: 700;
-  box-shadow: var(--shadow-active);
+  box-shadow: 0 6px 14px rgba(4, 22, 16, 0.28);
 }
 a.sidebar-item.sidebar-item-active .sidebar-item-icon {
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
+  background: rgba(14, 75, 56, 0.1);
+  color: var(--color-primary);
 }
 .sidebar-item-disabled {
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.38);
   cursor: not-allowed;
 }
 .sidebar-item-disabled .sidebar-item-icon {
-  background: #f6f7f7;
-  color: #b3bab7;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.32);
 }
 /* El candado va como un sellito sobre la esquina del ícono, así el texto entra completo. */
 .sidebar-item-disabled {
@@ -161,9 +166,9 @@ a.sidebar-item.sidebar-item-active .sidebar-item-icon {
   padding: 2px;
   box-sizing: border-box;
   border-radius: 50%;
-  background: var(--bg-surface);
-  box-shadow: 0 0 0 1px var(--border-default);
-  color: var(--text-tertiary);
+  background: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--sidebar-line);
+  color: var(--sidebar-text-muted);
 }
 
 /* Contador de lotes vencidos (alerta: Rosa Coral, nunca decorativo). */
@@ -183,7 +188,8 @@ a.sidebar-item.sidebar-item-active .sidebar-item-icon {
   justify-content: center;
 }
 a.sidebar-item.sidebar-item-active .sidebar-badge {
-  background: #fbeaec;
+  background: var(--color-danger);
+  color: #ffffff;
 }
 .sidebar-sr {
   position: absolute;
@@ -199,14 +205,14 @@ a.sidebar-item.sidebar-item-active .sidebar-badge {
   align-items: center;
   gap: 6px;
   padding: 10px 2px 0;
-  border-top: 1px solid var(--bg-muted);
+  border-top: 1px solid var(--sidebar-line);
 }
 .sidebar-avatar {
   width: 36px;
   height: 36px;
   border-radius: 11px;
-  background: var(--sidebar-item-active-bg);
-  color: #ffffff;
+  background: #ffffff;
+  color: var(--color-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -239,21 +245,22 @@ a.sidebar-item.sidebar-item-active .sidebar-badge {
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  border: 1px solid var(--border-default);
-  background: var(--bg-surface);
-  color: var(--sidebar-text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: transparent;
+  color: var(--sidebar-text);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: border-color 0.15s ease-out, color 0.15s ease-out;
+  transition: border-color 0.15s ease-out, color 0.15s ease-out, background 0.15s ease-out;
 }
 .sidebar-logout:hover {
-  border-color: var(--text-tertiary);
-  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.5);
+  background: var(--sidebar-item-hover-bg);
+  color: var(--sidebar-text-strong);
 }
 .sidebar-logout:focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid #ffffff;
   outline-offset: 2px;
 }
 
