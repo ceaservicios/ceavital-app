@@ -1,21 +1,19 @@
 import { useRef, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
 import { formatearMonto } from '../utils/format.js';
-import { envaseEnNombre, nombreUnidadSuelta, plural } from '../utils/presentacion.js';
+import { envaseEnNombre, plural } from '../utils/presentacion.js';
 
-// "Pasar a unidad + caja" (2026-10-11): un producto cargado con un envase como unidad de
-// medida ("Caja x 12") cuenta, cobra y descuenta de a una caja. Este panel lo deja con una
-// unidad suelta y la caja como pack; el servidor (POST /productos/:id/pasar-a-pack) convierte
-// el stock, los precios y las líneas viejas para que todo siga significando lo mismo.
-export default function PasarAPack({ producto, unidades, onHecho, onCancelar }) {
+// "Pasar a unidad + caja" (2026-10-11): un producto viejo cargado con un envase como unidad de
+// medida ("Caja x 12") cuenta, cobra y descuenta de a una caja. Este panel lo deja medido por
+// unidad con la caja como pack, vendiéndose también suelto o solo por caja; el servidor
+// (POST /productos/:id/pasar-a-pack) convierte el stock, los precios y las líneas viejas para
+// que todo siga significando lo mismo.
+export default function PasarAPack({ producto, onHecho, onCancelar }) {
   const envase = envaseEnNombre(producto.unidad_medida) ?? { nombre: 'Caja', unidades: null };
-  const sueltas = unidades.filter((u) => !envaseEnNombre(u.nombre));
-  const preferida = sueltas.find((u) => /^(1\s+)?unidad(es)?$/i.test(u.nombre.trim())) ?? sueltas[0];
-
   const [datos, setDatos] = useState({
-    unidad_medida_id: preferida ? String(preferida.id) : '',
     pack_nombre: envase.nombre,
     pack_unidades: envase.unidades ? String(envase.unidades) : '',
+    vende_suelto: true,
     precio_venta: '',
     codigo_es_del_pack: Boolean(producto.codigo_barras),
     codigo_barras_unidad: '',
@@ -26,15 +24,14 @@ export default function PasarAPack({ producto, unidades, onHecho, onCancelar }) 
 
   const n = Number(datos.pack_unidades);
   const nValido = Number.isInteger(n) && n >= 2;
-  const nombrePack = datos.pack_nombre.trim() || 'caja';
-  const unidadElegida = sueltas.find((u) => String(u.id) === datos.unidad_medida_id)?.nombre;
+  const nombrePack = (datos.pack_nombre.trim() || 'caja').toLowerCase();
   const fijar = (cambios) => setDatos({ ...datos, ...cambios });
 
   async function convertir(e) {
     e.preventDefault();
     if (enviandoRef.current) return;
-    if (!datos.unidad_medida_id || !nValido || datos.precio_venta === '' || !datos.pack_nombre.trim()) {
-      setError('Completá la unidad suelta, cuántas trae, el nombre y el precio por unidad.');
+    if (!nValido || !datos.pack_nombre.trim() || (datos.vende_suelto && datos.precio_venta === '')) {
+      setError(`Completá el nombre, cuántas unidades trae${datos.vende_suelto ? ' y el precio por unidad' : ''}.`);
       return;
     }
     enviandoRef.current = true;
@@ -42,12 +39,13 @@ export default function PasarAPack({ producto, unidades, onHecho, onCancelar }) 
     setError(null);
     try {
       const actualizado = await api.post(`/productos/${producto.id}/pasar-a-pack`, {
-        unidad_medida_id: Number(datos.unidad_medida_id),
         pack_nombre: datos.pack_nombre.trim(),
         pack_unidades: n,
-        precio_venta: Number(datos.precio_venta),
+        vende_suelto: datos.vende_suelto,
+        ...(datos.vende_suelto ? { precio_venta: Number(datos.precio_venta) } : {}),
         codigo_es_del_pack: datos.codigo_es_del_pack,
-        codigo_barras_unidad: datos.codigo_es_del_pack ? datos.codigo_barras_unidad.trim() || null : null,
+        codigo_barras_unidad:
+          datos.codigo_es_del_pack && datos.vende_suelto ? datos.codigo_barras_unidad.trim() || null : null,
       });
       onHecho(actualizado);
     } catch (err) {
@@ -58,38 +56,9 @@ export default function PasarAPack({ producto, unidades, onHecho, onCancelar }) 
     }
   }
 
-  if (sueltas.length === 0) {
-    return (
-      <div className="stock-aviso-envase">
-        <strong>Falta una unidad suelta.</strong> Creá la unidad «Unidad» en Configuración → Unidades de medida y volvé acá.
-        <div>
-          <button type="button" className="btn" onClick={onCancelar}>
-            Cerrar
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <form className="stock-pasar-pack" onSubmit={convertir}>
-      <span className="stock-section-label">Pasar a unidad + {nombrePack.toLowerCase()}</span>
-      <div className="field">
-        <label>Unidad suelta (lo más chico que se vende)</label>
-        <div className="stock-unidades" role="group" aria-label="Unidad suelta">
-          {sueltas.map((u) => (
-            <button
-              key={u.id}
-              type="button"
-              className={String(u.id) === datos.unidad_medida_id ? 'activo' : ''}
-              aria-pressed={String(u.id) === datos.unidad_medida_id}
-              onClick={() => fijar({ unidad_medida_id: String(u.id) })}
-            >
-              {u.nombre}
-            </button>
-          ))}
-        </div>
-      </div>
+      <span className="stock-section-label">Pasar a unidad + {nombrePack}</span>
       <div className="stock-form-grid2">
         <div className="field">
           <label>Nombre del envase</label>
@@ -107,16 +76,22 @@ export default function PasarAPack({ producto, unidades, onHecho, onCancelar }) 
           />
         </div>
       </div>
-      <div className="field">
-        <label>Precio de venta por {nombreUnidadSuelta(unidadElegida, 1)}</label>
-        <input
-          type="number"
-          min="0"
-          placeholder={nValido ? `la ${nombrePack.toLowerCase()} sale ${formatearMonto(producto.precio_venta)}` : ''}
-          value={datos.precio_venta}
-          onChange={(e) => fijar({ precio_venta: e.target.value })}
-        />
-      </div>
+      <label className="stock-presentacion-check">
+        <input type="checkbox" checked={datos.vende_suelto} onChange={(e) => fijar({ vende_suelto: e.target.checked })} />
+        También se vende suelto, por unidad
+      </label>
+      {datos.vende_suelto && (
+        <div className="field">
+          <label>Precio de venta por unidad</label>
+          <input
+            type="number"
+            min="0"
+            placeholder={`por ${nombrePack}: ${formatearMonto(producto.precio_venta)}`}
+            value={datos.precio_venta}
+            onChange={(e) => fijar({ precio_venta: e.target.value })}
+          />
+        </div>
+      )}
       {producto.codigo_barras && (
         <label className="stock-presentacion-check">
           <input
@@ -124,10 +99,10 @@ export default function PasarAPack({ producto, unidades, onHecho, onCancelar }) 
             checked={datos.codigo_es_del_pack}
             onChange={(e) => fijar({ codigo_es_del_pack: e.target.checked })}
           />
-          El código {producto.codigo_barras} es el de la {nombrePack.toLowerCase()}
+          El código {producto.codigo_barras} es el del envase ({nombrePack})
         </label>
       )}
-      {producto.codigo_barras && datos.codigo_es_del_pack && (
+      {producto.codigo_barras && datos.codigo_es_del_pack && datos.vende_suelto && (
         <div className="field">
           <label>Código de la unidad suelta</label>
           <input
@@ -141,19 +116,22 @@ export default function PasarAPack({ producto, unidades, onHecho, onCancelar }) 
         <ul className="stock-pasar-resumen">
           <li>
             Stock: {producto.stock_total} {plural(nombrePack, producto.stock_total)} →{' '}
-            <strong>
-              {producto.stock_total * n} {nombreUnidadSuelta(unidadElegida, producto.stock_total * n)}
-            </strong>
+            <strong>{producto.stock_total * n} unidades</strong>
           </li>
           <li>
-            Precio de la {nombrePack.toLowerCase()}: <strong>{formatearMonto(producto.precio_venta)}</strong> (el que tenía)
+            Precio por {nombrePack}: <strong>{formatearMonto(producto.precio_venta)}</strong> (el que tenía)
           </li>
           {producto.precio_costo != null && (
             <li>
-              Costo por {nombreUnidadSuelta(unidadElegida, 1)}: {formatearMonto(Math.round(producto.precio_costo / n))}
+              {datos.vende_suelto
+                ? `Costo por unidad: ${formatearMonto(Math.round(producto.precio_costo / n))}`
+                : `Costo por ${nombrePack}: ${formatearMonto(producto.precio_costo)} (el que tenía)`}
             </li>
           )}
-          <li>Las ventas anteriores quedan como «{nombrePack} x {n}».</li>
+          <li>{datos.vende_suelto ? `Se vende suelto y por ${nombrePack}.` : `Se vende solo por ${nombrePack}.`}</li>
+          <li>
+            Las ventas anteriores quedan como «{datos.pack_nombre.trim() || 'Caja'} x {n}».
+          </li>
         </ul>
       )}
       {error && <div className="alert alert-danger">{error}</div>}

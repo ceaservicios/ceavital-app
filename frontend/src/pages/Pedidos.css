@@ -202,6 +202,25 @@
   color: var(--text-muted);
   font-weight: 700;
 }
+/* Cantidad con decimales en productos por kg o litro (2026-10-11). */
+.pedido-peso {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.pedido-peso input {
+  width: 84px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 .pedido-stepper {
   display: inline-flex;
   align-items: center;

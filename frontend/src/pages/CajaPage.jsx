@@ -4,14 +4,47 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { formatearMonto, fechaHoyISO } from '../utils/format.js';
 import {
   describirStockLargo,
+  esFraccionable,
   etiquetaPack,
+  factorMedida,
   faltanParaPrecioCantidad,
+  formatearCantidad,
+  parsearCantidad,
   precioLinea,
+  simboloMedida,
+  subtotalLinea,
+  sufijoPrecio,
+  textoDeCantidad,
   tienePack,
   tienePrecioCantidad,
   unidadesDeLinea,
+  vendeSuelto,
 } from '../utils/presentacion.js';
 import './CajaPage.css';
+
+// Formas en que se puede vender un producto en Caja (2026-10-11): suelto (por unidad, kg o
+// litro) y/o por pack, según cómo se cargó. Cada una con su etiqueta y precio.
+function opcionesDeVenta(producto) {
+  const opciones = [];
+  if (vendeSuelto(producto)) {
+    opciones.push({
+      presentacion: 'unidad',
+      etiqueta: esFraccionable(producto.medida) ? `Por ${simboloMedida(producto.medida)}` : 'Unidad',
+      precio: `${formatearMonto(producto.precio_venta)}${sufijoPrecio(producto.medida)}`,
+    });
+  }
+  if (tienePack(producto)) {
+    opciones.push({
+      presentacion: 'pack',
+      etiqueta: etiquetaPack(producto.pack_nombre, producto.pack_unidades, producto.medida),
+      precio: formatearMonto(producto.precio_pack),
+    });
+  }
+  return opciones;
+}
+
+// Una línea suelta de un producto por kg o litro: la cantidad es el peso que se tipea.
+const esLineaPorPeso = (item) => item.presentacion === 'unidad' && esFraccionable(item.producto.medida);
 
 const MEDIOS_PAGO = [
   {
@@ -98,6 +131,7 @@ export default function CajaPage() {
   const [resultadosDe, setResultadosDe] = useState('');
   const [mostrarResultados, setMostrarResultados] = useState(false);
   const [carrito, setCarrito] = useState([]);
+  const [focoPeso, setFocoPeso] = useState(null); // clave de la línea por peso a enfocar
   const [medioPago, setMedioPago] = useState('efectivo');
   const [clientesEmpresa, setClientesEmpresa] = useState([]);
   const [clienteEmpresaId, setClienteEmpresaId] = useState('');
@@ -252,11 +286,16 @@ export default function CajaPage() {
   // precios y el pack para calcular el precio de la línea (el servidor decide el real).
   // `textoEscaneado`: si se agregó con el Enter del lector y mientras se buscaba ya se tipeó
   // otro código, no se borra lo nuevo.
+  // Por peso (kg/litro, 2026-10-11): la línea arranca sin peso y el foco va a su campo; agregar
+  // otra vez el mismo producto no suma 1 kg, vuelve al campo para corregir el peso.
   function agregarAlCarrito(producto, presentacion = 'unidad', textoEscaneado = null) {
-    const clave = `${producto.id}:${presentacion}`;
+    const pres = presentacion === 'unidad' && !vendeSuelto(producto) ? 'pack' : presentacion;
+    const clave = `${producto.id}:${pres}`;
+    const porPeso = pres === 'unidad' && esFraccionable(producto.medida);
     setCarrito((prev) => {
       const existente = prev.find((item) => item.clave === clave);
       if (existente) {
+        if (porPeso) return prev;
         return prev.map((item) => (item.clave === clave ? { ...item, cantidad: item.cantidad + 1 } : item));
       }
       return [
@@ -264,20 +303,37 @@ export default function CajaPage() {
         {
           clave,
           producto_id: producto.id,
-          presentacion,
+          presentacion: pres,
           nombre: producto.nombre,
           producto,
           stock_vendible: producto.stock_disponible, // lo que Caja puede vender: vendible menos lo reservado por pedidos de clientes
-          cantidad: 1,
+          cantidad: porPeso ? 0 : 1,
+          pesoTexto: '',
         },
       ];
     });
+    if (porPeso) setFocoPeso(clave);
     if (textoEscaneado !== null && searchInputRef.current && searchInputRef.current.value.trim() !== textoEscaneado) return;
     setQuery('');
     setResultados([]);
     setResultadosDe('');
     setMostrarResultados(false);
-    searchInputRef.current?.focus();
+    if (!porPeso) searchInputRef.current?.focus();
+  }
+
+  // Foco en el campo de peso de la línea recién agregada (después de que se dibuja).
+  useEffect(() => {
+    if (!focoPeso) return;
+    document.getElementById(`peso-${focoPeso}`)?.focus();
+    setFocoPeso(null);
+  }, [focoPeso, carrito]);
+
+  function cambiarPeso(clave, texto) {
+    setCarrito((prev) =>
+      prev.map((item) =>
+        item.clave === clave ? { ...item, pesoTexto: texto, cantidad: parsearCantidad(texto, item.producto.medida) ?? 0 } : item
+      )
+    );
   }
 
   // Enter con un solo resultado (el lector de código de barras tipea el código + Enter):
@@ -307,24 +363,40 @@ export default function CajaPage() {
     const candidatos = porCodigo.length === 1 ? porCodigo : lista;
     if (candidatos.length !== 1) return;
     const [producto] = candidatos;
+    const opciones = opcionesDeVenta(producto);
+    // El código del producto en uno que se vende solo por caja es el de la caja: agregarAlCarrito
+    // lo pasa a pack. Por nombre, si tiene una sola forma de venta, va esa; si tiene dos, se elige.
     if (producto.coincide_codigo === 'pack' && tienePack(producto)) agregarAlCarrito(producto, 'pack', texto);
-    else if (producto.coincide_codigo === 'unidad' || !tienePack(producto)) agregarAlCarrito(producto, 'unidad', texto);
+    else if (producto.coincide_codigo === 'unidad') agregarAlCarrito(producto, 'unidad', texto);
+    else if (opciones.length === 1) agregarAlCarrito(producto, opciones[0].presentacion, texto);
   }
 
   // Cambiar una línea de Unidad a Pack o al revés (2026-10-11): si ya había una línea del
   // mismo producto en esa presentación, se suman.
+  // Por peso, la cantidad cambia de sentido (packs ↔ gramos): 2 bolsas de 15 kg pasan a 30 kg y
+  // 30 kg a 2 bolsas (al menos 1).
   function cambiarPresentacion(clave, presentacion) {
     setCarrito((prev) => {
       const linea = prev.find((item) => item.clave === clave);
       if (!linea || linea.presentacion === presentacion) return prev;
+      const { medida, pack_unidades: trae } = linea.producto;
+      let cantidad = linea.cantidad;
+      if (esFraccionable(medida)) {
+        cantidad = presentacion === 'pack' ? Math.max(1, Math.floor(linea.cantidad / trae)) : linea.cantidad * trae;
+      }
       const nuevaClave = `${linea.producto_id}:${presentacion}`;
       const existente = prev.find((item) => item.clave === nuevaClave);
+      const conPeso = (item, total) => ({
+        ...item,
+        cantidad: total,
+        pesoTexto: presentacion === 'unidad' && esFraccionable(medida) ? textoDeCantidad(total, medida) : '',
+      });
       if (existente) {
         return prev
           .filter((item) => item.clave !== clave)
-          .map((item) => (item.clave === nuevaClave ? { ...item, cantidad: item.cantidad + linea.cantidad } : item));
+          .map((item) => (item.clave === nuevaClave ? conPeso(item, item.cantidad + cantidad) : item));
       }
-      return prev.map((item) => (item.clave === clave ? { ...item, clave: nuevaClave, presentacion } : item));
+      return prev.map((item) => (item.clave === clave ? conPeso({ ...item, clave: nuevaClave, presentacion }, cantidad) : item));
     });
   }
 
@@ -332,7 +404,8 @@ export default function CajaPage() {
     setCarrito((prev) =>
       prev
         .map((item) => (item.clave === clave ? { ...item, cantidad: item.cantidad + delta } : item))
-        .filter((item) => item.cantidad > 0)
+        // Solo la línea tocada sale si llega a 0: una línea por peso sin peso no se borra sola.
+        .filter((item) => item.clave !== clave || item.cantidad > 0)
     );
   }
 
@@ -346,8 +419,10 @@ export default function CajaPage() {
     const unidades = unidadesDeLinea(item.producto, item.cantidad, item.presentacion);
     return mapa.set(item.producto_id, (mapa.get(item.producto_id) ?? 0) + unidades);
   }, new Map());
-  const total = carrito.reduce((acc, item) => acc + precioDe(item).precio * item.cantidad, 0);
-  const articulos = carrito.reduce((acc, item) => acc + item.cantidad, 0);
+  const total = carrito.reduce((acc, item) => acc + subtotalLinea(item.producto, item.cantidad, item.presentacion), 0);
+  // Un producto pesado cuenta como 1 artículo; sin peso, la venta no se puede cobrar.
+  const articulos = carrito.reduce((acc, item) => acc + (esLineaPorPeso(item) ? (item.cantidad > 0 ? 1 : 0) : item.cantidad), 0);
+  const faltaPeso = carrito.some((item) => esLineaPorPeso(item) && !(item.cantidad > 0));
   const recibidoNumerico = Number(montoRecibido) || 0;
   const vuelto = recibidoNumerico - total;
 
@@ -369,7 +444,7 @@ export default function CajaPage() {
       });
       // Cuánto stock queda de lo que se vendió (2026-10-11): así se ve el efecto de cada venta.
       const quedan = (venta.stock_despues ?? [])
-        .map((s) => `${s.nombre}: ${describirStockLargo(s.stock_disponible, s, s.unidad_medida)}`)
+        .map((s) => `${s.nombre}: ${describirStockLargo(s.stock_disponible, s)}`)
         .join(' · ');
       setExito(`Venta #${venta.id} registrada por ${formatearMonto(venta.total)}.${quedan ? ` Stock que queda — ${quedan}.` : ''}`);
       setCarrito([]);
@@ -454,23 +529,24 @@ export default function CajaPage() {
                     {errorBusqueda ? 'No se pudo conectar con el servidor. Probá de nuevo en unos segundos.' : 'Sin resultados'}
                   </div>
                 )}
-                {resultados.map((producto) =>
-                  tienePack(producto) ? (
+                {resultados.map((producto) => {
+                  const opciones = opcionesDeVenta(producto);
+                  const nombreYStock = (
+                    <span className="caja-search-nombre">
+                      {producto.nombre}
+                      <span className="caja-search-stock">Stock: {describirStockLargo(producto.stock_disponible, producto)}</span>
+                    </span>
+                  );
+                  // Dos formas de venta: se elige cuál. Una sola: toda la fila la agrega.
+                  return opciones.length > 1 ? (
                     <div key={producto.id} className="caja-search-item caja-search-item-pack">
-                      <span className="caja-search-nombre">
-                        {producto.nombre}
-                        <span className="caja-search-stock">
-                          Stock: {describirStockLargo(producto.stock_disponible, producto, producto.unidad_medida)}
-                        </span>
-                      </span>
+                      {nombreYStock}
                       <span className="caja-search-opciones">
-                        <button type="button" onClick={() => agregarAlCarrito(producto, 'unidad')}>
-                          Unidad <strong>{formatearMonto(producto.precio_venta)}</strong>
-                        </button>
-                        <button type="button" onClick={() => agregarAlCarrito(producto, 'pack')}>
-                          {etiquetaPack(producto.pack_nombre, producto.pack_unidades)}{' '}
-                          <strong>{formatearMonto(producto.precio_pack)}</strong>
-                        </button>
+                        {opciones.map((o) => (
+                          <button key={o.presentacion} type="button" onClick={() => agregarAlCarrito(producto, o.presentacion)}>
+                            {o.etiqueta} <strong>{o.precio}</strong>
+                          </button>
+                        ))}
                       </span>
                     </div>
                   ) : (
@@ -478,18 +554,16 @@ export default function CajaPage() {
                       type="button"
                       key={producto.id}
                       className="caja-search-item"
-                      onClick={() => agregarAlCarrito(producto)}
+                      onClick={() => agregarAlCarrito(producto, opciones[0]?.presentacion ?? 'unidad')}
                     >
-                      <span className="caja-search-nombre">
-                        {producto.nombre}
-                        <span className="caja-search-stock">
-                          Stock: {describirStockLargo(producto.stock_disponible, producto, producto.unidad_medida)}
-                        </span>
+                      {nombreYStock}
+                      <span className="caja-search-item-precio">
+                        {opciones[0]?.presentacion === 'pack' && `${opciones[0].etiqueta} `}
+                        {opciones[0]?.precio}
                       </span>
-                      <span className="caja-search-item-precio">{formatearMonto(producto.precio_venta)}</span>
                     </button>
-                  )
-                )}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -509,61 +583,88 @@ export default function CajaPage() {
                 {carrito.map((item) => {
                   const { precio, aplicaPrecioCantidad } = precioDe(item);
                   const porPack = item.presentacion === 'pack';
+                  const porPeso = esLineaPorPeso(item);
+                  const medida = item.producto.medida;
                   const faltan = porPack ? 0 : faltanParaPrecioCantidad(item.producto, item.cantidad);
                   return (
                   <div className="caja-cart-row" key={item.clave}>
                     <span style={{ flex: 2.4 }} className="caja-cart-nombre">
                       {item.nombre}
                       {/* Unidad o caja en la misma línea, y cuánto descuenta del stock (2026-10-11). */}
-                      {tienePack(item.producto) && (
+                      {opcionesDeVenta(item.producto).length > 1 && (
                         <span className="caja-cart-switch" role="group" aria-label="Se vende por">
-                          <button
-                            type="button"
-                            className={!porPack ? 'activo' : ''}
-                            aria-pressed={!porPack}
-                            onClick={() => cambiarPresentacion(item.clave, 'unidad')}
-                          >
-                            Unidad
-                          </button>
-                          <button
-                            type="button"
-                            className={porPack ? 'activo' : ''}
-                            aria-pressed={porPack}
-                            onClick={() => cambiarPresentacion(item.clave, 'pack')}
-                          >
-                            {etiquetaPack(item.producto.pack_nombre, item.producto.pack_unidades)}
-                          </button>
+                          {opcionesDeVenta(item.producto).map((o) => (
+                            <button
+                              key={o.presentacion}
+                              type="button"
+                              className={item.presentacion === o.presentacion ? 'activo' : ''}
+                              aria-pressed={item.presentacion === o.presentacion}
+                              onClick={() => cambiarPresentacion(item.clave, o.presentacion)}
+                            >
+                              {o.etiqueta}
+                            </button>
+                          ))}
                         </span>
                       )}
                       {porPack && (
                         <span className="caja-cart-descuenta">
-                          Descuenta {item.cantidad * item.producto.pack_unidades} unidades del stock
+                          {opcionesDeVenta(item.producto).length === 1 &&
+                            `${etiquetaPack(item.producto.pack_nombre, item.producto.pack_unidades, medida)} · `}
+                          Descuenta {formatearCantidad(item.cantidad * item.producto.pack_unidades, medida)} del stock
                         </span>
                       )}
+                      {porPeso && !(item.cantidad > 0) && <span className="caja-cart-warning">Escribí el peso</span>}
                       {aplicaPrecioCantidad && (
-                        <span className="caja-cart-promo">Precio por cantidad (desde {item.producto.precio_cantidad_desde})</span>
+                        <span className="caja-cart-promo">
+                          Precio por cantidad (desde {formatearCantidad(item.producto.precio_cantidad_desde, medida, { corta: true })})
+                        </span>
                       )}
-                      {!porPack && !aplicaPrecioCantidad && tienePrecioCantidad(item.producto) && faltan <= 5 && (
+                      {!porPack && !aplicaPrecioCantidad && tienePrecioCantidad(item.producto) && faltan <= 5 * factorMedida(medida) && (
                         <span className="caja-cart-promo-hint">
-                          Llevando {faltan} más: {formatearMonto(item.producto.precio_cantidad)} c/u
+                          Llevando {formatearCantidad(faltan, medida, { corta: true })} más:{' '}
+                          {formatearMonto(item.producto.precio_cantidad)}
+                          {porPeso ? sufijoPrecio(medida) : ' c/u'}
                         </span>
                       )}
                       {unidadesPorProducto.get(item.producto_id) > item.stock_vendible && (
-                        <span className="caja-cart-warning">Solo hay {item.stock_vendible} unidades disponibles</span>
+                        <span className="caja-cart-warning">
+                          Solo hay {formatearCantidad(item.stock_vendible, medida)} disponibles
+                        </span>
                       )}
                     </span>
                     <span style={{ flex: 1.2 }} className="caja-cart-cantidad">
-                      <button type="button" onClick={() => cambiarCantidad(item.clave, -1)}>
-                        –
-                      </button>
-                      <span>{item.cantidad}</span>
-                      <button type="button" onClick={() => cambiarCantidad(item.clave, 1)}>
-                        +
-                      </button>
+                      {porPeso ? (
+                        <span className="caja-cart-peso">
+                          <input
+                            id={`peso-${item.clave}`}
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="0,000"
+                            aria-label={`Peso de ${item.nombre} en ${simboloMedida(medida)}`}
+                            value={item.pesoTexto}
+                            onChange={(e) => cambiarPeso(item.clave, e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && searchInputRef.current?.focus()}
+                          />
+                          {simboloMedida(medida)}
+                        </span>
+                      ) : (
+                        <>
+                          <button type="button" onClick={() => cambiarCantidad(item.clave, -1)}>
+                            –
+                          </button>
+                          <span>{item.cantidad}</span>
+                          <button type="button" onClick={() => cambiarCantidad(item.clave, 1)}>
+                            +
+                          </button>
+                        </>
+                      )}
                     </span>
-                    <span style={{ flex: 1, textAlign: 'right' }}>{formatearMonto(precio)}</span>
+                    <span style={{ flex: 1, textAlign: 'right' }}>
+                      {formatearMonto(precio)}
+                      {!porPack && sufijoPrecio(medida)}
+                    </span>
                     <span style={{ flex: 1, textAlign: 'right', fontWeight: 700 }}>
-                      {formatearMonto(precio * item.cantidad)}
+                      {formatearMonto(subtotalLinea(item.producto, item.cantidad, item.presentacion))}
                     </span>
                     <span style={{ width: 32, display: 'flex', justifyContent: 'center' }}>
                       <button
@@ -670,7 +771,7 @@ export default function CajaPage() {
               type="button"
               className="btn btn-primary"
               style={{ width: '100%', padding: '15px' }}
-              disabled={carrito.length === 0 || enviando || (medioPago === 'cta_cte' && !clienteEmpresaId)}
+              disabled={carrito.length === 0 || faltaPeso || enviando || (medioPago === 'cta_cte' && !clienteEmpresaId)}
               onClick={confirmarVenta}
             >
               {enviando ? 'Registrando…' : 'Confirmar y Cobrar Venta'}

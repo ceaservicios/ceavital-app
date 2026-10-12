@@ -15,7 +15,7 @@ export function listarPorVencer() {
       `SELECT
          l.id AS lote_id,
          l.producto_id,
-         p.nombre AS producto_nombre,
+         p.nombre AS producto_nombre, p.medida, p.pack_nombre, p.pack_unidades,
          l.cantidad,
          l.fecha_vencimiento,
          (l.fecha_vencimiento - ?::date) AS dias_restantes
@@ -42,7 +42,7 @@ export function listarVencidos() {
       `SELECT
          l.id AS lote_id,
          l.producto_id,
-         p.nombre AS producto_nombre,
+         p.nombre AS producto_nombre, p.medida, p.pack_nombre, p.pack_unidades,
          l.cantidad,
          l.fecha_vencimiento,
          (?::date - l.fecha_vencimiento) AS dias_vencido

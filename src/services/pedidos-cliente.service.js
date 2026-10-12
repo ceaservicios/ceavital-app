@@ -3,7 +3,7 @@ import { ApiError } from '../utils/api-error.js';
 import { existeClienteActivo } from './clientes-empresa.service.js';
 import { stockDisponible } from './reservas.service.js';
 import { obtenerVentaConItems, registrarVentaEnTransaccion } from './ventas.service.js';
-import { armarLinea, COLUMNAS_PRESENTACION, juntarLineas, validarPresentacion } from './presentacion.js';
+import { armarLinea, COLUMNAS_PRESENTACION, describirCantidad, juntarLineas, validarPresentacion } from './presentacion.js';
 
 // Pedidos de clientes-empresa (B2B Fase 2). Los arma el cliente desde su
 // portal; el negocio (Admin + Encargado) los aprueba o rechaza.
@@ -14,7 +14,8 @@ import { armarLinea, COLUMNAS_PRESENTACION, juntarLineas, validarPresentacion } 
 // Mientras está pendiente, el pedido reserva stock (ver reservas.service.js).
 
 const MAX_ITEMS = 100;
-const MAX_CANTIDAD = 100000;
+// En la medida más chica: unidades, o gramos/ml en productos por kg o litro (10.000 kg).
+const MAX_CANTIDAD = 10_000_000;
 // Tope para que un cliente no pueda apartar todo el stock con pedidos que
 // nunca se resuelven: el pedido pendiente reserva unidades reales.
 const MAX_PENDIENTES_POR_CLIENTE = 10;
@@ -59,7 +60,7 @@ function validarItems(items) {
 function itemsDe(pedidoId) {
   return db
     .prepare(
-      `SELECT i.id, i.producto_id, p.nombre AS producto_nombre, i.cantidad, i.precio_unitario, i.subtotal,
+      `SELECT i.id, i.producto_id, p.nombre AS producto_nombre, p.medida, i.cantidad, i.precio_unitario, i.subtotal,
               i.pack_nombre, i.pack_unidades, i.precio_cantidad_desde,
               CASE WHEN i.pack_unidades IS NULL THEN i.cantidad ELSE i.cantidad / i.pack_unidades END AS cantidad_presentacion
        FROM pedido_cliente_items i
@@ -220,8 +221,8 @@ export async function crearPedidoDelCliente(clienteId, { items, observaciones })
     for (const [productoId, unidades] of unidadesPorProducto) {
       const disponible = await stockDisponible(productoId);
       if (unidades > disponible) {
-        const { nombre } = productos.get(productoId);
-        throw new ApiError(409, `No hay stock suficiente de "${nombre}" (disponible: ${disponible} unidades)`);
+        const { nombre, medida } = productos.get(productoId);
+        throw new ApiError(409, `No hay stock suficiente de "${nombre}" (disponible: ${describirCantidad(disponible, medida)})`);
       }
     }
 
@@ -261,6 +262,7 @@ function soloParaElCliente(pedido) {
     ...(pedido.items && {
       items: pedido.items.map((i) => ({
         producto_nombre: i.producto_nombre,
+        medida: i.medida,
         cantidad: i.cantidad,
         cantidad_presentacion: i.cantidad_presentacion,
         pack_nombre: i.pack_nombre,

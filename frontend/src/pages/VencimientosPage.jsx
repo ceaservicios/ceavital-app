@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatearFecha } from '../utils/format.js';
+import { describirStock, formatearCantidad } from '../utils/presentacion.js';
 import './VencimientosPage.css';
 
 const PUEDE_RETIRAR = new Set(['admin', 'encargado']);
@@ -64,8 +65,15 @@ export default function VencimientosPage() {
 
   const vencidos = datos?.vencidos ?? [];
   const porVencer = datos?.por_vencer ?? [];
+  // En riesgo, separado por medida (2026-10-11): unidades y kg/litros no se suman entre sí.
+  const enRiesgoPorMedida = [...vencidos, ...porVencer].reduce(
+    (mapa, l) => mapa.set(l.medida ?? 'unidad', (mapa.get(l.medida ?? 'unidad') ?? 0) + l.cantidad),
+    new Map()
+  );
   const unidadesEnRiesgo =
-    vencidos.reduce((acc, l) => acc + l.cantidad, 0) + porVencer.reduce((acc, l) => acc + l.cantidad, 0);
+    enRiesgoPorMedida.size === 0
+      ? 0
+      : [...enRiesgoPorMedida].map(([medida, cantidad]) => formatearCantidad(cantidad, medida)).join(' · ');
 
   return (
     <div className="vencimientos-page">
@@ -79,7 +87,7 @@ export default function VencimientosPage() {
           <span className="vencimientos-kpi-value">{porVencer.length}</span>
         </div>
         <div className="card vencimientos-kpi">
-          <span className="vencimientos-kpi-label">Unidades en riesgo</span>
+          <span className="vencimientos-kpi-label">Cantidad en riesgo</span>
           <span className="vencimientos-kpi-value">{unidadesEnRiesgo}</span>
         </div>
       </div>
@@ -122,7 +130,7 @@ export default function VencimientosPage() {
                 <span style={{ flex: 1 }} className="vencimientos-fila-muted">
                   Lote #{lote.lote_id}
                 </span>
-                <span style={{ flex: 1, textAlign: 'center', fontWeight: 700 }}>{lote.cantidad}</span>
+                <span style={{ flex: 1, textAlign: 'center', fontWeight: 700 }}>{describirStock(lote.cantidad, lote)}</span>
                 <span style={{ flex: 1.2 }}>{formatearFecha(lote.fecha_vencimiento)}</span>
                 <span style={{ flex: 1 }}>
                   <span className="vencimientos-badge vencimientos-badge-vencido">
@@ -157,7 +165,7 @@ export default function VencimientosPage() {
                 <span style={{ flex: 1 }} className="vencimientos-fila-muted">
                   Lote #{lote.lote_id}
                 </span>
-                <span style={{ flex: 1, textAlign: 'center', fontWeight: 700 }}>{lote.cantidad}</span>
+                <span style={{ flex: 1, textAlign: 'center', fontWeight: 700 }}>{describirStock(lote.cantidad, lote)}</span>
                 <span style={{ flex: 1.2 }}>{formatearFecha(lote.fecha_vencimiento)}</span>
                 <span style={{ flex: 1 }}>
                   <span className="vencimientos-badge vencimientos-badge-aviso">

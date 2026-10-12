@@ -4,7 +4,7 @@ import { existeClienteActivo, registrarAjustePorAnulacion, registrarCargoPorVent
 import { stockDisponible } from './reservas.service.js';
 import { sqlDiaNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
 import { mediosPagoPermitidos } from './modulos.service.js';
-import { armarLinea, COLUMNAS_PRESENTACION, juntarLineas, validarPresentacion } from './presentacion.js';
+import { armarLinea, COLUMNAS_PRESENTACION, describirCantidad, juntarLineas, validarPresentacion } from './presentacion.js';
 
 // 'cta_cte' (B2B Fase 1) es distinto de 'fiado' -- 'fiado' sigue siendo la
 // venta fiada informal, sin cliente ni ledger (decisión confirmada con el
@@ -71,7 +71,7 @@ async function obtenerVentaConItems(ventaId) {
 
   const items = await db
     .prepare(
-      `SELECT vi.*, p.nombre AS producto_nombre
+      `SELECT vi.*, p.nombre AS producto_nombre, p.medida
        FROM venta_items vi
        JOIN productos p ON p.id = vi.producto_id
        WHERE vi.venta_id = ?
@@ -162,7 +162,7 @@ export async function registrarVentaEnTransaccion(
 
     const disponible = await stockDisponible(producto_id, { excluirPedidoId: pedidoId });
     if (unidades > disponible) {
-      throw new ApiError(409, `Stock insuficiente para "${producto.nombre}" (faltan ${unidades - disponible} unidad/es)`);
+      throw new ApiError(409, `Stock insuficiente para "${producto.nombre}" (faltan ${describirCantidad(unidades - disponible, producto.medida)})`);
     }
 
     let restante = unidades;
@@ -200,7 +200,7 @@ export async function registrarVentaEnTransaccion(
     }
 
     if (restante > 0) {
-      throw new ApiError(409, `Stock insuficiente para "${producto.nombre}" (faltan ${restante} unidad/es)`);
+      throw new ApiError(409, `Stock insuficiente para "${producto.nombre}" (faltan ${describirCantidad(restante, producto.medida)})`);
     }
   }
 
@@ -228,8 +228,8 @@ export async function registrarVenta(datos, { usuarioId }) {
   for (const [productoId, unidades] of vendidas) {
     const producto = await db
       .prepare(
-        `SELECT p.nombre, p.pack_nombre, p.pack_unidades, u.nombre AS unidad_medida
-         FROM productos p LEFT JOIN unidades_medida u ON u.id = p.unidad_medida_id WHERE p.id = ?`
+        `SELECT p.nombre, p.medida, p.vende_suelto, p.pack_nombre, p.pack_unidades
+         FROM productos p WHERE p.id = ?`
       )
       .get(productoId);
     stockDespues.push({ producto_id: productoId, ...producto, unidades_vendidas: unidades, stock_disponible: await stockDisponible(productoId) });

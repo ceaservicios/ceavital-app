@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { envaseEnNombre } from '../utils/presentacion.js';
 import './ConfiguracionPage.css';
 
 // Sección genérica de catálogo (categorías / unidades de medida / condiciones
 // de pago): misma forma exacta para las 3, evita duplicar el mismo CRUD
 // (corrección pedida 2026-09-15; condiciones de pago sumada 2026-09-18). Exclusivo Admin -- esta pantalla entera ya está gateada por
 // RequireRole en App.jsx.
-function SeccionCatalogo({ titulo, endpoint, singular, descripcion, avisoNombre }) {
+function SeccionCatalogo({ titulo, endpoint, singular, descripcion }) {
   const [items, setItems] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
@@ -109,7 +108,6 @@ function SeccionCatalogo({ titulo, endpoint, singular, descripcion, avisoNombre 
           Agregar
         </button>
       </form>
-      {avisoNombre?.(nombreNuevo) && <div className="config-aviso">{avisoNombre(nombreNuevo)}</div>}
 
       <div className="config-catalogo-lista">
         {cargando && <div className="config-catalogo-vacio">Cargando…</div>}
@@ -178,19 +176,8 @@ const SECCIONES = [
     endpoint: '/categorias',
     singular: 'categoría',
   },
-  {
-    clave: 'unidades',
-    texto: 'Unidades de medida',
-    descripcion:
-      'La unidad suelta, lo más chico que se vende (ej. Unidad, Kg, Litro). Aparecen en «¿Cómo se vende?» al cargar un producto. Las cajas y packs no van acá: se marcan en cada producto («También se vende en pack o caja»), con cuántas unidades traen.',
-    endpoint: '/unidades-medida',
-    singular: 'unidad de medida',
-    // "Caja x 12" como unidad cuenta, cobra y descuenta de a una caja (2026-10-11).
-    avisoNombre: (nombre) =>
-      envaseEnNombre(nombre)
-        ? `«${nombre.trim()}» parece un envase. Si la cargás como unidad, el stock y la venta cuentan cada ${envaseEnNombre(nombre).nombre.toLowerCase()} como 1. Para vender suelto y por ${envaseEnNombre(nombre).nombre.toLowerCase()}, usá «Unidad» y marcá el envase en el producto.`
-        : null,
-  },
+  // "Unidades de medida" se sacó el 2026-10-11: el producto elige Unidad / Kg / Litro (migración
+  // 019) y la lista libre dejaba cargar "Caja x 12" como unidad. La tabla queda como historial.
   {
     clave: 'pagos',
     texto: 'Condiciones de pago',
@@ -233,7 +220,6 @@ export default function ConfiguracionPage() {
         descripcion={seccion.descripcion}
         endpoint={seccion.endpoint}
         singular={seccion.singular}
-        avisoNombre={seccion.avisoNombre}
       />
     </div>
   );

@@ -1,8 +1,10 @@
 import db from '../db/connection.js';
 import { hoyNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
 import { ApiError } from '../utils/api-error.js';
+import { factorMedida, MEDIDAS } from './presentacion.js';
 
-const CAMPOS_PRECIO = ['precio_costo', 'precio_venta'];
+// Precios y forma de venta: editarlos en un producto ya cargado es solo del Admin.
+const CAMPOS_PRECIO = ['precio_costo', 'precio_venta', 'pack', 'precio_cantidad', 'vende_suelto', 'medida'];
 
 // Topes de longitud de los textos libres (sin tope, un nombre de 90.000 caracteres se guardaba).
 const MAX_TEXTO = 200;
@@ -49,7 +51,7 @@ function validarFecha(valor, campo) {
 // mismos crearon (Ver y Editar son permisos distintos en la matriz).
 function ocultarCosto(producto, rol) {
   if (rol === 'admin') return producto;
-  const { precio_costo, ...resto } = producto;
+  const { precio_costo, costo_pack, ...resto } = producto;
   return resto;
 }
 
@@ -119,13 +121,57 @@ function validarPack(pack) {
   }
   if (typeof pack !== 'object' || Array.isArray(pack)) throw new ApiError(400, 'pack tiene que ser un objeto o null');
   const unidades = validarEntero(pack.unidades, 'Unidades que trae el pack', { minimo: 2 });
-  if (unidades > 100000) throw new ApiError(400, 'Unidades que trae el pack no puede superar 100000');
+  if (unidades > 10_000_000) throw new ApiError(400, 'Lo que trae el pack es demasiado grande');
   return {
     pack_nombre: validarString(pack.nombre, 'Nombre del pack', { maxLength: 20 }),
     pack_unidades: unidades,
     precio_pack: validarEntero(pack.precio, 'Precio del pack', { minimo: 0 }),
     codigo_barras_pack: validarString(pack.codigo_barras, 'Código de barras del pack', { requerido: false, maxLength: MAX_CODIGO_BARRAS }),
+    // Costo del pack: solo se usa si el producto se vende únicamente por pack (2026-10-11).
+    costo_pack: validarEntero(pack.costo, 'Costo del pack', { requerido: false, minimo: 0 }),
   };
+}
+
+// Forma de medir y formas de venta (migración 019, decisiones del usuario del 2026-10-11):
+// - medida 'unidad' | 'kg' | 'litro' (kg/litro en gramos/ml, precios por kg/litro);
+// - vende_suelto y/o pack: al menos una de las dos. Suelto pide precio de venta y costo; si se
+//   vende solo por pack, se pide el costo del pack (así se compra) y el precio y el costo de
+//   referencia por unidad/kg salen del pack. El precio por cantidad es solo para el suelto.
+// `estado` es el producto completo como va a quedar (alta, o fila actual + cambios).
+function resolverFormas(estado) {
+  if (!MEDIDAS.includes(estado.medida)) throw new ApiError(400, 'medida tiene que ser "unidad", "kg" o "litro"');
+  if (typeof estado.vende_suelto !== 'boolean') throw new ApiError(400, 'vende_suelto tiene que ser true o false');
+  const tienePack = estado.pack_nombre != null;
+  if (!estado.vende_suelto && !tienePack) {
+    throw new ApiError(400, 'Elegí al menos una forma de venta: suelto o por caja/pack');
+  }
+  if (estado.vende_suelto) {
+    if (estado.precio_venta == null) throw new ApiError(400, 'Falta el precio de venta suelto');
+    if (estado.precio_costo == null) throw new ApiError(400, 'Falta el costo');
+    return { ...estado, costo_pack: null };
+  }
+  if (estado.precio_cantidad_desde != null) {
+    throw new ApiError(400, 'El precio por cantidad es para la venta suelta: este producto se vende solo por pack');
+  }
+  if (estado.costo_pack == null) throw new ApiError(400, `Falta el costo por ${String(estado.pack_nombre).toLowerCase()}`);
+  const f = factorMedida(estado.medida);
+  return {
+    ...estado,
+    precio_venta: Math.round((estado.precio_pack * f) / estado.pack_unidades),
+    precio_costo: Math.round((estado.costo_pack * f) / estado.pack_unidades),
+  };
+}
+
+function validarMedida(valor) {
+  if (valor === undefined || valor === null || valor === '') return 'unidad';
+  if (!MEDIDAS.includes(valor)) throw new ApiError(400, 'medida tiene que ser "unidad", "kg" o "litro"');
+  return valor;
+}
+
+function validarVendeSuelto(valor) {
+  if (valor === undefined || valor === null) return true;
+  if (typeof valor !== 'boolean') throw new ApiError(400, 'vende_suelto tiene que ser true o false');
+  return valor;
 }
 
 // Precio por cantidad: null o { desde, precio } (desde N unidades de este producto, toda la
@@ -134,7 +180,7 @@ function validarPrecioCantidad(valor) {
   if (valor === null) return { precio_cantidad_desde: null, precio_cantidad: null };
   if (typeof valor !== 'object' || Array.isArray(valor)) throw new ApiError(400, 'precio_cantidad tiene que ser un objeto o null');
   const desde = validarEntero(valor.desde, 'A partir de cuántas', { minimo: 2 });
-  if (desde > 100000) throw new ApiError(400, 'A partir de cuántas no puede superar 100000');
+  if (desde > 10_000_000) throw new ApiError(400, 'A partir de cuántas es demasiado grande');
   return {
     precio_cantidad_desde: desde,
     precio_cantidad: validarEntero(valor.precio, 'Precio por cantidad', { minimo: 0 }),
@@ -147,7 +193,7 @@ function unidadesDelLote(cantidad, enPacks, packUnidades) {
   if (enPacks !== true) return cantidad;
   if (!packUnidades) throw new ApiError(400, 'Este producto no tiene pack: cargá la cantidad en unidades');
   const unidades = cantidad * packUnidades;
-  if (unidades > 1_000_000) throw new ApiError(400, 'La cantidad no puede superar 1.000.000 de unidades');
+  if (unidades > 10_000_000) throw new ApiError(400, 'La cantidad es demasiado grande');
   return unidades;
 }
 
@@ -179,6 +225,7 @@ const SELECT_PRODUCTOS_CON_STOCK = `
     p.eliminado_en, p.creado_en, p.actualizado_en,
     p.categoria_id, c.nombre AS categoria,
     p.unidad_medida_id, u.nombre AS unidad_medida,
+    p.medida, p.vende_suelto, p.costo_pack,
     p.pack_nombre, p.pack_unidades, p.precio_pack, p.codigo_barras_pack,
     p.precio_cantidad_desde, p.precio_cantidad,
     COALESCE(SUM(l.cantidad), 0) AS stock_total,
@@ -252,9 +299,10 @@ export async function crearProducto(datos, { rol }) {
   const nombre = validarString(datos.nombre, 'nombre');
   const codigoBarras = validarString(datos.codigo_barras, 'codigo_barras', { requerido: false, maxLength: MAX_CODIGO_BARRAS });
   const categoriaId = datos.categoria_id != null ? validarEntero(datos.categoria_id, 'categoria_id') : null;
-  const unidadMedidaId = validarEntero(datos.unidad_medida_id, 'unidad_medida_id');
-  const precioCosto = validarEntero(datos.precio_costo, 'precio_costo', { minimo: 0 });
-  const precioVenta = validarEntero(datos.precio_venta, 'precio_venta', { minimo: 0 });
+  // La unidad del catálogo quedó como dato histórico (migración 019): opcional.
+  const unidadMedidaId = datos.unidad_medida_id != null ? validarEntero(datos.unidad_medida_id, 'unidad_medida_id') : null;
+  const medida = validarMedida(datos.medida);
+  const vendeSuelto = validarVendeSuelto(datos.vende_suelto);
   const proveedorId = datos.proveedor_id != null ? validarEntero(datos.proveedor_id, 'proveedor_id') : null;
   const stockMinimo =
     datos.stock_minimo != null ? validarEntero(datos.stock_minimo, 'stock_minimo', { minimo: 0 }) : 0;
@@ -267,6 +315,14 @@ export async function crearProducto(datos, { rol }) {
   const pack = validarPack(datos.pack ?? null);
   const precioCantidad = validarPrecioCantidad(datos.precio_cantidad ?? null);
   verificarCodigosDistintos(codigoBarras, pack.codigo_barras_pack);
+  const formas = resolverFormas({
+    medida,
+    vende_suelto: vendeSuelto,
+    precio_venta: vendeSuelto ? validarEntero(datos.precio_venta, 'Precio de venta', { minimo: 0 }) : null,
+    precio_costo: vendeSuelto ? validarEntero(datos.precio_costo, 'Costo', { minimo: 0 }) : null,
+    ...pack,
+    ...precioCantidad,
+  });
 
   // Lote inicial opcional, directo en la misma alta (corrección 2026-09-15:
   // antes había que crear el producto y recién en un segundo paso separado
@@ -309,20 +365,22 @@ export async function crearProducto(datos, { rol }) {
     await verificarCodigoBarrasLibre(codigoBarras);
     await verificarCodigoBarrasLibre(pack.codigo_barras_pack);
     await obtenerCategoriaActiva(categoriaId);
-    await obtenerUnidadMedidaActiva(unidadMedidaId);
+    if (unidadMedidaId !== null) await obtenerUnidadMedidaActiva(unidadMedidaId);
 
     const producto = await db
       .prepare(
         `INSERT INTO productos
            (nombre, codigo_barras, precio_costo, precio_venta, categoria_id, unidad_medida_id, proveedor_id, stock_minimo, dias_aviso_vencimiento,
+            medida, vende_suelto, costo_pack,
             pack_nombre, pack_unidades, precio_pack, codigo_barras_pack, precio_cantidad_desde, precio_cantidad)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING id`
       )
       .get(
-        nombre, codigoBarras, precioCosto, precioVenta, categoriaId, unidadMedidaId, proveedorId, stockMinimo, diasAviso,
-        pack.pack_nombre, pack.pack_unidades, pack.precio_pack, pack.codigo_barras_pack,
-        precioCantidad.precio_cantidad_desde, precioCantidad.precio_cantidad
+        nombre, codigoBarras, formas.precio_costo, formas.precio_venta, categoriaId, unidadMedidaId, proveedorId, stockMinimo, diasAviso,
+        formas.medida, formas.vende_suelto, formas.costo_pack,
+        formas.pack_nombre, formas.pack_unidades, formas.precio_pack, formas.codigo_barras_pack,
+        formas.precio_cantidad_desde, formas.precio_cantidad
       );
 
     if (loteInicial) {
@@ -339,9 +397,8 @@ export async function crearProducto(datos, { rol }) {
 export async function editarProducto(id, datos, { rol }) {
   // "Precios (costo/venta) -- Editar" es exclusivo del Admin (distinto de
   // "Stock -- Editar: alta, lotes, ajustes", que incluye tambien al Encargado).
-  // El pack y el precio por cantidad son precios: también solo el Admin (2026-10-11).
-  const tocaPrecios = CAMPOS_PRECIO.some((c) => datos[c] !== undefined)
-    || datos.pack !== undefined || datos.precio_cantidad !== undefined;
+  // El pack, el precio por cantidad y las formas de venta y de medir también (2026-10-11).
+  const tocaPrecios = CAMPOS_PRECIO.some((c) => datos[c] !== undefined);
 
   await db.transaction(async () => {
     await obtenerProductoActivo(id);
@@ -358,8 +415,9 @@ export async function editarProducto(id, datos, { rol }) {
       await obtenerCategoriaActiva(actualizaciones.categoria_id);
     }
     if (datos.unidad_medida_id !== undefined) {
-      actualizaciones.unidad_medida_id = validarEntero(datos.unidad_medida_id, 'unidad_medida_id');
-      await obtenerUnidadMedidaActiva(actualizaciones.unidad_medida_id);
+      actualizaciones.unidad_medida_id =
+        datos.unidad_medida_id === null ? null : validarEntero(datos.unidad_medida_id, 'unidad_medida_id');
+      if (actualizaciones.unidad_medida_id !== null) await obtenerUnidadMedidaActiva(actualizaciones.unidad_medida_id);
     }
     if (datos.stock_minimo !== undefined) {
       actualizaciones.stock_minimo = validarEntero(datos.stock_minimo, 'stock_minimo', { minimo: 0 });
@@ -378,18 +436,47 @@ export async function editarProducto(id, datos, { rol }) {
       actualizaciones.codigo_barras = validarString(datos.codigo_barras, 'codigo_barras', { requerido: false, maxLength: MAX_CODIGO_BARRAS });
       await verificarCodigoBarrasLibre(actualizaciones.codigo_barras, id);
     }
-    if (datos.precio_costo !== undefined) {
-      actualizaciones.precio_costo = validarEntero(datos.precio_costo, 'precio_costo', { minimo: 0 });
-    }
-    if (datos.precio_venta !== undefined) {
-      actualizaciones.precio_venta = validarEntero(datos.precio_venta, 'precio_venta', { minimo: 0 });
-    }
-    if (datos.pack !== undefined) {
-      Object.assign(actualizaciones, validarPack(datos.pack));
-      await verificarCodigoBarrasLibre(actualizaciones.codigo_barras_pack, id);
-    }
-    if (datos.precio_cantidad !== undefined) {
-      Object.assign(actualizaciones, validarPrecioCantidad(datos.precio_cantidad));
+    // Precios y formas de venta: se arma el producto completo como va a quedar (fila actual +
+    // cambios) y se valida entero, así nunca queda sin forma de venta ni con precios sueltos.
+    if (tocaPrecios) {
+      const actual = await db
+        .prepare(
+          `SELECT medida, vende_suelto, precio_venta, precio_costo, costo_pack, pack_nombre, pack_unidades, precio_pack,
+             codigo_barras_pack, precio_cantidad_desde, precio_cantidad
+           FROM productos WHERE id = ?`
+        )
+        .get(id);
+      const estado = { ...actual };
+      if (datos.medida !== undefined) {
+        estado.medida = validarMedida(datos.medida);
+        if (estado.medida !== actual.medida) {
+          // Kg y litro van en gramos/ml: con stock o ventas, cambiar la medida cambiaría su sentido.
+          const movimientos = await db
+            .prepare(
+              `SELECT (SELECT COUNT(*) FROM lotes WHERE producto_id = ?) + (SELECT COUNT(*) FROM venta_items WHERE producto_id = ?)
+                 + (SELECT COUNT(*) FROM pedido_cliente_items WHERE producto_id = ?) AS n`
+            )
+            .get(id, id, id);
+          if (Number(movimientos.n) > 0) {
+            throw new ApiError(409, 'La forma de medir no se puede cambiar: el producto ya tiene stock o ventas');
+          }
+        }
+      }
+      if (datos.vende_suelto !== undefined) estado.vende_suelto = validarVendeSuelto(datos.vende_suelto);
+      if (datos.precio_venta !== undefined) estado.precio_venta = validarEntero(datos.precio_venta, 'Precio de venta', { minimo: 0 });
+      if (datos.precio_costo !== undefined) estado.precio_costo = validarEntero(datos.precio_costo, 'Costo', { minimo: 0 });
+      if (datos.pack !== undefined) {
+        Object.assign(estado, validarPack(datos.pack));
+        if (datos.pack !== null && datos.pack.costo === undefined) estado.costo_pack = actual.costo_pack;
+        await verificarCodigoBarrasLibre(estado.codigo_barras_pack, id);
+      }
+      if (datos.precio_cantidad !== undefined) Object.assign(estado, validarPrecioCantidad(datos.precio_cantidad));
+      // De "solo por pack" a suelto: el precio suelto se pide, no se toma el de referencia.
+      if (estado.vende_suelto && !actual.vende_suelto && (datos.precio_venta === undefined || datos.precio_costo === undefined)) {
+        throw new ApiError(400, 'Para venderlo suelto, cargá el precio de venta y el costo sueltos');
+      }
+      const final = resolverFormas(estado);
+      for (const campo of Object.keys(actual)) actualizaciones[campo] = final[campo];
     }
     if (datos.codigo_barras !== undefined || datos.pack !== undefined) {
       const actual = await db.prepare('SELECT codigo_barras, codigo_barras_pack FROM productos WHERE id = ?').get(id);
@@ -423,13 +510,16 @@ export async function editarProducto(id, datos, { rol }) {
 // - precios: el de venta que tenía pasa a ser el del pack; el costo, dividido por N.
 // Los pedidos a proveedores son administrativos y no mueven stock: no se tocan.
 // Solo Admin (son precios). No se permite si ya tiene pack o precio por cantidad.
+// Desde la migración 019 queda medido por unidad y puede quedar "solo por caja"
+// (vende_suelto: false): ahí no se pide precio suelto y el costo que tenía es el de la caja.
 export async function pasarAPack(id, datos, { rol }) {
   if (rol !== 'admin') throw new ApiError(403, 'Solo el Admin puede pasar un producto a unidad + pack');
-  const unidadMedidaId = validarEntero(datos.unidad_medida_id, 'Unidad suelta');
+  const unidadMedidaId = datos.unidad_medida_id != null ? validarEntero(datos.unidad_medida_id, 'Unidad suelta') : null;
   const packNombre = validarString(datos.pack_nombre, 'Nombre del pack', { maxLength: 20 });
   const n = validarEntero(datos.pack_unidades, 'Unidades que trae', { minimo: 2 });
   if (n > 100000) throw new ApiError(400, 'Unidades que trae no puede superar 100000');
-  const precioUnidad = validarEntero(datos.precio_venta, 'Precio de venta por unidad', { minimo: 0 });
+  const vendeSuelto = validarVendeSuelto(datos.vende_suelto);
+  const precioUnidad = vendeSuelto ? validarEntero(datos.precio_venta, 'Precio de venta por unidad', { minimo: 0 }) : null;
   const codigoUnidad = validarString(datos.codigo_barras_unidad, 'Código de barras de la unidad', {
     requerido: false,
     maxLength: MAX_CODIGO_BARRAS,
@@ -439,17 +529,18 @@ export async function pasarAPack(id, datos, { rol }) {
   await db.transaction(async () => {
     const actual = await db
       .prepare(
-        `SELECT id, nombre, codigo_barras, precio_costo, precio_venta, pack_nombre, precio_cantidad_desde, stock_minimo
+        `SELECT id, nombre, codigo_barras, precio_costo, precio_venta, pack_nombre, precio_cantidad_desde, stock_minimo, medida
          FROM productos WHERE id = ? AND eliminado_en IS NULL`
       )
       .get(id);
     if (!actual) throw new ApiError(404, 'Producto no encontrado');
+    if (actual.medida !== 'unidad') throw new ApiError(409, `"${actual.nombre}" se vende por ${actual.medida}: no es una caja`);
     if (actual.stock_minimo * n > 1_000_000) throw new ApiError(400, 'Con esa cantidad por pack el stock mínimo superaría 1.000.000 de unidades');
     if (actual.pack_nombre) throw new ApiError(409, `"${actual.nombre}" ya se vende por pack`);
     if (actual.precio_cantidad_desde != null) {
       throw new ApiError(409, 'Sacale primero el precio por cantidad: estaba pensado por caja y no se puede convertir solo');
     }
-    await obtenerUnidadMedidaActiva(unidadMedidaId);
+    if (unidadMedidaId !== null) await obtenerUnidadMedidaActiva(unidadMedidaId);
 
     const maxLote = await db.prepare('SELECT COALESCE(MAX(cantidad), 0) AS m FROM lotes WHERE producto_id = ?').get(id);
     if (maxLote.m * n > 1_000_000) throw new ApiError(400, 'Con esa cantidad por pack algún lote superaría 1.000.000 de unidades');
@@ -486,12 +577,16 @@ export async function pasarAPack(id, datos, { rol }) {
     await db
       .prepare(
         `UPDATE productos SET unidad_medida_id = ?, codigo_barras = ?, precio_venta = ?, precio_costo = ?,
-           stock_minimo = stock_minimo * ?,
+           stock_minimo = stock_minimo * ?, medida = 'unidad', vende_suelto = ?, costo_pack = ?,
            pack_nombre = ?, pack_unidades = ?, precio_pack = ?, codigo_barras_pack = ?, actualizado_en = CURRENT_TIMESTAMP
          WHERE id = ?`
       )
       .run(
-        unidadMedidaId, codigoNuevo, precioUnidad, Math.round(actual.precio_costo / n), n,
+        unidadMedidaId, codigoNuevo,
+        // Solo por caja: el precio por unidad queda de referencia (caja / N) y el costo de la caja, entero.
+        vendeSuelto ? precioUnidad : Math.round(actual.precio_venta / n),
+        Math.round(actual.precio_costo / n), n,
+        vendeSuelto, vendeSuelto ? null : actual.precio_costo,
         packNombre, n, actual.precio_venta, codigoPack, id
       );
   });

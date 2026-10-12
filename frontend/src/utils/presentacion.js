@@ -1,23 +1,104 @@
 // Venta por pack y precio por cantidad (2026-10-11, modelo de CEAVital-Somnia). Las mismas
 // reglas que el servidor (src/services/presentacion.js), que es el que decide el precio
 // real; acá solo se muestran antes de confirmar.
+//
+// Forma de medir (migración 019): 'unidad' se cuenta; 'kg' y 'litro' tienen decimales y el
+// sistema los guarda en gramos / mililitros (enteros). Toda cantidad que viaja con la API
+// (stock, lotes, líneas, "trae", "desde", mínimo) va en esa medida chica; los precios son por
+// unidad, por kg o por litro. Acá se convierte para mostrar y para leer lo que se tipea.
+
+export const MEDIDAS = [
+  { valor: 'unidad', texto: 'Por unidad', ayuda: 'Se cuenta: alfajor, gaseosa, paquete de fideos' },
+  { valor: 'kg', texto: 'Por peso (kg)', ayuda: 'Se pesa: queso, fiambre, pan, alimento suelto' },
+  { valor: 'litro', texto: 'Por litro', ayuda: 'Se mide: productos sueltos a granel' },
+];
+
+export function esFraccionable(medida) {
+  return medida === 'kg' || medida === 'litro';
+}
+
+export function factorMedida(medida) {
+  return esFraccionable(medida) ? 1000 : 1;
+}
+
+/** "kg", "L" o "unidad(es)". */
+export function simboloMedida(medida, cantidad = 2) {
+  if (medida === 'kg') return 'kg';
+  if (medida === 'litro') return 'L';
+  return cantidad === 1 ? 'unidad' : 'unidades';
+}
+
+/** "por unidad" / "por kg" / "por litro". */
+export function porMedida(medida) {
+  if (medida === 'kg') return 'por kg';
+  if (medida === 'litro') return 'por litro';
+  return 'por unidad';
+}
+
+/** Precio con su medida: "$600", "$12.000/kg". */
+export function sufijoPrecio(medida) {
+  if (medida === 'kg') return '/kg';
+  if (medida === 'litro') return '/L';
+  return '';
+}
+
+function numeroCorto(valor) {
+  return valor.toLocaleString('es-AR', { maximumFractionDigits: 3 });
+}
+
+/**
+ * Cantidad en la medida chica → texto: "12 unidades", "0,35 kg", "1,5 L".
+ * `corta`: sin la palabra "unidades" ("12"), para tablas.
+ */
+export function formatearCantidad(base, medida, { corta = false } = {}) {
+  const n = Number(base) || 0;
+  if (!esFraccionable(medida)) return corta ? String(n) : `${n} ${simboloMedida(medida, n)}`;
+  return `${numeroCorto(n / 1000)} ${simboloMedida(medida)}`;
+}
+
+/** Lo que se tipea ("0,350", "12") → cantidad en la medida chica, o null si no es válida. */
+export function parsearCantidad(texto, medida) {
+  // En unidades el punto es de miles ("1.000"); en kg/litro, decimal salvo que haya coma ("1.250,5").
+  const crudo = String(texto ?? '').trim();
+  const sinMiles = !esFraccionable(medida) || crudo.includes(',') ? crudo.replace(/\./g, '') : crudo;
+  const limpio = sinMiles.replace(',', '.');
+  if (!limpio) return null;
+  const n = Number(limpio);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (!esFraccionable(medida)) return Number.isInteger(n) ? n : null;
+  const base = Math.round(n * 1000);
+  return base > 0 ? base : null;
+}
+
+/** Cantidad en la medida chica → texto para un campo ("0,35", "12"). */
+export function textoDeCantidad(base, medida) {
+  if (base == null || base === '') return '';
+  if (!esFraccionable(medida)) return String(base);
+  return String(Number(base) / 1000).replace('.', ',');
+}
 
 export function tienePack(producto) {
   return Boolean(producto?.pack_nombre && producto?.pack_unidades);
+}
+
+/** Se vende suelto (por unidad, kg o litro). Los productos viejos no traen el dato: sí. */
+export function vendeSuelto(producto) {
+  return producto?.vende_suelto !== false;
 }
 
 export function tienePrecioCantidad(producto) {
   return producto?.precio_cantidad_desde != null && producto?.precio_cantidad != null;
 }
 
-/** "Pack x 24". */
-export function etiquetaPack(nombre, unidades) {
+/** "Caja x 12", "Bolsa x 15 kg". */
+export function etiquetaPack(nombre, unidades, medida = 'unidad') {
+  if (esFraccionable(medida)) return `${nombre} x ${formatearCantidad(unidades, medida)}`;
   return `${nombre} x ${unidades}`;
 }
 
 /**
- * Precio de una línea: por pack, el del pack; por unidad, el normal o, desde N unidades
- * inclusive, el precio por cantidad para toda la línea.
+ * Precio de una línea: por pack, el del pack; suelto, el normal o, desde N inclusive, el
+ * precio por cantidad para toda la línea. En kg/litro el precio es por kg/litro.
  */
 export function precioLinea(producto, cantidad, presentacion) {
   if (presentacion === 'pack') return { precio: producto.precio_pack, aplicaPrecioCantidad: false };
@@ -25,7 +106,14 @@ export function precioLinea(producto, cantidad, presentacion) {
   return { precio: aplica ? producto.precio_cantidad : producto.precio_venta, aplicaPrecioCantidad: aplica };
 }
 
-/** Cuántas unidades faltan para el precio por cantidad (0 si ya llegó o no tiene). */
+/** Subtotal de una línea: packs × precio del pack; suelto, cantidad × precio (÷1000 en kg/litro). */
+export function subtotalLinea(producto, cantidad, presentacion) {
+  const { precio } = precioLinea(producto, cantidad, presentacion);
+  if (presentacion === 'pack') return precio * cantidad;
+  return Math.round((cantidad * precio) / factorMedida(producto.medida));
+}
+
+/** Cuánto falta para el precio por cantidad (0 si ya llegó o no tiene), en la medida chica. */
 export function faltanParaPrecioCantidad(producto, cantidad) {
   if (!tienePrecioCantidad(producto)) return 0;
   return Math.max(0, producto.precio_cantidad_desde - cantidad);
@@ -35,18 +123,27 @@ export function unidadesDeLinea(producto, cantidad, presentacion) {
   return presentacion === 'pack' ? cantidad * producto.pack_unidades : cantidad;
 }
 
-/** Las unidades en packs: "10 pack" / "10 pack + 10", o null si no tiene pack o no llega a uno. */
-export function describirPacks(unidades, producto) {
-  if (!tienePack(producto) || unidades < producto.pack_unidades) return null;
-  const packs = Math.floor(unidades / producto.pack_unidades);
-  const resto = unidades % producto.pack_unidades;
-  return `${packs} ${plural(producto.pack_nombre, packs)}${resto ? ` + ${resto}` : ''}`;
+/** Cuántos packs son: "10 cajas" / "10 cajas + 4" / "2 bolsas + 3,5 kg", o null si no llega a uno. */
+export function describirPacks(base, producto) {
+  if (!tienePack(producto) || base < producto.pack_unidades) return null;
+  const packs = Math.floor(base / producto.pack_unidades);
+  const resto = base % producto.pack_unidades;
+  const textoResto = resto ? ` + ${formatearCantidad(resto, producto.medida, { corta: true })}` : '';
+  return `${packs} ${plural(producto.pack_nombre, packs)}${textoResto}`;
 }
 
-/** "240" o, con pack, "240 (10 pack)" / "250 (10 pack + 10)". */
-export function describirStock(unidades, producto) {
-  const packs = describirPacks(unidades, producto);
-  return packs ? `${unidades} (${packs})` : String(unidades);
+/** Corto, para tablas: "240 (10 cajas)", "3,5 kg". */
+export function describirStock(base, producto) {
+  const texto = formatearCantidad(base, producto?.medida, { corta: true });
+  const packs = describirPacks(base, producto);
+  return packs ? `${texto} (${packs})` : texto;
+}
+
+/** Largo: "64 unidades (5 cajas + 4)", "12,35 kg". */
+export function describirStockLargo(base, producto) {
+  const texto = formatearCantidad(base, producto?.medida);
+  const packs = describirPacks(base, producto);
+  return packs ? `${texto} (${packs})` : texto;
 }
 
 /** "caja" → "cajas", "pack" → "packs" (para "5 cajas"). */
@@ -57,29 +154,9 @@ export function plural(nombre, cantidad) {
   return `${n}s`;
 }
 
-/**
- * Stock legible con la unidad del producto y, si tiene pack, cuántos son:
- * "64 unidades (5 cajas + 4)", "3 kg". `unidad` es el nombre de la unidad de medida.
- */
-export function describirStockLargo(unidades, producto, unidad) {
-  const nombre = nombreUnidadSuelta(unidad, unidades);
-  const base = `${unidades} ${nombre}`;
-  if (!tienePack(producto) || unidades < producto.pack_unidades) return base;
-  const packs = Math.floor(unidades / producto.pack_unidades);
-  const resto = unidades % producto.pack_unidades;
-  return `${base} (${packs} ${plural(producto.pack_nombre, packs)}${resto ? ` + ${resto}` : ''})`;
-}
-
-/** "1 unidad" / "Unidad" / vacío → "unidad(es)"; "Kg" → "kg". */
-export function nombreUnidadSuelta(unidad, cantidad = 2) {
-  const limpio = String(unidad || '').trim().toLowerCase().replace(/^1\s+/, '');
-  if (!limpio || /^unidad(es)?$/.test(limpio)) return cantidad === 1 ? 'unidad' : 'unidades';
-  return limpio;
-}
-
-// Unidades de medida que en realidad son un envase (2026-10-11): con "Caja x 12" como
-// unidad, el sistema cuenta, cobra y descuenta de a una caja, sin relación con las unidades
-// que trae. Para eso está la casilla del pack. Se avisa al cargar el producto.
+// Unidades de medida del catálogo viejo que en realidad son un envase (2026-10-11): con
+// "Caja x 12" como unidad, el sistema cuenta, cobra y descuenta de a una caja. Desde la
+// migración 019 la unidad ya no se elige de esa lista; esto solo detecta productos viejos.
 const ENVASES = /\b(pack|caja|cajita|bulto|fardo|display|blister|blíster|docena|maple|tira|bandeja)\b/i;
 // "x 12", "de 24", "por 6", pero no un peso o volumen ("de 5 kg", "x 500 ml").
 const CANTIDAD_ENVASE = /(?:x|de|por)\s*(\d+)(?!\s*(?:kg|kgs|g|gr|grs|l|lt|lts|ml|cc|cm|m)\b)(?!\d)/i;
@@ -97,8 +174,13 @@ export function envaseEnNombre(nombreUnidad) {
   return { nombre, unidades: unidades >= 2 ? unidades : null };
 }
 
-/** Cantidad de una línea de pedido o venta: "3" o "2 Pack x 24". */
+/** Producto viejo cargado con un envase como unidad (y todavía sin convertir). */
+export function cargadoConEnvase(producto) {
+  return (producto?.medida ?? 'unidad') === 'unidad' && !tienePack(producto) && Boolean(envaseEnNombre(producto?.unidad_medida));
+}
+
+/** Cantidad de una línea de pedido o venta: "3", "0,35 kg" o "2 Caja x 12". */
 export function describirCantidadLinea(item) {
-  if (!item.pack_nombre) return String(item.cantidad_presentacion ?? item.cantidad);
-  return `${item.cantidad_presentacion} ${etiquetaPack(item.pack_nombre, item.pack_unidades)}`;
+  if (!item.pack_nombre) return formatearCantidad(item.cantidad, item.medida, { corta: true });
+  return `${item.cantidad_presentacion} ${etiquetaPack(item.pack_nombre, item.pack_unidades, item.medida)}`;
 }

@@ -11,12 +11,26 @@ import { ApiError } from '../utils/api-error.js';
 
 export const PRESENTACIONES = ['unidad', 'pack'];
 
+// Forma de medir (migración 019): 'unidad' se cuenta; 'kg' y 'litro' tienen decimales y se
+// guardan en gramos / mililitros (enteros). Los precios son por unidad, por kg o por litro.
+export const MEDIDAS = ['unidad', 'kg', 'litro'];
+export function factorMedida(medida) {
+  return medida === 'kg' || medida === 'litro' ? 1000 : 1;
+}
+
+/** Cantidad legible para mensajes: "3 unidades", "13,999 kg", "1,5 L". */
+export function describirCantidad(base, medida) {
+  if (factorMedida(medida) === 1) return `${base} ${base === 1 ? 'unidad' : 'unidades'}`;
+  const texto = (base / 1000).toLocaleString('es-AR', { maximumFractionDigits: 3 });
+  return `${texto} ${medida === 'kg' ? 'kg' : 'L'}`;
+}
+
 // Columnas de productos que necesita armarLinea (para los SELECT de quien la llama).
 export const COLUMNAS_PRESENTACION =
-  'pack_nombre, pack_unidades, precio_pack, codigo_barras_pack, precio_cantidad_desde, precio_cantidad';
+  'medida, vende_suelto, pack_nombre, pack_unidades, precio_pack, codigo_barras_pack, precio_cantidad_desde, precio_cantidad';
 
-// Tope de unidades de una linea (cantidad x unidades del pack): lotes.cantidad es INTEGER.
-const MAX_UNIDADES_LINEA = 1_000_000;
+// Tope de una linea en la medida más chica (unidades, gramos o ml): lotes.cantidad es INTEGER.
+const MAX_UNIDADES_LINEA = 10_000_000;
 
 export function validarPresentacion(valor, campo) {
   if (valor === undefined || valor === null || valor === '') return 'unidad';
@@ -54,6 +68,10 @@ export function armarLinea(producto, { cantidad, presentacion }) {
     };
   }
 
+  // Suelto: por unidad, o en gramos/ml para kg/litro (el precio es por kg o litro).
+  if (producto.vende_suelto === false) {
+    throw new ApiError(400, `"${producto.nombre}" no se vende suelto: solo por ${String(producto.pack_nombre).toLowerCase()}`);
+  }
   if (cantidad > MAX_UNIDADES_LINEA) throw new ApiError(400, `Cantidad demasiado grande para "${producto.nombre}"`);
   const aplicaPrecioCantidad = producto.precio_cantidad_desde !== null && producto.precio_cantidad_desde !== undefined
     && producto.precio_cantidad !== null && producto.precio_cantidad !== undefined
@@ -66,7 +84,7 @@ export function armarLinea(producto, { cantidad, presentacion }) {
     precio_unitario: precio,
     precio_cantidad_desde: aplicaPrecioCantidad ? producto.precio_cantidad_desde : null,
     unidades: cantidad,
-    subtotal: cantidad * precio,
+    subtotal: Math.round((cantidad * precio) / factorMedida(producto.medida)),
   };
 }
 

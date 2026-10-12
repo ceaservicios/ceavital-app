@@ -419,6 +419,25 @@
   color: var(--text-tertiary);
 }
 
+/* "¿Cómo se mide?" / "¿Cómo se vende?" (2026-10-11): cada forma de venta en su recuadro;
+   la marcada se destaca con el verde de marca. */
+.formas-venta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.formas-venta > .field + .field {
+  margin-bottom: -4px;
+}
+.stock-presentacion-activa {
+  border-color: rgba(14, 75, 56, 0.45);
+  background: rgba(14, 75, 56, 0.04);
+}
+.stock-unidades button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 /* Circuito unidad / caja (2026-10-11): cuenta del ingreso, aviso de envase y conversión. */
 .stock-cuenta {
   font-size: 12.5px;
