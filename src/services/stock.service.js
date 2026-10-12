@@ -117,7 +117,10 @@ function verificarCodigosDistintos(codigoUnidad, codigoPack) {
 // { nombre, unidades, precio, codigo_barras }. Todo junto o nada (CHECK de la migración 018).
 function validarPack(pack) {
   if (pack === null) {
-    return { pack_nombre: null, pack_unidades: null, precio_pack: null, codigo_barras_pack: null };
+    return {
+      pack_nombre: null, pack_unidades: null, precio_pack: null, codigo_barras_pack: null,
+      costo_pack: null, pack_cantidad_desde: null, precio_pack_cantidad: null,
+    };
   }
   if (typeof pack !== 'object' || Array.isArray(pack)) throw new ApiError(400, 'pack tiene que ser un objeto o null');
   const unidades = validarEntero(pack.unidades, 'Unidades que trae el pack', { minimo: 2 });
@@ -129,6 +132,19 @@ function validarPack(pack) {
     codigo_barras_pack: validarString(pack.codigo_barras, 'Código de barras del pack', { requerido: false, maxLength: MAX_CODIGO_BARRAS }),
     // Costo del pack: solo se usa si el producto se vende únicamente por pack (2026-10-11).
     costo_pack: validarEntero(pack.costo, 'Costo del pack', { requerido: false, minimo: 0 }),
+    // Precio por cantidad del pack (migración 020): null o { desde, precio }, contado en packs.
+    ...validarPrecioCantidadPack(pack.precio_cantidad ?? null),
+  };
+}
+
+function validarPrecioCantidadPack(valor) {
+  if (valor === null) return { pack_cantidad_desde: null, precio_pack_cantidad: null };
+  if (typeof valor !== 'object' || Array.isArray(valor)) throw new ApiError(400, 'pack.precio_cantidad tiene que ser un objeto o null');
+  const desde = validarEntero(valor.desde, 'A partir de cuántos packs', { minimo: 2 });
+  if (desde > 100000) throw new ApiError(400, 'A partir de cuántos packs no puede superar 100000');
+  return {
+    pack_cantidad_desde: desde,
+    precio_pack_cantidad: validarEntero(valor.precio, 'Precio por cantidad del pack', { minimo: 0 }),
   };
 }
 
@@ -227,6 +243,7 @@ const SELECT_PRODUCTOS_CON_STOCK = `
     p.unidad_medida_id, u.nombre AS unidad_medida,
     p.medida, p.vende_suelto, p.costo_pack,
     p.pack_nombre, p.pack_unidades, p.precio_pack, p.codigo_barras_pack,
+    p.pack_cantidad_desde, p.precio_pack_cantidad,
     p.precio_cantidad_desde, p.precio_cantidad,
     COALESCE(SUM(l.cantidad), 0) AS stock_total,
     COALESCE(SUM(CASE WHEN l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= ${SQL_HOY_NEGOCIO} THEN l.cantidad ELSE 0 END), 0) AS stock_vendible,
@@ -372,15 +389,17 @@ export async function crearProducto(datos, { rol }) {
         `INSERT INTO productos
            (nombre, codigo_barras, precio_costo, precio_venta, categoria_id, unidad_medida_id, proveedor_id, stock_minimo, dias_aviso_vencimiento,
             medida, vende_suelto, costo_pack,
-            pack_nombre, pack_unidades, precio_pack, codigo_barras_pack, precio_cantidad_desde, precio_cantidad)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            pack_nombre, pack_unidades, precio_pack, codigo_barras_pack, precio_cantidad_desde, precio_cantidad,
+            pack_cantidad_desde, precio_pack_cantidad)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING id`
       )
       .get(
         nombre, codigoBarras, formas.precio_costo, formas.precio_venta, categoriaId, unidadMedidaId, proveedorId, stockMinimo, diasAviso,
         formas.medida, formas.vende_suelto, formas.costo_pack,
         formas.pack_nombre, formas.pack_unidades, formas.precio_pack, formas.codigo_barras_pack,
-        formas.precio_cantidad_desde, formas.precio_cantidad
+        formas.precio_cantidad_desde, formas.precio_cantidad,
+        formas.pack_cantidad_desde, formas.precio_pack_cantidad
       );
 
     if (loteInicial) {
@@ -442,7 +461,7 @@ export async function editarProducto(id, datos, { rol }) {
       const actual = await db
         .prepare(
           `SELECT medida, vende_suelto, precio_venta, precio_costo, costo_pack, pack_nombre, pack_unidades, precio_pack,
-             codigo_barras_pack, precio_cantidad_desde, precio_cantidad
+             codigo_barras_pack, precio_cantidad_desde, precio_cantidad, pack_cantidad_desde, precio_pack_cantidad
            FROM productos WHERE id = ?`
         )
         .get(id);
@@ -468,6 +487,11 @@ export async function editarProducto(id, datos, { rol }) {
       if (datos.pack !== undefined) {
         Object.assign(estado, validarPack(datos.pack));
         if (datos.pack !== null && datos.pack.costo === undefined) estado.costo_pack = actual.costo_pack;
+        // Un pack mandado sin su precio por cantidad conserva el que tenía (como el costo).
+        if (datos.pack !== null && datos.pack.precio_cantidad === undefined) {
+          estado.pack_cantidad_desde = actual.pack_cantidad_desde;
+          estado.precio_pack_cantidad = actual.precio_pack_cantidad;
+        }
         await verificarCodigoBarrasLibre(estado.codigo_barras_pack, id);
       }
       if (datos.precio_cantidad !== undefined) Object.assign(estado, validarPrecioCantidad(datos.precio_cantidad));

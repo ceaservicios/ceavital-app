@@ -27,7 +27,8 @@ export function describirCantidad(base, medida) {
 
 // Columnas de productos que necesita armarLinea (para los SELECT de quien la llama).
 export const COLUMNAS_PRESENTACION =
-  'medida, vende_suelto, pack_nombre, pack_unidades, precio_pack, codigo_barras_pack, precio_cantidad_desde, precio_cantidad';
+  'medida, vende_suelto, pack_nombre, pack_unidades, precio_pack, codigo_barras_pack, precio_cantidad_desde, precio_cantidad, ' +
+  'pack_cantidad_desde, precio_pack_cantidad';
 
 // Tope de una linea en la medida más chica (unidades, gramos o ml): lotes.cantidad es INTEGER.
 const MAX_UNIDADES_LINEA = 10_000_000;
@@ -57,14 +58,19 @@ export function armarLinea(producto, { cantidad, presentacion }) {
     if (!tienePack(producto)) throw new ApiError(400, `"${producto.nombre}" no se vende por pack`);
     const unidades = cantidad * producto.pack_unidades;
     if (unidades > MAX_UNIDADES_LINEA) throw new ApiError(400, `Cantidad demasiado grande para "${producto.nombre}"`);
+    // Precio por cantidad del pack (migración 020): desde N packs, toda la línea a ese precio.
+    const aplicaPrecioCantidad = producto.pack_cantidad_desde != null && producto.precio_pack_cantidad != null
+      && cantidad >= producto.pack_cantidad_desde;
+    const precio = aplicaPrecioCantidad ? producto.precio_pack_cantidad : producto.precio_pack;
     return {
       producto_id: producto.id,
       pack_nombre: producto.pack_nombre,
       pack_unidades: producto.pack_unidades,
-      precio_unitario: producto.precio_pack,
-      precio_cantidad_desde: null,
+      precio_unitario: precio,
+      // En una línea por pack, "desde" se lee en packs.
+      precio_cantidad_desde: aplicaPrecioCantidad ? producto.pack_cantidad_desde : null,
       unidades,
-      subtotal: cantidad * producto.precio_pack,
+      subtotal: cantidad * precio,
     };
   }
 

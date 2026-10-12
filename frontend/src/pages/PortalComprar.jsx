@@ -6,6 +6,7 @@ import {
   etiquetaPack,
   formatearCantidad,
   parsearCantidad,
+  plural,
   precioLinea,
   simboloMedida,
   subtotalLinea,
@@ -247,6 +248,13 @@ export default function PortalComprar({ onSesionVencida, onPedidoEnviado }) {
                 </span>
               );
               const precioSuelto = `${formatearMonto(precioLinea(p, cantidadDe(p, 'unidad'), 'unidad').precio)}${sufijoPrecio(p.medida)}`;
+              // Precio por cantidad del pack (migración 020): desde N packs.
+              const precioCantidadPack = tienePrecioCantidad(p, 'pack') && (
+                <span className="pedido-prod-promo">
+                  Desde {p.pack_cantidad_desde} {plural(p.pack_nombre, p.pack_cantidad_desde)}: {formatearMonto(p.precio_pack_cantidad)} c/u
+                </span>
+              );
+              const precioPack = tienePack(p) ? formatearMonto(precioLinea(p, cantidadDe(p, 'pack'), 'pack').precio) : '';
               const formas = [vendeSuelto(p) && 'unidad', tienePack(p) && 'pack'].filter(Boolean);
               const etiquetaPackP = tienePack(p) ? etiquetaPack(p.pack_nombre, p.pack_unidades, p.medida) : '';
 
@@ -258,9 +266,9 @@ export default function PortalComprar({ onSesionVencida, onPedidoEnviado }) {
                       <span className="pedido-prod-nombre">{p.nombre}</span>
                       {pres === 'pack' && <span className="pedido-prod-meta">{etiquetaPackP}</span>}
                       {meta && <span className="pedido-prod-meta">{meta}</span>}
-                      {pres === 'unidad' && precioCantidad}
+                      {pres === 'unidad' ? precioCantidad : precioCantidadPack}
                     </div>
-                    <span className="pedido-prod-precio">{pres === 'pack' ? formatearMonto(p.precio_pack) : precioSuelto}</span>
+                    <span className="pedido-prod-precio">{pres === 'pack' ? precioPack : precioSuelto}</span>
                     <span className="pedido-prod-stock">{stock}</span>
                     {control(p, pres, p.nombre)}
                   </li>
@@ -284,8 +292,11 @@ export default function PortalComprar({ onSesionVencida, onPedidoEnviado }) {
                       {control(p, 'unidad', `${p.nombre} suelto`)}
                     </div>
                     <div className="pedido-opcion">
-                      <span className="pedido-opcion-nombre">{etiquetaPackP}</span>
-                      <span className="pedido-prod-precio">{formatearMonto(p.precio_pack)}</span>
+                      <span className="pedido-opcion-nombre">
+                        {etiquetaPackP}
+                        {precioCantidadPack}
+                      </span>
+                      <span className="pedido-prod-precio">{precioPack}</span>
                       {control(p, 'pack', `${p.nombre} por ${p.pack_nombre}`)}
                     </div>
                   </div>

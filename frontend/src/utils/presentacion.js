@@ -86,8 +86,17 @@ export function vendeSuelto(producto) {
   return producto?.vende_suelto !== false;
 }
 
-export function tienePrecioCantidad(producto) {
+/** Precio por cantidad del suelto o, con presentacion 'pack', del pack (migración 020). */
+export function tienePrecioCantidad(producto, presentacion = 'unidad') {
+  if (presentacion === 'pack') return producto?.pack_cantidad_desde != null && producto?.precio_pack_cantidad != null;
   return producto?.precio_cantidad_desde != null && producto?.precio_cantidad != null;
+}
+
+/** Desde cuánto y a qué precio rige el precio por cantidad de esa forma de venta. */
+export function precioCantidadDe(producto, presentacion = 'unidad') {
+  return presentacion === 'pack'
+    ? { desde: producto.pack_cantidad_desde, precio: producto.precio_pack_cantidad }
+    : { desde: producto.precio_cantidad_desde, precio: producto.precio_cantidad };
 }
 
 /** "Caja x 12", "Bolsa x 15 kg". */
@@ -101,9 +110,9 @@ export function etiquetaPack(nombre, unidades, medida = 'unidad') {
  * precio por cantidad para toda la línea. En kg/litro el precio es por kg/litro.
  */
 export function precioLinea(producto, cantidad, presentacion) {
-  if (presentacion === 'pack') return { precio: producto.precio_pack, aplicaPrecioCantidad: false };
-  const aplica = tienePrecioCantidad(producto) && cantidad >= producto.precio_cantidad_desde;
-  return { precio: aplica ? producto.precio_cantidad : producto.precio_venta, aplicaPrecioCantidad: aplica };
+  const aplica = tienePrecioCantidad(producto, presentacion) && cantidad >= precioCantidadDe(producto, presentacion).desde;
+  const normal = presentacion === 'pack' ? producto.precio_pack : producto.precio_venta;
+  return { precio: aplica ? precioCantidadDe(producto, presentacion).precio : normal, aplicaPrecioCantidad: aplica };
 }
 
 /** Subtotal de una línea: packs × precio del pack; suelto, cantidad × precio (÷1000 en kg/litro). */
@@ -113,10 +122,10 @@ export function subtotalLinea(producto, cantidad, presentacion) {
   return Math.round((cantidad * precio) / factorMedida(producto.medida));
 }
 
-/** Cuánto falta para el precio por cantidad (0 si ya llegó o no tiene), en la medida chica. */
-export function faltanParaPrecioCantidad(producto, cantidad) {
-  if (!tienePrecioCantidad(producto)) return 0;
-  return Math.max(0, producto.precio_cantidad_desde - cantidad);
+/** Cuánto falta para el precio por cantidad (0 si ya llegó o no tiene): en la medida chica, o en packs. */
+export function faltanParaPrecioCantidad(producto, cantidad, presentacion = 'unidad') {
+  if (!tienePrecioCantidad(producto, presentacion)) return 0;
+  return Math.max(0, precioCantidadDe(producto, presentacion).desde - cantidad);
 }
 
 export function unidadesDeLinea(producto, cantidad, presentacion) {

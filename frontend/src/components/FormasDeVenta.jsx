@@ -3,6 +3,7 @@ import {
   formatearCantidad,
   MEDIDAS,
   parsearCantidad,
+  plural,
   porMedida,
   simboloMedida,
   textoDeCantidad,
@@ -14,7 +15,8 @@ import {
 // - medida fija: por unidad, por peso (kg) o por litro;
 // - formas de venta opcionales (al menos una): suelto (precio y costo por unidad/kg/litro) y
 //   por caja/pack/bolsa (trae N, precio, código; si no se vende suelto, también su costo);
-// - precio especial por cantidad, solo para el suelto.
+// - precio por cantidad dentro de cada forma de venta (pedido del usuario: "+10 pack puede tener
+//   oferta"): el del suelto, desde N unidades/kg; el del pack, desde N packs (migración 020).
 // Los campos son texto (en kg se tipea "0,350"); formasParaApi los pasa a la medida chica.
 
 export const FORMAS_VACIAS = {
@@ -22,6 +24,7 @@ export const FORMAS_VACIAS = {
   suelto: { activo: true, precio: '', costo: '' },
   pack: { activo: false, nombre: 'Caja', cantidad: '', precio: '', costo: '', codigo_barras: '' },
   precioCantidad: { activo: false, desde: '', precio: '' },
+  packCantidad: { activo: false, desde: '', precio: '' },
 };
 
 const texto = (valor) => (valor == null ? '' : String(valor));
@@ -46,6 +49,10 @@ export function formasDesdeProducto(p) {
       p.precio_cantidad_desde != null
         ? { activo: true, desde: textoDeCantidad(p.precio_cantidad_desde, medida), precio: texto(p.precio_cantidad) }
         : { ...FORMAS_VACIAS.precioCantidad },
+    packCantidad:
+      p.pack_cantidad_desde != null
+        ? { activo: true, desde: texto(p.pack_cantidad_desde), precio: texto(p.precio_pack_cantidad) }
+        : { ...FORMAS_VACIAS.packCantidad },
   };
 }
 
@@ -64,6 +71,9 @@ export function formasParaApi(v, { conCosto = true } = {}) {
           precio: Number(v.pack.precio),
           codigo_barras: v.pack.codigo_barras.trim() || null,
           ...(!suelto && conCosto ? { costo: Number(v.pack.costo) } : {}),
+          precio_cantidad: v.packCantidad.activo
+            ? { desde: parsearCantidad(v.packCantidad.desde, 'unidad'), precio: Number(v.packCantidad.precio) }
+            : null,
         }
       : null,
     precio_cantidad:
@@ -79,6 +89,12 @@ export function faltaEnFormas(v, { conCosto = true } = {}) {
   if (!v.suelto.activo && !v.pack.activo) return 'Elegí al menos una forma de venta: suelto o por caja/pack.';
   if (v.suelto.activo && v.suelto.precio === '') return `Completá el precio de venta ${porMedida(v.medida)}.`;
   if (v.suelto.activo && conCosto && v.suelto.costo === '') return `Completá el costo ${porMedida(v.medida)}.`;
+  if (v.suelto.activo && v.precioCantidad.activo) {
+    const desde = parsearCantidad(v.precioCantidad.desde, v.medida);
+    if (!desde || (!esFraccionable(v.medida) && desde < 2) || v.precioCantidad.precio === '') {
+      return `Completá la cantidad mínima y el precio por cantidad de la venta suelta.`;
+    }
+  }
   if (v.pack.activo) {
     if (!v.pack.nombre.trim()) return 'Completá el nombre de la caja o pack.';
     const cantidad = parsearCantidad(v.pack.cantidad, v.medida);
@@ -89,10 +105,11 @@ export function faltaEnFormas(v, { conCosto = true } = {}) {
     }
     if (v.pack.precio === '') return `Completá el precio por ${nombrePack}.`;
     if (!v.suelto.activo && conCosto && v.pack.costo === '') return `Completá el costo por ${nombrePack}.`;
-  }
-  if (v.suelto.activo && v.precioCantidad.activo) {
-    if (!parsearCantidad(v.precioCantidad.desde, v.medida) || v.precioCantidad.precio === '') {
-      return 'Completá desde cuánto y el precio especial por cantidad.';
+    if (v.packCantidad.activo) {
+      const desde = parsearCantidad(v.packCantidad.desde, 'unidad');
+      if (!desde || desde < 2 || v.packCantidad.precio === '') {
+        return `Completá la cantidad mínima (2 o más) y el precio por cantidad de la venta por ${nombrePack}.`;
+      }
     }
   }
   return null;
@@ -110,12 +127,55 @@ function Campo({ label, ayuda, children }) {
   );
 }
 
+// Precio por cantidad de una forma de venta: cantidad mínima y precio desde ahí (toda la línea).
+function PrecioPorCantidad({ valor, onFijar, editable, unidadCantidad, porQue, decimal }) {
+  return (
+    <div className="stock-precio-cantidad">
+      <label className="stock-presentacion-check">
+        <input
+          type="checkbox"
+          disabled={!editable}
+          checked={valor.activo}
+          onChange={(e) => onFijar({ activo: e.target.checked })}
+        />
+        <span>
+          Precio por cantidad
+          <span className="stock-label-unidad">Precio diferencial a partir de una cantidad mínima</span>
+        </span>
+      </label>
+      {valor.activo && (
+        <div className="stock-form-grid2">
+          <Campo label="Cantidad mínima" ayuda={unidadCantidad}>
+            <input
+              type="text"
+              inputMode={decimal ? 'decimal' : 'numeric'}
+              disabled={!editable}
+              placeholder="ej: 10"
+              value={valor.desde}
+              onChange={(e) => onFijar({ desde: e.target.value })}
+            />
+          </Campo>
+          <Campo label="Precio" ayuda={porQue}>
+            <input
+              type="number"
+              min="0"
+              disabled={!editable}
+              value={valor.precio}
+              onChange={(e) => onFijar({ precio: e.target.value })}
+            />
+          </Campo>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * `editablePrecios`: alta, o edición del Admin. `verCosto`: alta, o Admin.
  * `medidaBloqueada`: texto del motivo si la medida no se puede cambiar (ya tiene stock o ventas).
  */
 export default function FormasDeVenta({ valor, onChange, editablePrecios, verCosto, medidaBloqueada = null }) {
-  const { medida, suelto, pack, precioCantidad } = valor;
+  const { medida, suelto, pack, precioCantidad, packCantidad } = valor;
   const fijar = (parte, cambios) => onChange({ ...valor, [parte]: { ...valor[parte], ...cambios } });
   const fraccion = esFraccionable(medida);
   const nombrePack = pack.nombre.trim().toLowerCase() || (fraccion ? 'bolsa' : 'caja');
@@ -123,7 +183,7 @@ export default function FormasDeVenta({ valor, onChange, editablePrecios, verCos
 
   function cambiarMedida(nueva) {
     if (nueva === medida) return;
-    // Lo que trae el pack y el "desde" cambian de sentido con la medida: se vacían.
+    // Lo que trae el pack y el "desde" del suelto cambian de sentido con la medida: se vacían.
     onChange({
       ...valor,
       medida: nueva,
@@ -168,32 +228,42 @@ export default function FormasDeVenta({ valor, onChange, editablePrecios, verCos
           Suelto, {porMedida(medida)}
         </label>
         {suelto.activo && (
-          <div className="stock-form-grid2">
-            <Campo label="Precio de venta" ayuda={porMedida(medida)}>
-              <input
-                type="number"
-                min="0"
-                disabled={!editablePrecios}
-                value={suelto.precio}
-                onChange={(e) => fijar('suelto', { precio: e.target.value })}
-              />
-            </Campo>
-            {verCosto ? (
-              <Campo label="Costo" ayuda={porMedida(medida)}>
+          <>
+            <div className="stock-form-grid2">
+              <Campo label="Precio de venta" ayuda={porMedida(medida)}>
                 <input
                   type="number"
                   min="0"
                   disabled={!editablePrecios}
-                  value={suelto.costo}
-                  onChange={(e) => fijar('suelto', { costo: e.target.value })}
+                  value={suelto.precio}
+                  onChange={(e) => fijar('suelto', { precio: e.target.value })}
                 />
               </Campo>
-            ) : (
-              <Campo label="Costo">
-                <div className="stock-campo-oculto">No disponible para tu rol</div>
-              </Campo>
-            )}
-          </div>
+              {verCosto ? (
+                <Campo label="Costo" ayuda={porMedida(medida)}>
+                  <input
+                    type="number"
+                    min="0"
+                    disabled={!editablePrecios}
+                    value={suelto.costo}
+                    onChange={(e) => fijar('suelto', { costo: e.target.value })}
+                  />
+                </Campo>
+              ) : (
+                <Campo label="Costo">
+                  <div className="stock-campo-oculto">No disponible para tu rol</div>
+                </Campo>
+              )}
+            </div>
+            <PrecioPorCantidad
+              valor={precioCantidad}
+              onFijar={(c) => fijar('precioCantidad', c)}
+              editable={editablePrecios}
+              unidadCantidad={fraccion ? simboloMedida(medida) : 'unidades'}
+              porQue={porMedida(medida)}
+              decimal={fraccion}
+            />
+          </>
         )}
       </div>
 
@@ -271,45 +341,17 @@ export default function FormasDeVenta({ valor, onChange, editablePrecios, verCos
                 del stock.
               </span>
             )}
+            <PrecioPorCantidad
+              valor={packCantidad}
+              onFijar={(c) => fijar('packCantidad', c)}
+              editable={editablePrecios}
+              unidadCantidad={plural(nombrePack, 2)}
+              porQue={`por ${nombrePack}`}
+              decimal={false}
+            />
           </>
         )}
       </div>
-
-      {suelto.activo && (
-        <div className={`stock-presentacion${precioCantidad.activo ? ' stock-presentacion-activa' : ''}`}>
-          <label className="stock-presentacion-check">
-            <input
-              type="checkbox"
-              disabled={!editablePrecios}
-              checked={precioCantidad.activo}
-              onChange={(e) => fijar('precioCantidad', { activo: e.target.checked })}
-            />
-            Precio especial por cantidad (ej: desde {fraccion ? `3 ${simboloMedida(medida)}` : '3'}, más barato)
-          </label>
-          {precioCantidad.activo && (
-            <div className="stock-form-grid2">
-              <Campo label="A partir de" ayuda={fraccion ? simboloMedida(medida) : 'unidades'}>
-                <input
-                  type="text"
-                  inputMode={fraccion ? 'decimal' : 'numeric'}
-                  disabled={!editablePrecios}
-                  value={precioCantidad.desde}
-                  onChange={(e) => fijar('precioCantidad', { desde: e.target.value })}
-                />
-              </Campo>
-              <Campo label="Precio" ayuda={porMedida(medida)}>
-                <input
-                  type="number"
-                  min="0"
-                  disabled={!editablePrecios}
-                  value={precioCantidad.precio}
-                  onChange={(e) => fijar('precioCantidad', { precio: e.target.value })}
-                />
-              </Campo>
-            </div>
-          )}
-        </div>
-      )}
       {!editablePrecios && <span className="stock-hint">Solo el Admin puede cambiar los precios y las formas de venta.</span>}
     </div>
   );

@@ -10,6 +10,8 @@ import {
   faltanParaPrecioCantidad,
   formatearCantidad,
   parsearCantidad,
+  plural,
+  precioCantidadDe,
   precioLinea,
   simboloMedida,
   subtotalLinea,
@@ -585,7 +587,10 @@ export default function CajaPage() {
                   const porPack = item.presentacion === 'pack';
                   const porPeso = esLineaPorPeso(item);
                   const medida = item.producto.medida;
-                  const faltan = porPack ? 0 : faltanParaPrecioCantidad(item.producto, item.cantidad);
+                  const faltan = faltanParaPrecioCantidad(item.producto, item.cantidad, item.presentacion);
+                  // "desde 10 cajas" / "desde 3 kg" / "desde 6": el del pack se cuenta en packs.
+                  const cantidadTexto = (n) =>
+                    porPack ? `${n} ${plural(item.producto.pack_nombre, n)}` : formatearCantidad(n, medida, { corta: true });
                   return (
                   <div className="caja-cart-row" key={item.clave}>
                     <span style={{ flex: 2.4 }} className="caja-cart-nombre">
@@ -616,13 +621,15 @@ export default function CajaPage() {
                       {porPeso && !(item.cantidad > 0) && <span className="caja-cart-warning">Escribí el peso</span>}
                       {aplicaPrecioCantidad && (
                         <span className="caja-cart-promo">
-                          Precio por cantidad (desde {formatearCantidad(item.producto.precio_cantidad_desde, medida, { corta: true })})
+                          Precio por cantidad (desde {cantidadTexto(precioCantidadDe(item.producto, item.presentacion).desde)})
                         </span>
                       )}
-                      {!porPack && !aplicaPrecioCantidad && tienePrecioCantidad(item.producto) && faltan <= 5 * factorMedida(medida) && (
+                      {!aplicaPrecioCantidad &&
+                        tienePrecioCantidad(item.producto, item.presentacion) &&
+                        faltan <= (porPack ? 5 : 5 * factorMedida(medida)) && (
                         <span className="caja-cart-promo-hint">
-                          Llevando {formatearCantidad(faltan, medida, { corta: true })} más:{' '}
-                          {formatearMonto(item.producto.precio_cantidad)}
+                          Llevando {cantidadTexto(faltan)} más:{' '}
+                          {formatearMonto(precioCantidadDe(item.producto, item.presentacion).precio)}
                           {porPeso ? sufijoPrecio(medida) : ' c/u'}
                         </span>
                       )}

@@ -429,6 +429,20 @@
 .formas-venta > .field + .field {
   margin-bottom: -4px;
 }
+/* Precio por cantidad dentro de cada forma de venta (2026-10-11). */
+.stock-precio-cantidad {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-default);
+}
+.stock-precio-cantidad .stock-presentacion-check {
+  align-items: flex-start;
+}
+.stock-precio-cantidad .stock-presentacion-check input {
+  margin-top: 2px;
+}
 .stock-presentacion-activa {
   border-color: rgba(14, 75, 56, 0.45);
   background: rgba(14, 75, 56, 0.04);

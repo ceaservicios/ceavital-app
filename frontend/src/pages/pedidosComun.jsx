@@ -1,5 +1,5 @@
 import { formatearMonto } from '../utils/format.js';
-import { describirCantidadLinea, formatearCantidad, sufijoPrecio } from '../utils/presentacion.js';
+import { describirCantidadLinea, formatearCantidad, plural, sufijoPrecio } from '../utils/presentacion.js';
 
 export const ETIQUETA_ESTADO = {
   pendiente: 'Pendiente',
@@ -33,7 +33,11 @@ export function ItemsPedido({ items, total }) {
               {i.producto_nombre}
               {i.precio_cantidad_desde && (
                 <span className="pedido-cantidad-pack">
-                  Precio por cantidad (desde {formatearCantidad(i.precio_cantidad_desde, i.medida, { corta: true })})
+                  Precio por cantidad (desde{' '}
+                  {i.pack_nombre
+                    ? `${i.precio_cantidad_desde} ${plural(i.pack_nombre, i.precio_cantidad_desde)}`
+                    : formatearCantidad(i.precio_cantidad_desde, i.medida, { corta: true })}
+                  )
                 </span>
               )}
             </td>
