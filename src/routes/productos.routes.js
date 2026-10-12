@@ -6,6 +6,7 @@ import {
   eliminarProductoController,
   listarProductosController,
   obtenerProductoController,
+  pasarAPackController,
 } from '../controllers/productos.controller.js';
 import {
   crearLoteController,
@@ -23,6 +24,10 @@ router.get('/:id', requireAuth(), obtenerProductoController);
 // Stock -- Editar (alta, lotes, ajustes): Admin + Encargado.
 router.post('/', requireAuth(['admin', 'encargado']), crearProductoController);
 router.patch('/:id', requireAuth(['admin', 'encargado']), editarProductoController);
+
+// Pasar un producto cargado con un envase como unidad ("Caja x 12") a unidad suelta + pack:
+// convierte stock, precios y líneas viejas. Exclusivo Admin (son precios).
+router.post('/:id/pasar-a-pack', requireAuth(['admin']), pasarAPackController);
 
 // Stock -- Eliminar productos: exclusivo Admin.
 router.delete('/:id', requireAuth(['admin']), eliminarProductoController);

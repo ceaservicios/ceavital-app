@@ -3,7 +3,17 @@ import { useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatearFecha, formatearMonto, fechaHoyISO } from '../utils/format.js';
-import { describirPacks, describirStock, etiquetaPack, tienePack } from '../utils/presentacion.js';
+import {
+  describirPacks,
+  describirStock,
+  describirStockLargo,
+  envaseEnNombre,
+  etiquetaPack,
+  nombreUnidadSuelta,
+  plural,
+  tienePack,
+} from '../utils/presentacion.js';
+import PasarAPack from '../components/PasarAPack.jsx';
 import PresentacionCampos, {
   faltaEnPresentacion,
   PRESENTACION_VACIA,
@@ -31,8 +41,43 @@ const PRODUCTO_VACIO = {
 // ("Ingreso de Nuevo Lote" -- pensado para reponer stock de un producto YA
 // existente), cargar el primer lote. Cantidad vacía = producto creado sin
 // stock todavía, sigue siendo válido.
-const LOTE_INICIAL_VACIO = { cantidad: '', en_packs: false, fecha_ingreso: '', fecha_vencimiento: '' };
+// en_packs arranca en true: si el producto tiene caja, la mercadería se compra por caja
+// (2026-10-11, "cargué 5 y entraron 5 unidades"). Sin caja no se usa.
+const LOTE_INICIAL_VACIO = { cantidad: '', en_packs: true, fecha_ingreso: '', fecha_vencimiento: '' };
 const LOTE_NUEVO_VACIO = () => ({ cantidad: '', en_packs: false, fecha_ingreso: fechaHoyISO(), fecha_vencimiento: '' });
+
+// Cuenta del ingreso a la vista (2026-10-11): "5 cajas = 60 unidades · el stock queda en
+// 64 unidades (5 cajas + 4)". `producto` trae pack_nombre/pack_unidades si tiene caja.
+function CuentaIngreso({ cantidad, enPacks, producto, unidad, stockActual = 0, textoFinal = 'el stock queda en' }) {
+  const n = Number(cantidad);
+  if (!Number.isInteger(n) || n <= 0) return null;
+  const porPack = enPacks && tienePack(producto);
+  const unidades = porPack ? n * producto.pack_unidades : n;
+  return (
+    <span className="stock-cuenta">
+      {porPack && `${n} ${plural(producto.pack_nombre, n)} = `}
+      <strong>
+        {unidades} {nombreUnidadSuelta(unidad, unidades)}
+      </strong>
+      {textoFinal && ` · ${textoFinal} ${describirStockLargo(stockActual + unidades, producto, unidad)}`}
+    </span>
+  );
+}
+
+// Aviso de unidad que es un envase ("Caja x 12"): con ella el sistema cuenta, cobra y
+// descuenta de a una caja, sin relación con lo que trae (2026-10-11).
+function AvisoEnvase({ unidad, envase, children }) {
+  return (
+    <div className="stock-aviso-envase" role="alert">
+      <span>
+        <strong>«{unidad}» es un envase, no una unidad suelta.</strong> Así, el stock, el cobro y el descuento cuentan cada{' '}
+        {envase.nombre.toLowerCase()} como 1. Para vender suelto y por {envase.nombre.toLowerCase()}, la unidad tiene que
+        ser la suelta y el envase se marca en «También se vende en pack o caja».
+      </span>
+      {children}
+    </div>
+  );
+}
 
 // "¿Cómo se vende?" (2026-10-11): las unidades de medida del catálogo como botones en vez de
 // un desplegable, para que no se lea como una cantidad ni se confunda con el pack de abajo.
@@ -92,6 +137,7 @@ export default function StockPage() {
   const [presNuevo, setPresNuevo] = useState(PRESENTACION_VACIA);
   const [presEdicion, setPresEdicion] = useState(PRESENTACION_VACIA);
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
+  const [pasandoAPack, setPasandoAPack] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [panelError, setPanelError] = useState(null);
   const [panelExito, setPanelExito] = useState(null);
@@ -109,6 +155,46 @@ export default function StockPage() {
   // Segunda línea de las etiquetas de precio: "por kg". Sin unidad elegida, nada.
   const porUnidad = (id) =>
     id === '' || id == null ? null : <span className="stock-label-unidad">por {nombreUnidad(id)}</span>;
+
+  // Unidad elegida que es un envase ("Caja x 12") y unidad suelta del catálogo para arreglarlo:
+  // «Unidad» si existe, si no la primera que no sea un envase.
+  const nombreDeUnidad = (id) => unidadesMedida.find((u) => String(u.id) === String(id))?.nombre;
+  const sueltas = unidadesMedida.filter((u) => !envaseEnNombre(u.nombre));
+  const unidadSuelta = sueltas.find((u) => /^(1\s+)?unidad(es)?$/i.test(u.nombre.trim())) ?? sueltas[0];
+  const envaseNuevo = envaseEnNombre(nombreDeUnidad(nuevoProducto.unidad_medida_id));
+
+  // "Arreglarlo así" en el alta: la unidad pasa a la suelta y el envase a la casilla del pack.
+  // Los precios que se cargaron eran de la caja: el de venta pasa a ser el del pack y el costo
+  // se divide por lo que trae.
+  function arreglarEnvaseNuevo() {
+    const n = envaseNuevo.unidades;
+    const pasarPrecio = nuevoProducto.precio_venta !== '' && presNuevo.pack.precio === '';
+    setPresNuevo({
+      ...presNuevo,
+      pack: {
+        ...presNuevo.pack,
+        activo: true,
+        nombre: envaseNuevo.nombre,
+        unidades: n ? String(n) : presNuevo.pack.unidades,
+        precio: pasarPrecio ? nuevoProducto.precio_venta : presNuevo.pack.precio,
+      },
+    });
+    setNuevoProducto({
+      ...nuevoProducto,
+      unidad_medida_id: String(unidadSuelta.id),
+      precio_venta: pasarPrecio ? '' : nuevoProducto.precio_venta,
+      precio_costo:
+        n && nuevoProducto.precio_costo !== ''
+          ? String(Math.round(Number(nuevoProducto.precio_costo) / n))
+          : nuevoProducto.precio_costo,
+    });
+    setPanelError(null);
+    setPanelExito(
+      pasarPrecio
+        ? `Listo. El precio que habías puesto quedó como precio de la ${envaseNuevo.nombre.toLowerCase()}; cargá el precio por unidad.`
+        : 'Listo. Revisá los precios por unidad y el de la caja.'
+    );
+  }
 
   async function cargarProductos() {
     setCargando(true);
@@ -192,7 +278,8 @@ export default function StockPage() {
         dias_aviso_vencimiento: data.dias_aviso_vencimiento ?? '',
       });
       setPresEdicion(presentacionDesdeProducto(data));
-      setNuevoLote(LOTE_NUEVO_VACIO());
+      setNuevoLote({ ...LOTE_NUEVO_VACIO(), en_packs: tienePack(data) });
+      setPasandoAPack(false);
     } catch (err) {
       setPanelError(err instanceof ApiError ? err.message : 'No se pudo cargar el producto.');
     }
@@ -220,10 +307,18 @@ export default function StockPage() {
     guardandoRef.current = true;
     setGuardando(true);
     setPanelError(null);
+    // Un producto contado en cajas ("Caja x 12" como unidad) no se cambia a mano a unidad +
+    // caja: el stock, las ventas viejas (una anulación reingresa cajas) y las reservas quedarían
+    // sin convertir. Para eso está "Pasar a unidad + caja", que convierte todo (2026-10-11).
+    const envaseActual = !tienePack(detalle) && envaseEnNombre(detalle.unidad_medida);
+    const cambiaPresentacion =
+      presEdicion.pack.activo || String(edicion.unidad_medida_id) !== String(detalle.unidad_medida_id);
     const faltaEdicion =
-      esAdmin && (edicion.precio_costo === '' || edicion.precio_venta === '')
-        ? 'Completá el precio de costo y el de venta.'
-        : esAdmin && faltaEnPresentacion(presEdicion);
+      envaseActual && cambiaPresentacion
+        ? `Este producto está contado en «${detalle.unidad_medida}». Para pasarlo a unidad + ${envaseActual.nombre.toLowerCase()} usá el botón «Pasar a unidad + ${envaseActual.nombre.toLowerCase()}», que convierte el stock, los precios y las ventas anteriores.`
+        : esAdmin && (edicion.precio_costo === '' || edicion.precio_venta === '')
+          ? 'Completá el precio de costo y el de venta.'
+          : esAdmin && faltaEnPresentacion(presEdicion);
     if (faltaEdicion) {
       setPanelError(faltaEdicion);
       guardandoRef.current = false;
@@ -345,7 +440,7 @@ export default function StockPage() {
         fecha_ingreso: nuevoLote.fecha_ingreso,
         fecha_vencimiento: nuevoLote.fecha_vencimiento || null,
       });
-      setNuevoLote(LOTE_NUEVO_VACIO());
+      setNuevoLote({ ...LOTE_NUEVO_VACIO(), en_packs: tienePack(detalle) });
       setPanelExito('Lote registrado.');
       abrirDetalle(detalle.id);
       cargarProductos();
@@ -514,10 +609,29 @@ export default function StockPage() {
                   valor={nuevoProducto.unidad_medida_id}
                   onChange={(id) => setNuevoProducto({ ...nuevoProducto, unidad_medida_id: id })}
                 />
-                {unidadesMedida.length === 0 && (
+                {unidadesMedida.length === 0 ? (
                   <span className="stock-hint">Todavía no hay unidades de medida cargadas -- se crean en Configuración.</span>
+                ) : (
+                  <span className="stock-hint">
+                    Lo más chico que vendés (unidad, kg, litro). Si también vendés la caja o el pack, se marca más abajo.
+                  </span>
                 )}
               </div>
+              {envaseNuevo && !presNuevo.pack.activo && (
+                <AvisoEnvase unidad={nombreDeUnidad(nuevoProducto.unidad_medida_id)} envase={envaseNuevo}>
+                  {unidadSuelta && (
+                    <button type="button" className="btn btn-primary" onClick={arreglarEnvaseNuevo}>
+                      Arreglarlo: «{unidadSuelta.nombre}» + {envaseNuevo.nombre.toLowerCase()}
+                      {envaseNuevo.unidades ? ` de ${envaseNuevo.unidades}` : ''}
+                    </button>
+                  )}
+                </AvisoEnvase>
+              )}
+              {panelExito && (
+                <div className="alert" style={{ background: 'rgba(14,75,56,0.08)', color: '#0e4b38', border: '1px solid rgba(14,75,56,0.25)' }}>
+                  {panelExito}
+                </div>
+              )}
               <div className="stock-form-grid2">
                 <div className="field">
                   <label>Precio costo{porUnidad(nuevoProducto.unidad_medida_id)}</label>
@@ -602,6 +716,17 @@ export default function StockPage() {
                     placeholder="Dejar vacío si todavía no hay stock"
                     value={loteInicial.cantidad}
                     onChange={(e) => setLoteInicial({ ...loteInicial, cantidad: e.target.value })}
+                  />
+                  <CuentaIngreso
+                    cantidad={loteInicial.cantidad}
+                    enPacks={loteInicial.en_packs}
+                    producto={
+                      presNuevo.pack.activo && Number(presNuevo.pack.unidades) >= 2
+                        ? { pack_nombre: presNuevo.pack.nombre.trim() || 'Pack', pack_unidades: Number(presNuevo.pack.unidades) }
+                        : {}
+                    }
+                    unidad={nombreDeUnidad(nuevoProducto.unidad_medida_id)}
+                    textoFinal={null}
                   />
                 </div>
                 {Number(loteInicial.cantidad) > 0 && (
@@ -704,6 +829,31 @@ export default function StockPage() {
                   <label>¿Cómo se vende?</label>
                   <div className="stock-campo-oculto">{detalle.unidad_medida || '—'}</div>
                 </div>
+              )}
+              {!tienePack(detalle) && envaseEnNombre(detalle.unidad_medida) && !pasandoAPack && (
+                <AvisoEnvase unidad={detalle.unidad_medida} envase={envaseEnNombre(detalle.unidad_medida)}>
+                  {esAdmin ? (
+                    <button type="button" className="btn btn-primary" onClick={() => setPasandoAPack(true)}>
+                      Pasar a unidad + {envaseEnNombre(detalle.unidad_medida).nombre.toLowerCase()}
+                    </button>
+                  ) : (
+                    <span className="stock-hint">Pedile al Administrador que lo pase a unidad + caja.</span>
+                  )}
+                </AvisoEnvase>
+              )}
+              {pasandoAPack && (
+                <PasarAPack
+                  producto={detalle}
+                  unidades={unidadesMedida}
+                  onCancelar={() => setPasandoAPack(false)}
+                  onHecho={async (actualizado) => {
+                    await abrirDetalle(actualizado.id);
+                    cargarProductos();
+                    setPanelExito(
+                      `Listo: el stock quedó en ${describirStockLargo(actualizado.stock_total, actualizado, actualizado.unidad_medida)}. En Caja se elige unidad o ${actualizado.pack_nombre.toLowerCase()}.`
+                    );
+                  }}
+                />
               )}
               <div className="stock-form-grid2">
                 {esAdmin ? (
@@ -839,6 +989,13 @@ export default function StockPage() {
                       min="1"
                       value={nuevoLote.cantidad}
                       onChange={(e) => setNuevoLote({ ...nuevoLote, cantidad: e.target.value })}
+                    />
+                    <CuentaIngreso
+                      cantidad={nuevoLote.cantidad}
+                      enPacks={nuevoLote.en_packs}
+                      producto={detalle}
+                      unidad={detalle.unidad_medida}
+                      stockActual={detalle.stock_total}
                     />
                   </div>
                   <div className="field">

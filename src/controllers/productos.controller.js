@@ -33,6 +33,12 @@ export async function editarProductoController(req, res) {
   res.json(producto);
 }
 
+export async function pasarAPackController(req, res) {
+  const id = parsearId(req.params.id);
+  const producto = await stockService.pasarAPack(id, req.body || {}, { rol: req.sesion.rol });
+  res.json(producto);
+}
+
 export async function eliminarProductoController(req, res) {
   const id = parsearId(req.params.id);
   await stockService.eliminarProducto(id);

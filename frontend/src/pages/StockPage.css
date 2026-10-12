@@ -418,3 +418,57 @@
   font-weight: 500;
   color: var(--text-tertiary);
 }
+
+/* Circuito unidad / caja (2026-10-11): cuenta del ingreso, aviso de envase y conversión. */
+.stock-cuenta {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--color-primary);
+  background: rgba(14, 75, 56, 0.06);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+}
+.stock-cuenta strong {
+  font-weight: 800;
+}
+/* Dorado: aviso de atención media (marca.md), con texto oscuro. */
+.stock-aviso-envase {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(243, 192, 67, 0.16);
+  border: 1px solid rgba(243, 192, 67, 0.7);
+  color: #5c4300;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.stock-aviso-envase .btn {
+  white-space: normal;
+  text-align: left;
+}
+.stock-pasar-pack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+.stock-pasar-resumen {
+  margin: 0;
+  padding: 10px 12px 10px 28px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.stock-pasar-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

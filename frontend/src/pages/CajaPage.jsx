@@ -3,6 +3,7 @@ import { api, ApiError } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatearMonto, fechaHoyISO } from '../utils/format.js';
 import {
+  describirStockLargo,
   etiquetaPack,
   faltanParaPrecioCantidad,
   precioLinea,
@@ -92,6 +93,9 @@ export default function CajaPage() {
 
   const [query, setQuery] = useState('');
   const [resultados, setResultados] = useState([]);
+  // Texto al que corresponden los resultados: el lector tipea el código y aprieta Enter antes
+  // de que termine la búsqueda (espera 250 ms), y el Enter se perdía (2026-10-11).
+  const [resultadosDe, setResultadosDe] = useState('');
   const [mostrarResultados, setMostrarResultados] = useState(false);
   const [carrito, setCarrito] = useState([]);
   const [medioPago, setMedioPago] = useState('efectivo');
@@ -125,6 +129,7 @@ export default function CajaPage() {
   // Guardias sincrónicas: `disabled` no alcanza contra dos clicks en el mismo tick
   // (duplicaba la venta, el gasto o la baja).
   const confirmandoVentaRef = useRef(false);
+  const enterEnCursoRef = useRef(new Set());
   const registrandoGastoRef = useRef(false);
   const eliminandoGastoRef = useRef(false);
 
@@ -216,13 +221,16 @@ export default function CajaPage() {
   useEffect(() => {
     if (query.trim().length < 1) {
       setResultados([]);
+      setResultadosDe('');
       setErrorBusqueda(false);
       return;
     }
     const timeoutId = setTimeout(async () => {
       try {
-        const data = await api.get(`/productos?q=${encodeURIComponent(query.trim())}`);
+        const texto = query.trim();
+        const data = await api.get(`/productos?q=${encodeURIComponent(texto)}`);
         setResultados(data.productos);
+        setResultadosDe(texto);
         setErrorBusqueda(false);
         setMostrarResultados(true);
       } catch {
@@ -231,6 +239,7 @@ export default function CajaPage() {
         // responde 200 con data.productos:[]). Antes esto se confundía con
         // "no existe" (hallazgo Baja #2, verificador-funcional 2026-09-10).
         setResultados([]);
+        setResultadosDe('');
         setErrorBusqueda(true);
         setMostrarResultados(true);
       }
@@ -241,7 +250,9 @@ export default function CajaPage() {
   // Venta por pack (2026-10-11): cada línea del carrito es un producto en una presentación
   // ('unidad' o 'pack'); el mismo producto puede ir en dos líneas. `producto` guarda los
   // precios y el pack para calcular el precio de la línea (el servidor decide el real).
-  function agregarAlCarrito(producto, presentacion = 'unidad') {
+  // `textoEscaneado`: si se agregó con el Enter del lector y mientras se buscaba ya se tipeó
+  // otro código, no se borra lo nuevo.
+  function agregarAlCarrito(producto, presentacion = 'unidad', textoEscaneado = null) {
     const clave = `${producto.id}:${presentacion}`;
     setCarrito((prev) => {
       const existente = prev.find((item) => item.clave === clave);
@@ -261,8 +272,10 @@ export default function CajaPage() {
         },
       ];
     });
+    if (textoEscaneado !== null && searchInputRef.current && searchInputRef.current.value.trim() !== textoEscaneado) return;
     setQuery('');
     setResultados([]);
+    setResultadosDe('');
     setMostrarResultados(false);
     searchInputRef.current?.focus();
   }
@@ -270,12 +283,49 @@ export default function CajaPage() {
   // Enter con un solo resultado (el lector de código de barras tipea el código + Enter):
   // el código del pack agrega un pack y el de la unidad, una unidad, sin preguntar. Si se
   // buscó por nombre un producto con pack, se elige Unidad o Pack en la lista.
-  function handleSearchKeyDown(e) {
-    if (e.key !== 'Enter' || resultados.length !== 1) return;
+  // Si los resultados en pantalla no son de lo que se tipeó (el lector es más rápido que la
+  // búsqueda), se busca en el momento. Un código exacto gana aunque el texto aparezca en otros.
+  async function handleSearchKeyDown(e) {
+    if (e.key !== 'Enter') return;
+    const texto = query.trim();
+    if (!texto) return;
     e.preventDefault();
-    const [producto] = resultados;
-    if (producto.coincide_codigo === 'pack' && tienePack(producto)) agregarAlCarrito(producto, 'pack');
-    else if (producto.coincide_codigo === 'unidad' || !tienePack(producto)) agregarAlCarrito(producto, 'unidad');
+    // Un segundo Enter del mismo código mientras se busca no lo agrega dos veces.
+    if (enterEnCursoRef.current.has(texto)) return;
+    let lista = resultadosDe === texto ? resultados : null;
+    if (!lista) {
+      enterEnCursoRef.current.add(texto);
+      try {
+        lista = (await api.get(`/productos?q=${encodeURIComponent(texto)}`)).productos;
+      } catch {
+        return;
+      } finally {
+        enterEnCursoRef.current.delete(texto);
+      }
+    }
+    const porCodigo = lista.filter((p) => p.coincide_codigo);
+    const candidatos = porCodigo.length === 1 ? porCodigo : lista;
+    if (candidatos.length !== 1) return;
+    const [producto] = candidatos;
+    if (producto.coincide_codigo === 'pack' && tienePack(producto)) agregarAlCarrito(producto, 'pack', texto);
+    else if (producto.coincide_codigo === 'unidad' || !tienePack(producto)) agregarAlCarrito(producto, 'unidad', texto);
+  }
+
+  // Cambiar una línea de Unidad a Pack o al revés (2026-10-11): si ya había una línea del
+  // mismo producto en esa presentación, se suman.
+  function cambiarPresentacion(clave, presentacion) {
+    setCarrito((prev) => {
+      const linea = prev.find((item) => item.clave === clave);
+      if (!linea || linea.presentacion === presentacion) return prev;
+      const nuevaClave = `${linea.producto_id}:${presentacion}`;
+      const existente = prev.find((item) => item.clave === nuevaClave);
+      if (existente) {
+        return prev
+          .filter((item) => item.clave !== clave)
+          .map((item) => (item.clave === nuevaClave ? { ...item, cantidad: item.cantidad + linea.cantidad } : item));
+      }
+      return prev.map((item) => (item.clave === clave ? { ...item, clave: nuevaClave, presentacion } : item));
+    });
   }
 
   function cambiarCantidad(clave, delta) {
@@ -317,7 +367,11 @@ export default function CajaPage() {
           presentacion: item.presentacion,
         })),
       });
-      setExito(`Venta #${venta.id} registrada por ${formatearMonto(venta.total)}.`);
+      // Cuánto stock queda de lo que se vendió (2026-10-11): así se ve el efecto de cada venta.
+      const quedan = (venta.stock_despues ?? [])
+        .map((s) => `${s.nombre}: ${describirStockLargo(s.stock_disponible, s, s.unidad_medida)}`)
+        .join(' · ');
+      setExito(`Venta #${venta.id} registrada por ${formatearMonto(venta.total)}.${quedan ? ` Stock que queda — ${quedan}.` : ''}`);
       setCarrito([]);
       setMontoRecibido('');
       setClienteEmpresaId('');
@@ -403,7 +457,12 @@ export default function CajaPage() {
                 {resultados.map((producto) =>
                   tienePack(producto) ? (
                     <div key={producto.id} className="caja-search-item caja-search-item-pack">
-                      <span>{producto.nombre}</span>
+                      <span className="caja-search-nombre">
+                        {producto.nombre}
+                        <span className="caja-search-stock">
+                          Stock: {describirStockLargo(producto.stock_disponible, producto, producto.unidad_medida)}
+                        </span>
+                      </span>
                       <span className="caja-search-opciones">
                         <button type="button" onClick={() => agregarAlCarrito(producto, 'unidad')}>
                           Unidad <strong>{formatearMonto(producto.precio_venta)}</strong>
@@ -421,7 +480,12 @@ export default function CajaPage() {
                       className="caja-search-item"
                       onClick={() => agregarAlCarrito(producto)}
                     >
-                      <span>{producto.nombre}</span>
+                      <span className="caja-search-nombre">
+                        {producto.nombre}
+                        <span className="caja-search-stock">
+                          Stock: {describirStockLargo(producto.stock_disponible, producto, producto.unidad_medida)}
+                        </span>
+                      </span>
                       <span className="caja-search-item-precio">{formatearMonto(producto.precio_venta)}</span>
                     </button>
                   )
@@ -450,9 +514,30 @@ export default function CajaPage() {
                   <div className="caja-cart-row" key={item.clave}>
                     <span style={{ flex: 2.4 }} className="caja-cart-nombre">
                       {item.nombre}
+                      {/* Unidad o caja en la misma línea, y cuánto descuenta del stock (2026-10-11). */}
+                      {tienePack(item.producto) && (
+                        <span className="caja-cart-switch" role="group" aria-label="Se vende por">
+                          <button
+                            type="button"
+                            className={!porPack ? 'activo' : ''}
+                            aria-pressed={!porPack}
+                            onClick={() => cambiarPresentacion(item.clave, 'unidad')}
+                          >
+                            Unidad
+                          </button>
+                          <button
+                            type="button"
+                            className={porPack ? 'activo' : ''}
+                            aria-pressed={porPack}
+                            onClick={() => cambiarPresentacion(item.clave, 'pack')}
+                          >
+                            {etiquetaPack(item.producto.pack_nombre, item.producto.pack_unidades)}
+                          </button>
+                        </span>
+                      )}
                       {porPack && (
-                        <span className="caja-cart-presentacion">
-                          {etiquetaPack(item.producto.pack_nombre, item.producto.pack_unidades)}
+                        <span className="caja-cart-descuenta">
+                          Descuenta {item.cantidad * item.producto.pack_unidades} unidades del stock
                         </span>
                       )}
                       {aplicaPrecioCantidad && (

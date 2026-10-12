@@ -217,9 +217,24 @@ export async function registrarVentaEnTransaccion(
   return ventaId;
 }
 
+// Caja muestra, al cobrar, cuánto stock queda de cada producto vendido (2026-10-11: "no hay
+// relación entre cómo se carga, cómo cobra y el stock"): unidades vendidas y disponible después.
 export async function registrarVenta(datos, { usuarioId }) {
   const ventaId = await db.transaction(() => registrarVentaEnTransaccion(datos, { usuarioId }));
-  return obtenerVentaConItems(ventaId);
+  const venta = await obtenerVentaConItems(ventaId);
+  const vendidas = new Map();
+  for (const item of venta.items) vendidas.set(item.producto_id, (vendidas.get(item.producto_id) ?? 0) + item.cantidad);
+  const stockDespues = [];
+  for (const [productoId, unidades] of vendidas) {
+    const producto = await db
+      .prepare(
+        `SELECT p.nombre, p.pack_nombre, p.pack_unidades, u.nombre AS unidad_medida
+         FROM productos p LEFT JOIN unidades_medida u ON u.id = p.unidad_medida_id WHERE p.id = ?`
+      )
+      .get(productoId);
+    stockDespues.push({ producto_id: productoId, ...producto, unidades_vendidas: unidades, stock_disponible: await stockDisponible(productoId) });
+  }
+  return { ...venta, stock_despues: stockDespues };
 }
 
 export { obtenerVentaConItems };

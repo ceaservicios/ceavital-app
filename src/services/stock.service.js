@@ -413,6 +413,92 @@ export async function editarProducto(id, datos, { rol }) {
   return obtenerProducto(id, { rol });
 }
 
+// "Pasar a unidad + pack" (2026-10-11): para un producto que se cargó con un envase como
+// unidad de medida ("Caja x 12") y por eso cuenta, cobra y descuenta de a una caja. Queda
+// con una unidad suelta y la caja como pack, y todo lo que estaba contado en cajas pasa a
+// unidades con la copia del pack, así significa lo mismo que antes:
+// - lotes (también los retirados, por si una anulación reingresa en ellos): cantidad × N;
+// - líneas de venta y de pedidos de clientes sin pack: cantidad × N + pack copiado (el precio
+//   de la línea era el de la caja = precio del pack, y el subtotal no cambia);
+// - precios: el de venta que tenía pasa a ser el del pack; el costo, dividido por N.
+// Los pedidos a proveedores son administrativos y no mueven stock: no se tocan.
+// Solo Admin (son precios). No se permite si ya tiene pack o precio por cantidad.
+export async function pasarAPack(id, datos, { rol }) {
+  if (rol !== 'admin') throw new ApiError(403, 'Solo el Admin puede pasar un producto a unidad + pack');
+  const unidadMedidaId = validarEntero(datos.unidad_medida_id, 'Unidad suelta');
+  const packNombre = validarString(datos.pack_nombre, 'Nombre del pack', { maxLength: 20 });
+  const n = validarEntero(datos.pack_unidades, 'Unidades que trae', { minimo: 2 });
+  if (n > 100000) throw new ApiError(400, 'Unidades que trae no puede superar 100000');
+  const precioUnidad = validarEntero(datos.precio_venta, 'Precio de venta por unidad', { minimo: 0 });
+  const codigoUnidad = validarString(datos.codigo_barras_unidad, 'Código de barras de la unidad', {
+    requerido: false,
+    maxLength: MAX_CODIGO_BARRAS,
+  });
+  const codigoEsDelPack = datos.codigo_es_del_pack === true;
+
+  await db.transaction(async () => {
+    const actual = await db
+      .prepare(
+        `SELECT id, nombre, codigo_barras, precio_costo, precio_venta, pack_nombre, precio_cantidad_desde, stock_minimo
+         FROM productos WHERE id = ? AND eliminado_en IS NULL`
+      )
+      .get(id);
+    if (!actual) throw new ApiError(404, 'Producto no encontrado');
+    if (actual.stock_minimo * n > 1_000_000) throw new ApiError(400, 'Con esa cantidad por pack el stock mínimo superaría 1.000.000 de unidades');
+    if (actual.pack_nombre) throw new ApiError(409, `"${actual.nombre}" ya se vende por pack`);
+    if (actual.precio_cantidad_desde != null) {
+      throw new ApiError(409, 'Sacale primero el precio por cantidad: estaba pensado por caja y no se puede convertir solo');
+    }
+    await obtenerUnidadMedidaActiva(unidadMedidaId);
+
+    const maxLote = await db.prepare('SELECT COALESCE(MAX(cantidad), 0) AS m FROM lotes WHERE producto_id = ?').get(id);
+    if (maxLote.m * n > 1_000_000) throw new ApiError(400, 'Con esa cantidad por pack algún lote superaría 1.000.000 de unidades');
+    // Las líneas viejas también se multiplican: que ninguna se pase del entero de la columna.
+    for (const tabla of ['venta_items', 'pedido_cliente_items']) {
+      const maxLinea = await db.prepare(`SELECT COALESCE(MAX(cantidad), 0) AS m FROM ${tabla} WHERE producto_id = ?`).get(id);
+      if (maxLinea.m * n > 2_000_000_000) throw new ApiError(400, 'Con esa cantidad por pack una venta o pedido viejo quedaría fuera de rango');
+    }
+
+    // El código que tenía: si es el que trae la caja, pasa a ser el del pack.
+    const codigoPack = codigoEsDelPack ? actual.codigo_barras : null;
+    const codigoNuevo = codigoEsDelPack ? codigoUnidad : actual.codigo_barras;
+    if (codigoEsDelPack) await verificarCodigoBarrasLibre(codigoUnidad, id);
+    verificarCodigosDistintos(codigoNuevo, codigoPack);
+
+    await db.prepare('UPDATE lotes SET cantidad = cantidad * ?, actualizado_en = CURRENT_TIMESTAMP WHERE producto_id = ?').run(n, id);
+    for (const tabla of ['venta_items', 'pedido_cliente_items']) {
+      // Primero las líneas de un pack que el producto tuvo antes y se sacó ("Pallet x 10" de
+      // cajas): sus unidades también eran cajas; se conserva el nombre y pasan a unidades
+      // sueltas. Va antes que las sueltas para no multiplicar dos veces las que se convierten.
+      await db
+        .prepare(
+          `UPDATE ${tabla} SET cantidad = cantidad * ?, pack_unidades = pack_unidades * ?
+           WHERE producto_id = ? AND pack_nombre IS NOT NULL`
+        )
+        .run(n, n, id);
+      await db
+        .prepare(
+          `UPDATE ${tabla} SET cantidad = cantidad * ?, pack_nombre = ?, pack_unidades = ?, precio_cantidad_desde = NULL
+           WHERE producto_id = ? AND pack_nombre IS NULL`
+        )
+        .run(n, packNombre, n, id);
+    }
+    await db
+      .prepare(
+        `UPDATE productos SET unidad_medida_id = ?, codigo_barras = ?, precio_venta = ?, precio_costo = ?,
+           stock_minimo = stock_minimo * ?,
+           pack_nombre = ?, pack_unidades = ?, precio_pack = ?, codigo_barras_pack = ?, actualizado_en = CURRENT_TIMESTAMP
+         WHERE id = ?`
+      )
+      .run(
+        unidadMedidaId, codigoNuevo, precioUnidad, Math.round(actual.precio_costo / n), n,
+        packNombre, n, actual.precio_venta, codigoPack, id
+      );
+  });
+
+  return obtenerProducto(id, { rol });
+}
+
 export async function eliminarProducto(id) {
   await obtenerProductoActivo(id);
   await db.prepare('UPDATE productos SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
