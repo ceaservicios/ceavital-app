@@ -19,17 +19,26 @@
   --text-tertiary: #6b7672;
   --text-muted: #8a9490;
 
-  --sidebar-bg: var(--color-primary);
-  --sidebar-text-strong: #ffffff;
-  --sidebar-text-muted: #9cc7b7;
-  --sidebar-text-faint: #7fb39e;
-  --sidebar-text-link: #bfe0d3;
-  --sidebar-item-active-bg: rgba(255, 255, 255, 0.16);
-  --sidebar-item-hover-bg: rgba(255, 255, 255, 0.1);
+  /* Menú lateral "isla flotante" (opción C elegida 2026-10-11): tarjeta blanca sobre el
+     gris de fondo; el verde de marca queda para la pantalla actual. */
+  --sidebar-bg: var(--bg-surface);
+  --sidebar-text-strong: var(--text-primary);
+  --sidebar-text-muted: var(--text-tertiary);
+  --sidebar-text-faint: var(--text-muted);
+  --sidebar-item-hover-bg: #f6f7f7;
+  --sidebar-item-active-bg: linear-gradient(135deg, #136650 0%, var(--color-primary) 100%);
+  --sidebar-icon-bg: var(--bg-muted);
+  --sidebar-badge-bg: rgba(224, 90, 101, 0.14); /* Rosa Coral: solo alerta (lotes vencidos) */
+  --sidebar-badge-text: #a8323d;
 
   --radius-sm: 8px;
   --radius-md: 10px;
+  --radius-card: 14px;
   --radius-pill: 20px;
+
+  --shadow-card: 0 1px 2px rgba(16, 40, 32, 0.05), 0 4px 14px rgba(16, 40, 32, 0.05);
+  --shadow-float: 0 1px 2px rgba(16, 40, 32, 0.06), 0 10px 30px rgba(16, 40, 32, 0.08);
+  --shadow-active: 0 6px 14px rgba(14, 75, 56, 0.28);
 
   --font-sans: 'Manrope', system-ui, -apple-system, sans-serif;
 
@@ -150,10 +159,13 @@ a.btn-primary:hover {
   cursor: not-allowed;
 }
 
+/* Tarjetas: sombra suave en vez de borde, mismo idioma que el menú flotante. El borde
+   queda transparente (no se saca) para no mover ni un píxel los tamaños de nada. */
 .card {
   background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 
 .alert {

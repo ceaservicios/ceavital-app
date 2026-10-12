@@ -1,4 +1,6 @@
-import { NavLink } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { api } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { etiquetaRol, iniciales, moduloDisponible, puedeVerModulo } from '../constants/roles.js';
 import './Sidebar.css';
@@ -105,15 +107,44 @@ const SECCIONES = [
   },
 ];
 
+// Cantidad de lotes vencidos para el contador de "Vencimientos" (alerta en Rosa Coral, como
+// pide marca.md). Se vuelve a pedir al cambiar de pantalla; si falla o da 0, no se muestra.
+function useLotesVencidos(pathname) {
+  const [cantidad, setCantidad] = useState(0);
+  useEffect(() => {
+    let vigente = true;
+    api
+      .get('/vencimientos')
+      .then((data) => {
+        if (vigente) setCantidad(Array.isArray(data?.vencidos) ? data.vencidos.length : 0);
+      })
+      .catch(() => {
+        if (vigente) setCantidad(0);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [pathname]);
+  return cantidad;
+}
+
 export default function Sidebar({ abierto = false }) {
   const { usuario, logout, modulos } = useAuth();
   const rol = usuario?.rol;
+  const { pathname } = useLocation();
+  const vencidos = useLotesVencidos(pathname);
 
   return (
     <aside className={`sidebar${abierto ? ' sidebar-abierto' : ''}`}>
       <div className="sidebar-brand">
-        <div className="sidebar-brand-title">CEAVital</div>
-        <div className="sidebar-brand-subtitle">POS Management</div>
+        <img className="sidebar-brand-logo" src="/logo-isotipo.png" alt="" width="46" height="33" />
+        <div className="sidebar-brand-text">
+          <div className="sidebar-brand-title">
+            <span className="sidebar-brand-cea">CEA</span>
+            <span className="sidebar-brand-vital">Vital</span>
+          </div>
+          <div className="sidebar-brand-subtitle">Sistema de gestión</div>
+        </div>
       </div>
 
       <nav className="sidebar-nav">
@@ -125,7 +156,7 @@ export default function Sidebar({ abierto = false }) {
               if (!habilitado) {
                 return (
                   <div className="sidebar-item sidebar-item-disabled" key={item.modulo} title="No disponible para tu rol">
-                    {ICONOS[item.modulo]}
+                    <span className="sidebar-item-icon">{ICONOS[item.modulo]}</span>
                     <span className="sidebar-item-label">{item.label}</span>
                     {CANDADO}
                   </div>
@@ -137,8 +168,14 @@ export default function Sidebar({ abierto = false }) {
                   key={item.modulo}
                   className={({ isActive }) => `sidebar-item${isActive ? ' sidebar-item-active' : ''}`}
                 >
-                  {ICONOS[item.modulo]}
+                  <span className="sidebar-item-icon">{ICONOS[item.modulo]}</span>
                   <span className="sidebar-item-label">{item.label}</span>
+                  {item.modulo === 'vencimientos' && vencidos > 0 && (
+                    <span className="sidebar-badge" title={vencidos === 1 ? '1 lote vencido' : `${vencidos} lotes vencidos`}>
+                      <span aria-hidden="true">{vencidos > 99 ? '99+' : vencidos}</span>
+                      <span className="sidebar-sr">{vencidos === 1 ? '1 lote vencido' : `${vencidos} lotes vencidos`}</span>
+                    </span>
+                  )}
                 </NavLink>
               );
             })}
