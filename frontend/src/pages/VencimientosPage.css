@@ -29,7 +29,8 @@
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
-.vencimientos-kpi-vencido {
+/* `.card.` adelante: global.css se carga después y su `.card` (mismo peso) dejaba las tarjetas en blanco. */
+.card.vencimientos-kpi-vencido {
   background: #fbeaec;
   border-color: #f1c4c9;
 }
@@ -39,7 +40,7 @@
 .vencimientos-kpi-vencido .vencimientos-kpi-value {
   color: #b0333e;
 }
-.vencimientos-kpi-aviso {
+.card.vencimientos-kpi-aviso {
   background: #fdf3dd;
   border-color: #f0dba0;
 }

@@ -121,6 +121,12 @@ const PUEDE_ANULAR = new Set(['admin', 'encargado']);
 // cargado) -- Admin+Encargado, mismo criterio que anular una venta.
 const PUEDE_ELIMINAR_GASTO = new Set(['admin', 'encargado']);
 
+// Lector de código de barras tipo teclado: manda los caracteres a menos de esto entre sí (una
+// persona tarda más). Largo mínimo bajo a propósito para aceptar códigos internos cortos;
+// nadie tipea 6 caracteres seguidos a menos de 50 ms cada uno.
+const LECTOR_MS_ENTRE_TECLAS = 50;
+const LECTOR_LARGO_MINIMO = 6;
+
 export default function CajaPage() {
   const { usuario, moduloActivo } = useAuth();
   const cuentaCorrienteActiva = moduloActivo('clientes_empresa');
@@ -168,6 +174,7 @@ export default function CajaPage() {
   const enterEnCursoRef = useRef(new Set());
   const registrandoGastoRef = useRef(false);
   const eliminandoGastoRef = useRef(false);
+  const rafagasPesoRef = useRef(new Map()); // clave de línea → { antes, ultima }, ver teclaEnPeso
 
   const puedeAnular = PUEDE_ANULAR.has(usuario?.rol);
   const puedeEliminarGasto = PUEDE_ELIMINAR_GASTO.has(usuario?.rol);
@@ -338,6 +345,31 @@ export default function CajaPage() {
     );
   }
 
+  // Lector en el campo de peso (2026-10-14): si se escanea con el foco en el peso, el código no
+  // es un peso. El lector tipea cada carácter y el Enter a pocos ms; una persona, no. Por línea
+  // se guarda el texto que había antes de la ráfaga, para devolverlo y mandar el código a Caja.
+  function teclaEnPeso(e, clave) {
+    const ahora = performance.now();
+    const rafaga = rafagasPesoRef.current.get(clave);
+    const enRafaga = rafaga && ahora - rafaga.ultima < LECTOR_MS_ENTRE_TECLAS;
+    if (e.key.length === 1) {
+      // El keydown llega antes de que el carácter se escriba: el valor es el de antes.
+      if (enRafaga) rafaga.ultima = ahora;
+      else rafagasPesoRef.current.set(clave, { antes: e.currentTarget.value, ultima: ahora });
+      return;
+    }
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    rafagasPesoRef.current.delete(clave);
+    const texto = e.currentTarget.value;
+    const codigo = enRafaga && texto.startsWith(rafaga.antes) ? texto.slice(rafaga.antes.length).trim() : '';
+    searchInputRef.current?.focus();
+    if (codigo.length < LECTOR_LARGO_MINIMO) return;
+    cambiarPeso(clave, rafaga.antes);
+    setQuery(codigo);
+    agregarPorTexto(codigo);
+  }
+
   // Enter con un solo resultado (el lector de código de barras tipea el código + Enter):
   // el código del pack agrega un pack y el de la unidad, una unidad, sin preguntar. Si se
   // buscó por nombre un producto con pack, se elige Unidad o Pack en la lista.
@@ -348,6 +380,10 @@ export default function CajaPage() {
     const texto = query.trim();
     if (!texto) return;
     e.preventDefault();
+    await agregarPorTexto(texto);
+  }
+
+  async function agregarPorTexto(texto) {
     // Un segundo Enter del mismo código mientras se busca no lo agrega dos veces.
     if (enterEnCursoRef.current.has(texto)) return;
     let lista = resultadosDe === texto ? resultados : null;
@@ -376,23 +412,36 @@ export default function CajaPage() {
   // Cambiar una línea de Unidad a Pack o al revés (2026-10-11): si ya había una línea del
   // mismo producto en esa presentación, se suman.
   // Por peso, la cantidad cambia de sentido (packs ↔ gramos): 2 bolsas de 15 kg pasan a 30 kg y
-  // 30 kg a 2 bolsas (al menos 1).
+  // 30 kg a 2 bolsas (menos de una bolsa → 1). Lo que no completa una bolsa no se pierde
+  // (2026-10-14): 31 kg pasan a 2 bolsas y queda una línea suelta de 1 kg.
   function cambiarPresentacion(clave, presentacion) {
     setCarrito((prev) => {
       const linea = prev.find((item) => item.clave === clave);
       if (!linea || linea.presentacion === presentacion) return prev;
       const { medida, pack_unidades: trae } = linea.producto;
       let cantidad = linea.cantidad;
+      let resto = 0;
       if (esFraccionable(medida)) {
         cantidad = presentacion === 'pack' ? Math.max(1, Math.floor(linea.cantidad / trae)) : linea.cantidad * trae;
+        if (presentacion === 'pack' && linea.cantidad >= trae) resto = linea.cantidad % trae;
       }
       const nuevaClave = `${linea.producto_id}:${presentacion}`;
       const existente = prev.find((item) => item.clave === nuevaClave);
       const conPeso = (item, total) => ({
         ...item,
         cantidad: total,
-        pesoTexto: presentacion === 'unidad' && esFraccionable(medida) ? textoDeCantidad(total, medida) : '',
+        pesoTexto: item.presentacion === 'unidad' && esFraccionable(medida) ? textoDeCantidad(total, medida) : '',
       });
+      if (resto > 0) {
+        const suelta = conPeso(linea, resto);
+        if (existente) {
+          return prev.map((item) =>
+            item.clave === clave ? suelta : item.clave === nuevaClave ? conPeso(item, item.cantidad + cantidad) : item
+          );
+        }
+        const packs = conPeso({ ...linea, clave: nuevaClave, presentacion }, cantidad);
+        return prev.flatMap((item) => (item.clave === clave ? [packs, suelta] : [item]));
+      }
       if (existente) {
         return prev
           .filter((item) => item.clave !== clave)
@@ -650,7 +699,7 @@ export default function CajaPage() {
                             aria-label={`Peso de ${item.nombre} en ${simboloMedida(medida)}`}
                             value={item.pesoTexto}
                             onChange={(e) => cambiarPeso(item.clave, e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && searchInputRef.current?.focus()}
+                            onKeyDown={(e) => teclaEnPeso(e, item.clave)}
                           />
                           {simboloMedida(medida)}
                         </span>
