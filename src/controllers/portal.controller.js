@@ -1,4 +1,3 @@
-import config from '../config/env.js';
 import { armarResumenCuenta, obtenerClienteEmpresa } from '../services/clientes-empresa.service.js';
 import { cerrarSesionCliente, loginCliente } from '../services/clientes-portal.service.js';
 import { catalogoConDisponibilidad } from '../services/reservas.service.js';
@@ -10,6 +9,8 @@ import {
 } from '../services/pedidos-cliente.service.js';
 import { ApiError } from '../utils/api-error.js';
 import { enviarResumenCuentaPdf } from '../services/resumen-cuenta-pdf.service.js';
+import { actorCliente, registrarAccion } from '../services/registro.service.js';
+import { fijarCookiePortal } from '../middleware/portal-auth.middleware.js';
 
 export async function loginPortalController(req, res) {
   const { usuario, password } = req.body || {};
@@ -20,17 +21,18 @@ export async function loginPortalController(req, res) {
 
   try {
     const resultado = await loginCliente(usuario.trim(), password);
+    await registrarAccion('ingreso', { actor: actorCliente(resultado.cliente), ip: req.ip });
 
-    res.cookie('portal_token', resultado.token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'lax',
-      maxAge: config.session.timeoutMinutes * 60 * 1000,
-    });
+    fijarCookiePortal(res, resultado.token);
 
     res.json({ cliente: resultado.cliente });
   } catch (err) {
-    if (err.codigo === 'USUARIO_BLOQUEADO') return res.status(423).json({ error: err.message });
+    if (err.codigo === 'USUARIO_BLOQUEADO') {
+      if (err.recienBloqueado) {
+        await registrarAccion('cuenta-bloqueada', { actor: err.cuenta, ip: req.ip, detalle: { cuenta: err.cuenta.nombre } });
+      }
+      return res.status(423).json({ error: err.message });
+    }
     if (err.codigo === 'CREDENCIALES_INVALIDAS') return res.status(401).json({ error: err.message });
     throw err;
   }
@@ -38,6 +40,7 @@ export async function loginPortalController(req, res) {
 
 export async function logoutPortalController(req, res) {
   await cerrarSesionCliente(req.cliente.sesionId, 'logout');
+  await registrarAccion('salida', { actor: actorCliente(req.cliente), ip: req.ip });
   res.clearCookie('portal_token');
   res.json({ ok: true });
 }

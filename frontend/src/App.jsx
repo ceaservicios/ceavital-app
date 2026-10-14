@@ -19,6 +19,7 @@ import ConfiguracionPage from './pages/ConfiguracionPage.jsx';
 import PortalLoginPage from './pages/PortalLoginPage.jsx';
 import PortalPage from './pages/PortalPage.jsx';
 import SuperadminPage from './pages/SuperadminPage.jsx';
+import CuentaPage from './pages/CuentaPage.jsx';
 
 export default function App() {
   return (
@@ -44,6 +45,7 @@ export default function App() {
           }
         >
           <Route index element={<Navigate to="/caja" replace />} />
+          <Route path="cuenta" element={<CuentaPage />} />
           <Route path="caja" element={<CajaPage />} />
           <Route path="stock" element={<StockPage />} />
           <Route path="vencimientos" element={<VencimientosPage />} />

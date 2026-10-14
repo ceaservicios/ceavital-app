@@ -17,7 +17,7 @@ import { asyncHandler } from '../utils/async-handler.js';
 
 const router = Router();
 
-// El login del portal: además del bloqueo por cliente que ya aplica el servicio (5 intentos,
+// El login del portal: además del bloqueo por cliente que ya aplica el servicio (10 intentos,
 // 15 min), el tope de intentos FALLIDOS por IP compartido con el login del negocio
 // (ingreso-limiter.middleware.js: 20 en 15 min, los correctos no cuentan).
 

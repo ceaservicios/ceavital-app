@@ -1,0 +1,169 @@
+.dosfa {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.dosfa p {
+  margin: 0;
+}
+.dosfa-ayuda {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.dosfa-aviso {
+  background: rgba(14, 75, 56, 0.08);
+  color: var(--color-primary);
+  border: 1px solid rgba(14, 75, 56, 0.25);
+}
+.dosfa-estado {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.dosfa-chip {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(14, 75, 56, 0.1);
+  color: var(--color-primary);
+  font-size: 12.5px;
+  font-weight: 800;
+}
+.dosfa-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Elección del método: dos tarjetas que se tocan enteras. */
+.dosfa-opciones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.dosfa-opcion {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  text-align: left;
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.dosfa-opcion:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: rgba(14, 75, 56, 0.04);
+}
+.dosfa-opcion:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.dosfa-opcion-titulo {
+  font-size: 14.5px;
+  font-weight: 800;
+}
+.dosfa-opcion-texto {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+
+.dosfa-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 600px;
+}
+.dosfa-pasos {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.dosfa-qr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 20px;
+}
+.dosfa-qr-espera {
+  width: 180px;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.dosfa-qr-lado {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.dosfa-qr img {
+  display: block;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  max-width: 100%;
+  height: auto;
+}
+.dosfa-qr-clave {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.dosfa-qr-clave code {
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  overflow-wrap: anywhere;
+}
+.dosfa-codigo-input {
+  max-width: 220px;
+  font-size: 20px !important;
+  letter-spacing: 6px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Códigos de recuperación: dos columnas, monoespaciados. */
+.dosfa-codigos {
+  margin: 0;
+  padding: 14px 16px;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 24px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-sm);
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  max-width: 420px;
+}
+
+@media (max-width: 480px) {
+  .dosfa-codigos {
+    grid-template-columns: 1fr;
+  }
+}

@@ -207,6 +207,36 @@ a.sidebar-item.sidebar-item-active .sidebar-badge {
   padding: 10px 2px 0;
   border-top: 1px solid var(--sidebar-line);
 }
+/* Avatar + nombre: enlace a "Mi cuenta" (un <a>, así que se le fijan los colores). Sobre el
+   verde, la cuenta abierta se marca con un velo blanco (el blanco lleno de los ítems dejaría el
+   nombre blanco sobre blanco). Mismo bloque que Central. */
+.sidebar-cuenta,
+.sidebar-cuenta:hover {
+  color: var(--sidebar-text-strong);
+}
+.sidebar-cuenta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-grow: 1;
+  min-width: 0;
+  padding: 4px;
+  border-radius: 10px;
+  transition: background 0.15s ease-out;
+}
+.sidebar-cuenta:hover {
+  background: var(--sidebar-item-hover-bg);
+}
+.sidebar-cuenta:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+.sidebar-cuenta-activa {
+  background: rgba(255, 255, 255, 0.14);
+}
+.sidebar-cuenta-activa .sidebar-user-name {
+  color: #ffffff;
+}
 .sidebar-avatar {
   width: 36px;
   height: 36px;

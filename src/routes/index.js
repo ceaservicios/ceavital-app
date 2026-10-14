@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authRoutes from './auth.routes.js';
+import cuentaRoutes from './cuenta.routes.js';
 import productosRoutes from './productos.routes.js';
 import vencimientosRoutes from './vencimientos.routes.js';
 import ventasRoutes from './ventas.routes.js';
@@ -29,6 +30,8 @@ router.get(
 );
 
 router.use('/auth', authRoutes);
+// "Mi cuenta" del usuario del negocio: contraseña y verificación en dos pasos propias.
+router.use('/cuenta', cuentaRoutes);
 // Superadmin de la instalación (CEA): cuenta, sesión y cookie propias, aparte del negocio.
 router.use('/sa', superadminRoutes);
 router.use('/productos', productosRoutes);

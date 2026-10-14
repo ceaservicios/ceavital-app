@@ -8,7 +8,16 @@ const migrationsDir = path.join(__dirname, 'migrations');
 
 // Clave del candado de Postgres que evita que dos instancias migren a la vez
 // (ej. dos contenedores arrancando juntos en un deploy).
-const CLAVE_CANDADO = 727_001;
+export const CLAVE_CANDADO = 727_001;
+
+/** Las migraciones del código, en orden: [{ archivo, sql }]. La restauración de una copia aplica las que le faltan. */
+export function listarMigraciones() {
+  return fs
+    .readdirSync(migrationsDir)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
+    .map((archivo) => ({ archivo, sql: fs.readFileSync(path.join(migrationsDir, archivo), 'utf8') }));
+}
 
 /**
  * Aplica las migraciones .sql pendientes, en orden por nombre de archivo.
@@ -33,15 +42,8 @@ export async function runMigrations() {
       (await client.query('SELECT archivo FROM _migrations')).rows.map((fila) => fila.archivo)
     );
 
-    const archivos = fs
-      .readdirSync(migrationsDir)
-      .filter((f) => f.endsWith('.sql'))
-      .sort();
-
-    for (const archivo of archivos) {
+    for (const { archivo, sql } of listarMigraciones()) {
       if (yaAplicadas.has(archivo)) continue;
-
-      const sql = fs.readFileSync(path.join(migrationsDir, archivo), 'utf8');
 
       await client.query('BEGIN');
       try {

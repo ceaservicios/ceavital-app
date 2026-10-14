@@ -13,10 +13,10 @@ import { asyncHandler } from '../utils/async-handler.js';
 
 const router = Router();
 
-// El login y el código por mail son alcanzables desde cualquier lugar de internet (el
-// sistema es online): además del bloqueo por cuenta (5 intentos, 15 min) que aplican
-// auth.service y codigo-ingreso.service, el tope de intentos FALLIDOS por IP compartido
-// con el portal (ingreso-limiter.middleware.js: 20 en 15 min).
+// El login y el segundo paso son alcanzables desde cualquier lugar de internet (el sistema es
+// online): además del bloqueo por cuenta (10 intentos, 15 min; 5 por código) que aplican
+// auth.service y codigo-ingreso.service, el tope de intentos FALLIDOS por IP compartido con el
+// portal (ingreso-limiter.middleware.js: 20 en 15 min). Sirven también para el superadmin.
 
 // Todos los controladores de auth son async: en Express 4 un reject sin capturar no
 // llega solo a errorHandler. Los de login y código van con asyncHandler
@@ -37,7 +37,8 @@ const reenvioLimiter = rateLimit({
 router.post('/login', ingresoLimiter, asyncHandler(loginController));
 router.post('/codigo', ingresoLimiter, asyncHandler(codigoController));
 router.post('/codigo/reenviar', reenvioLimiter, asyncHandler(reenviarCodigoController));
-router.post('/logout', requireAuth(), logoutController);
-router.get('/me', requireAuth(), meController);
+// Con algo pendiente (contraseña provisoria, Admin sin 2FA) igual se puede ver la sesión y salir.
+router.post('/logout', requireAuth(null, { permitirPendiente: true }), logoutController);
+router.get('/me', requireAuth(null, { permitirPendiente: true }), meController);
 
 export default router;

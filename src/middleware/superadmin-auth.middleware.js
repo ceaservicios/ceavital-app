@@ -43,6 +43,21 @@ export async function requireSuperadmin(req, res, next) {
   }
 
   await marcarActividadSuperadmin(sesion.sesion_id);
-  req.superadmin = { id: sesion.superadmin_id, usuario: sesion.usuario, sesionId: sesion.sesion_id, csrfToken: sesion.csrf_token };
+  req.superadmin = {
+    id: sesion.superadmin_id,
+    usuario: sesion.usuario,
+    sesionId: sesion.sesion_id,
+    csrfToken: sesion.csrf_token,
+    pendienteDosfa: !sesion.dosfa_metodo,
+  };
+  next();
+}
+
+// EST-01 §4: sin la verificación en dos pasos configurada, el superadmin solo puede configurarla
+// (y salir): el resto del panel responde 403. Va después de requireSuperadmin.
+export function exigirSuperadminListo(req, res, next) {
+  if (req.superadmin.pendienteDosfa) {
+    return res.status(403).json({ error: 'Antes de usar el panel activá la verificación en dos pasos.', codigo: 'DOSFA_PENDIENTE' });
+  }
   next();
 }

@@ -29,11 +29,47 @@
   color: var(--text-tertiary);
 }
 
-.sa-grilla {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+/* Resumen fijo (estado, plan, cuota) y pestañas. */
+.sa-resumen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sa-pestanas {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-default);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.sa-pestana {
+  flex-shrink: 0;
+  padding: 10px 16px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sa-pestana:hover {
+  color: var(--text-primary);
+}
+.sa-pestana-activa {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+/* Todas las tarjetas del mismo ancho, una abajo de la otra. */
+.sa-contenido {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
-  align-items: start;
 }
 
 .sa-card {
@@ -50,6 +86,14 @@
   margin: 0;
   font-size: 16px;
   font-weight: 800;
+}
+/* Título de la tarjeta con su estado a la derecha. */
+.sa-card-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
 }
 .sa-detalle {
   font-size: 13.5px;
@@ -117,51 +161,88 @@
   line-height: 1.4;
 }
 
-.sa-planes {
+/* Planes: una tarjeta por plan, lado a lado, con todo lo que incluye. */
+.sa-planes-grilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+.sa-plan-tarjeta {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-.sa-plan {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: 12px;
+  padding: 16px 18px;
   border: 1.5px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-.sa-plan input {
-  margin-top: 3px;
-}
-.sa-plan-elegido {
-  border-color: var(--color-primary);
-  background: rgba(14, 75, 56, 0.04);
-}
-.sa-plan-texto {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  border-radius: var(--radius-md);
   min-width: 0;
 }
+.sa-plan-actual {
+  border-color: var(--color-primary);
+  background: rgba(14, 75, 56, 0.03);
+}
+.sa-plan-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .sa-plan-nombre {
-  font-size: 14.5px;
+  font-size: 17px;
   font-weight: 800;
 }
-.sa-plan-modulos {
-  font-size: 12.5px;
-  color: var(--text-tertiary);
-  line-height: 1.4;
+.sa-plan-base {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.sa-plan-modulo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sa-plan-modulo-nombre {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--color-primary);
+}
+.sa-plan-lista {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.sa-plan-pie {
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+/* Un campo que se estira y sus botones al lado (suspender, email de la empresa). */
+.sa-form-fila {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+.sa-form-fila .field {
+  flex: 1 1 280px;
+}
+.sa-confirmar-linea {
+  flex-wrap: nowrap;
+}
+.sa-confirmar-linea > span {
+  flex-basis: auto;
 }
 
 .sa-form-cuota {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   align-items: end;
 }
 .sa-form-cuota .btn {
-  grid-column: 1 / -1;
+  justify-self: start;
 }
 
 /* Los rótulos de los formularios del panel pueden ocupar dos líneas (en global.css se
@@ -173,23 +254,114 @@
 
 .sa-form-topes {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   align-items: start;
 }
 .sa-form-topes .btn {
-  grid-column: 1 / -1;
+  justify-self: start;
 }
 
-.sa-form-email {
+/* Administradores del negocio */
+.sa-form-admin {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   align-items: flex-end;
 }
-.sa-form-email .field {
-  flex: 1 1 260px;
+.sa-form-admin .field {
+  flex: 1 1 240px;
 }
+.sa-credenciales {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(14, 75, 56, 0.25);
+  background: rgba(14, 75, 56, 0.05);
+  font-size: 13.5px;
+}
+.sa-credenciales-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.sa-credenciales-clave {
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  overflow-wrap: anywhere;
+}
+/* .btn.sa-btn-chico y no solo .sa-btn-chico: en el build global.css queda después y lo pisaba. */
+.btn.sa-btn-chico {
+  padding: 7px 12px;
+  font-size: 13px;
+}
+.sa-tabla-admins {
+  min-width: 860px;
+}
+.sa-tabla-admins td {
+  vertical-align: middle;
+}
+.sa-tabla-admins .sa-una-linea {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+/* Si los tres botones no entran, bajan a otra fila (antes apretaban el email y la fecha). */
+.sa-admin-acciones {
+  width: 1%;
+}
+.sa-admin-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 290px;
+}
+.sa-admin-acciones .sa-confirmar {
+  flex-wrap: wrap;
+  width: 290px;
+  white-space: normal;
+}
+/* Registro de acciones */
+.sa-campo-filtro {
+  width: 240px;
+}
+.sa-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.sa-tabla-registro {
+  min-width: 720px;
+}
+.sa-tabla-registro td:nth-child(3) {
+  overflow-wrap: normal;
+}
+.sa-registro-quien,
+.sa-registro-accion {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sa-registro-quien {
+  max-width: 260px;
+}
+.sa-registro-nombre {
+  overflow-wrap: anywhere;
+}
+.sa-registro-titulo {
+  font-weight: 700;
+}
+.sa-card-dosfa {
+  max-width: 760px;
+}
+
 
 .sa-form-pago {
   display: grid;
@@ -295,12 +467,193 @@
   padding: 6px 0;
 }
 
+/* Pestaña Correo: los dos correos lado a lado (con la grilla y las tarjetas de los planes). */
+.sa-correo-datos {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 13.5px;
+}
+.sa-correo-datos dt {
+  color: var(--text-tertiary);
+}
+.sa-correo-datos dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.sa-tabla-correos td:nth-child(3) {
+  overflow-wrap: normal;
+}
+.sa-tabla-correos td:nth-child(4) {
+  overflow-wrap: anywhere;
+}
+/* Copias: tres columnas, entra entera en el celular (el nombre del archivo se corta donde haga falta). */
+.sa-tabla.sa-tabla-copias {
+  min-width: 0;
+}
+.sa-tabla-copias .sa-mono {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* Restaurar una copia */
+.sa-quiebre {
+  overflow-wrap: anywhere;
+}
+.sa-restaurar-ultima {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.sa-restaurar-cambios {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+.sa-restaurar-lista {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  margin: 12px 0;
+}
+.sa-restaurar-opcion {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 2px;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-default);
+  cursor: pointer;
+  font-size: 14px;
+}
+.sa-restaurar-opcion:last-child {
+  border-bottom: none;
+}
+.sa-restaurar-opcion input {
+  grid-row: span 2;
+  margin: 0;
+}
+.sa-restaurar-elegida {
+  background: rgba(14, 75, 56, 0.06);
+}
+.sa-restaurar-dato {
+  min-width: 0;
+}
+.sa-restaurar-chica {
+  color: #7a5b00;
+  font-weight: 600;
+}
+.sa-restaurar-pie {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.sa-restaurar-confirmar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+}
+.sa-restaurar-confirmar .sa-h3 {
+  margin: 0;
+}
+.sa-restaurar-perdida {
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 4px solid var(--color-danger);
+  background: rgba(224, 90, 101, 0.1);
+  color: #a13640;
+  font-size: 16px;
+  font-weight: 700;
+}
+.sa-restaurar-puntos {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.sa-restaurar-campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+.sa-restaurar-campos .sa-mono {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.btn.sa-btn-restaurar {
+  background: #a13640;
+  border-color: #a13640;
+  color: #ffffff;
+}
+.btn.sa-btn-restaurar:disabled {
+  opacity: 0.5;
+}
+.sa-etapas {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14.5px;
+  color: var(--text-tertiary);
+}
+.sa-etapas li {
+  display: flex;
+  gap: 10px;
+}
+.sa-etapa-marca {
+  width: 18px;
+  flex-shrink: 0;
+  text-align: center;
+}
+.sa-etapa-lista {
+  color: var(--color-primary);
+}
+.sa-etapa-actual {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+@media (max-width: 560px) {
+  .sa-restaurar-pie {
+    flex-direction: column-reverse;
+  }
+  .sa-restaurar-pie .btn {
+    width: 100%;
+  }
+}
+.sa-correo-estado {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+@media (max-width: 900px) {
+  .sa-form-cuota,
+  .sa-form-topes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 600px) {
   .sa-page {
     padding-top: 16px;
   }
   .sa-form-cuota {
     grid-template-columns: 1fr;
+  }
+  .sa-confirmar-linea {
+    flex-wrap: wrap;
   }
   .sa-form-pago .sa-pago-nota {
     grid-column: 1 / -1;

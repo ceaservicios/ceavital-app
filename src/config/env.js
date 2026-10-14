@@ -51,10 +51,11 @@ const config = {
   // del proxy de Easypanel, donde el Host es el dominio real).
   publicUrl: (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, ''),
 
-  // Correo de la empresa: códigos de ingreso de los usuarios del negocio y datos de
-  // acceso al portal. NECESARIO para los usuarios: sin SMTP_HOST no se pueden crear
-  // usuarios, cambiar emails ni activar 2FA, y quien necesita código no puede entrar
-  // (el acceso al portal sí cae a abrir el mail en el programa de correo del usuario).
+  // Correo de la empresa: códigos de ingreso de los usuarios del negocio, contraseñas provisorias
+  // de los Administradores y datos de acceso al portal. La app funciona sin él (EST-01 §10.2): la
+  // verificación del email de los empleados queda en pausa, el 2FA de los Administradores va por
+  // app, la contraseña provisoria se ve en pantalla y el acceso al portal cae a abrir el mail en el
+  // programa de correo del usuario. Lo que no se puede es activar el 2FA por mail.
   // Puerto 465 = conexión segura desde el inicio.
   smtp: {
     host: (process.env.SMTP_HOST || '').trim(),
@@ -63,15 +64,27 @@ const config = {
     user: (process.env.SMTP_USER || '').trim(),
     pass: process.env.SMTP_PASS || '',
     from: (process.env.SMTP_FROM || process.env.SMTP_USER || '').trim(),
+    // A dónde van las respuestas a esos mails (la casilla propia de la empresa). El envío sale por
+    // la cuenta de CEA, que la empresa no maneja: así no puede cortarlo (ni borrar su clave de app).
+    replyTo: (process.env.SMTP_REPLY_TO || '').trim(),
   },
 
-  // Cuenta del superadmin (CEA) de esta instalación. Solo se usa para CREARLA la primera
-  // vez, si todavía no existe (ver superadmin.service.js > asegurarSuperadmin): después
-  // manda la contraseña guardada, no esta variable. Nunca por argumento de línea de comandos.
+  // Cuenta del superadmin (CEA) de esta instalación (EST-01 §1: entra con su mail). La contraseña
+  // solo se usa para CREARLA la primera vez, si todavía no existe (ver superadmin.service.js >
+  // asegurarSuperadmin): después manda la guardada. Nunca por argumento de línea de comandos.
   superadmin: {
-    // Vacío = no fijado: al crear la cuenta se usa 'superadmin' y una cuenta existente no se renombra.
-    usuario: (process.env.SUPERADMIN_USUARIO || '').trim(),
+    // Vacío = sin cuenta nueva y una cuenta existente no se renombra.
+    email: (process.env.SUPERADMIN_EMAIL || '').trim(),
     password: process.env.SUPERADMIN_PASSWORD || '',
+  },
+
+  // Verificación en dos pasos (EST-01 §4). DOSFA_CLAVE cifra los secretos de las apps
+  // autenticadoras (mínimo 32 caracteres; si cambia, los que usan la app la tienen que volver a
+  // configurar). Sin ella solo se puede elegir el código por mail. DOSFA_EMISOR es el nombre que
+  // muestra la app autenticadora (distingue esta instalación de otras de CEAVital).
+  dosfa: {
+    clave: process.env.DOSFA_CLAVE || '',
+    emisor: (process.env.DOSFA_EMISOR || '').replaceAll(':', '').trim().slice(0, 40) || 'CEAVital',
   },
 
   // Correo de CEA (remitente admin@ceavital.net) para los avisos de cuota del superadmin.
@@ -103,14 +116,23 @@ const config = {
       .filter(Boolean),
   },
 
+  // Copias de seguridad (services/copias.service.js): Google Drive de CEA (admin@ceaservicios.com.ar)
+  // con el cliente OAuth de IntelDrive y DaleFit. Sin las tres (o sin PUBLIC_URL) no hay copias.
+  gdrive: {
+    clientId: (process.env.GDRIVE_CLIENT_ID || '').trim(),
+    clientSecret: (process.env.GDRIVE_CLIENT_SECRET || '').trim(),
+    refreshToken: (process.env.GDRIVE_REFRESH_TOKEN || '').trim(),
+  },
+
   session: {
-    // Sesion inactiva se cierra sola a los 30 min (Instructivo-Funcional > Requisitos transversales).
-    timeoutMinutes: 30,
+    // EST-01 §3 (SEG-POL-001 §1.1): la sesión vence a las 8 h sin uso. Las del Admin del negocio
+    // y del superadmin no se extienden solas: vencen a las 8 h de haber ingresado aunque se usen.
+    timeoutMinutes: 480,
   },
 
   login: {
-    // Bloqueo tras 5 intentos fallidos, 15 min (Instructivo-Funcional > Configuracion y Seguridad).
-    maxIntentos: 5,
+    // EST-01 §9.6: 10 intentos fallidos seguidos bloquean la cuenta 15 min (negocio, portal y superadmin).
+    maxIntentos: 10,
     bloqueoMinutos: 15,
   },
 };

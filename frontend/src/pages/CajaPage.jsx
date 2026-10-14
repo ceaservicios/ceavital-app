@@ -347,22 +347,25 @@ export default function CajaPage() {
 
   // Lector en el campo de peso (2026-10-14): si se escanea con el foco en el peso, el código no
   // es un peso. El lector tipea cada carácter y el Enter a pocos ms; una persona, no. Por línea
-  // se guarda el texto que había antes de la ráfaga, para devolverlo y mandar el código a Caja.
+  // se guarda el texto que había antes de la ráfaga (para devolverlo) y las teclas de la ráfaga
+  // (el código): no se deduce del valor del campo, que depende de la selección y del cursor
+  // (con Tab el texto queda seleccionado y el código lo reemplaza).
   function teclaEnPeso(e, clave) {
     const ahora = performance.now();
     const rafaga = rafagasPesoRef.current.get(clave);
     const enRafaga = rafaga && ahora - rafaga.ultima < LECTOR_MS_ENTRE_TECLAS;
     if (e.key.length === 1) {
       // El keydown llega antes de que el carácter se escriba: el valor es el de antes.
-      if (enRafaga) rafaga.ultima = ahora;
-      else rafagasPesoRef.current.set(clave, { antes: e.currentTarget.value, ultima: ahora });
+      if (enRafaga) {
+        rafaga.ultima = ahora;
+        rafaga.teclas += e.key;
+      } else rafagasPesoRef.current.set(clave, { antes: e.currentTarget.value, teclas: e.key, ultima: ahora });
       return;
     }
     if (e.key !== 'Enter') return;
     e.preventDefault();
     rafagasPesoRef.current.delete(clave);
-    const texto = e.currentTarget.value;
-    const codigo = enRafaga && texto.startsWith(rafaga.antes) ? texto.slice(rafaga.antes.length).trim() : '';
+    const codigo = enRafaga ? rafaga.teclas.trim() : '';
     searchInputRef.current?.focus();
     if (codigo.length < LECTOR_LARGO_MINIMO) return;
     cambiarPeso(clave, rafaga.antes);

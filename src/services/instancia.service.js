@@ -3,6 +3,7 @@ import { ApiError } from '../utils/api-error.js';
 import { SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
 import { cambiarPlan } from './modulos.service.js';
 import { armarCorreoCuota, correoCeaDisponible, enviarCorreo } from './mail.service.js';
+import { encolarCorreo } from './cola-correo.service.js';
 
 // Estado de la instalación que gestiona el superadmin: suspensión (manual o automática por
 // cuota impaga) y cuota. (El plan vive en `configuracion` y lo cambia modulos.service.cambiarPlan.)
@@ -132,18 +133,18 @@ export async function aplicarReactivacion() {
     .run();
 }
 
-// Mail a la empresa avisando que el servicio está activo de nuevo. Va después de la
-// transacción y nunca hace fallar la reactivación: sin correo configurado o sin email de
-// la empresa no se manda, y un error del SMTP queda en el log. Devuelve a quién se mandó.
+// Mail a la empresa avisando que el servicio está activo de nuevo (por la cola). Va después de
+// la transacción y nunca hace fallar la reactivación: sin correo configurado o sin email de la
+// empresa no se manda. Devuelve a quién se mandó.
 export async function avisarReactivacion() {
   if (!correoCeaDisponible()) return null;
   const { empresa_email: para } = await db.prepare('SELECT empresa_email FROM instancia WHERE id = 1').get();
   if (!para) return null;
   try {
-    await enviarCorreo({ para, ...armarCorreoCuota({ tipo: 'reactivada' }) }, 'cea');
+    await encolarCorreo({ para, ...armarCorreoCuota({ tipo: 'reactivada' }) }, { canal: 'cea', tipo: 'aviso-cuota' });
     return para;
   } catch (err) {
-    console.error('[cuota] no se pudo mandar el aviso de reactivación:', err.message);
+    console.error('[cuota] no se pudo encolar el aviso de reactivación:', err.message);
     return null;
   }
 }
@@ -240,17 +241,35 @@ export async function cuposPorRol() {
   });
 }
 
-// datos: { admin, encargado, cajero }, cada uno un entero de 0 a 999 o vacío (sin cargar).
+// Tope de clientes con acceso al portal (EST-01 §3: "incluidos los clientes finales con acceso").
+// Ocupan lugar los clientes-empresa activos con el acceso configurado y habilitado; deshabilitar
+// el acceso o dar de baja al cliente libera el lugar.
+export async function cupoPortal() {
+  const { cupo_portal: tope } = await db.prepare('SELECT cupo_portal FROM instancia WHERE id = 1').get();
+  const { n } = await db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM clientes_empresa
+       WHERE eliminado_en IS NULL AND portal_habilitado = 1 AND portal_usuario IS NOT NULL AND portal_password_hash IS NOT NULL`
+    )
+    .get();
+  const usados = Number(n);
+  return { tope: tope ?? null, usados, libres: Math.max(0, (tope ?? 0) - usados) };
+}
+
+// datos: { admin, encargado, cajero } (enteros de 0 a 999) y { portal } (de 0 a 99999); vacío = sin cargar.
 export async function fijarCupos(datos) {
   const valores = ROLES_CON_TOPE.map((rol) =>
     vacio(datos[rol]) ? null : enteroEntre(datos[rol], 0, 999, 'Cada tope tiene que ser un número entero entre 0 y 999')
   );
+  const portal = vacio(datos.portal)
+    ? null
+    : enteroEntre(datos.portal, 0, 99999, 'El tope de clientes con acceso al portal tiene que ser un número entero entre 0 y 99999');
   await db
     .prepare(
-      `UPDATE instancia SET cupo_admin = ?, cupo_encargado = ?, cupo_cajero = ?, actualizado_en = CURRENT_TIMESTAMP
+      `UPDATE instancia SET cupo_admin = ?, cupo_encargado = ?, cupo_cajero = ?, cupo_portal = ?, actualizado_en = CURRENT_TIMESTAMP
        WHERE id = 1`
     )
-    .run(...valores);
+    .run(...valores, portal);
 }
 
 // Cambio de plan hecho por el superadmin: el mismo cambiarPlan de siempre (bloquea si

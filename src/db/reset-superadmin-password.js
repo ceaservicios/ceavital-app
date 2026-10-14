@@ -1,6 +1,7 @@
 import db from './connection.js';
 import { runMigrations } from './migrate.js';
 import { cambiarPasswordSuperadmin } from '../services/superadmin.service.js';
+import { registrarAccion } from '../services/registro.service.js';
 
 // Cambia la contraseña del superadmin desde la terminal del servidor. La contraseña nueva
 // va en la variable de entorno SUPERADMIN_PASSWORD_NUEVA (nunca como argumento: quedaría
@@ -10,6 +11,7 @@ import { cambiarPasswordSuperadmin } from '../services/superadmin.service.js';
 try {
   await runMigrations();
   await cambiarPasswordSuperadmin(process.env.SUPERADMIN_PASSWORD_NUEVA);
+  await registrarAccion('contrasena-terminal');
   console.log('[superadmin] contraseña cambiada; las sesiones abiertas se cerraron');
 } catch (err) {
   console.error(`[superadmin] ${err.message}`);

@@ -90,9 +90,9 @@ export default function SuperadminSeguridad({ irAlLogin }) {
         <span className="sa-chip sa-chip-neutro">{estado.resumen.eventos_24h} ataque{estado.resumen.eventos_24h === 1 ? '' : 's'} detectado{estado.resumen.eventos_24h === 1 ? '' : 's'} en 24 h</span>
       </p>
       <p className="sa-ayuda">
-        Se bloquea sola, en el acto, la IP que sondea archivos (.env, wp-admin…), intenta inyecciones o comandos, usa herramientas de hacking,
-        mapea la API (15 rutas inexistentes en 5 min) o hace ráfagas de pedidos. Bloqueo de 1 hora; si reincide en 30 días, 24 horas y
-        después 7 días. Las contraseñas o códigos mal puestos nunca bloquean la IP: cada cuenta se bloquea a los 5 intentos (15 min) y, con 20
+        Se bloquea sola, en el acto, la IP que sondea archivos (.env, wp-admin…), intenta inyecciones o comandos, usa herramientas de hacking
+        o programas que copian el sitio (HTTrack, SiteSucker, wget…), mapea la API (15 rutas inexistentes en 5 min) o hace ráfagas de pedidos. Bloqueo de 1 hora; si reincide en 30 días, 24 horas y
+        después 7 días. Las contraseñas o códigos mal puestos nunca bloquean la IP: cada cuenta se bloquea a los 10 intentos (15 min; 5 para un código) y, con 20
         intentos fallidos desde una misma IP en 15 min, esa IP espera para volver a intentar. Quien ya tiene una sesión abierta nunca queda
         bloqueado (aunque su IP lo esté) y lo que hace nunca bloquea su IP.{' '}
         {estado.alerta_email
@@ -171,7 +171,7 @@ export default function SuperadminSeguridad({ irAlLogin }) {
       <details className="sa-eventos">
         <summary>Bloquear una IP a mano</summary>
         <form
-          className="sa-form-email"
+          className="sa-form-fila"
           onSubmit={(e) => {
             e.preventDefault();
             ejecutar(async () => {

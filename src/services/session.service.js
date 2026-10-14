@@ -42,24 +42,35 @@ export async function crearSesion(usuario) {
   });
 }
 
+// EST-01 §3: la sesión vence a las 8 h sin uso; la del Admin, además, a las 8 h de haber ingresado
+// aunque se use (no se extiende sola). Condición SQL compartida por la validación y la limpieza.
+const SQL_SESION_VIGENTE = `sa.ultima_actividad >= LOCALTIMESTAMP - (?::int * INTERVAL '1 minute')
+  AND (sa.rol <> 'admin' OR sa.iniciada_en >= LOCALTIMESTAMP - (?::int * INTERVAL '1 minute'))`;
+
 /**
- * Devuelve la sesion solo si esta activa Y no vencio por inactividad (30 min).
+ * Devuelve la sesion solo si esta activa Y no vencio (ver SQL_SESION_VIGENTE).
  * La comparacion de fechas se hace en la base (LOCALTIMESTAMP, en UTC) para no
  * depender de parseo de fechas en JS, que es una fuente tipica de bugs de huso horario.
  */
 export function obtenerSesionActivaValida(token) {
-  // JOIN a usuarios solo para nombre/usuario -- lo necesita el frontend para
-  // mostrar el nombre real en el Sidebar sin depender de lo que devolvio el
-  // login (que no sobrevive a un refresh de pagina).
+  // JOIN a usuarios para nombre/usuario (el Sidebar muestra el nombre real aunque se recargue la
+  // página) y para saber si la cuenta tiene algo pendiente (contraseña provisoria, 2FA sin configurar).
   return db
     .prepare(
-      `SELECT sa.*, u.nombre, u.usuario
+      `SELECT sa.*, u.nombre, u.usuario, u.debe_cambiar_password, u.dosfa_metodo
        FROM sesiones_activas sa
        JOIN usuarios u ON u.id = sa.usuario_id
-       WHERE sa.token = ? AND sa.estado = 'activa'
-         AND sa.ultima_actividad >= LOCALTIMESTAMP - (?::int * INTERVAL '1 minute')`
+       WHERE sa.token = ? AND sa.estado = 'activa' AND ${SQL_SESION_VIGENTE}`
     )
-    .get(token, config.session.timeoutMinutes);
+    .get(token, config.session.timeoutMinutes, config.session.timeoutMinutes);
+}
+
+// Lo que la cuenta tiene que resolver antes de usar el sistema: 'password' (contraseña provisoria,
+// EST-01 §5) o 'dosfa' (Admin sin verificación en dos pasos, EST-01 §4). null = nada.
+export function pendienteDeCuenta({ rol, debe_cambiar_password: debeCambiar, dosfa_metodo: metodo }) {
+  if (debeCambiar) return 'password';
+  if (rol === 'admin' && !metodo) return 'dosfa';
+  return null;
 }
 
 export async function marcarActividad(sesionId) {
@@ -80,20 +91,29 @@ export async function cerrarSesion(sesionId, motivo = 'logout') {
 
 /**
  * Housekeeping: cierra formalmente (con motivo_cierre = 'timeout' y
- * cerrada_en) las sesiones que siguen marcadas 'activa' pero superaron los
- * 30 min de inactividad. No es lo que bloquea el acceso (eso ya lo hace
- * obtenerSesionActivaValida en cada request) -- es para que el historial de
- * sesiones quede prolijo y auditable.
+ * cerrada_en) las sesiones que siguen marcadas 'activa' pero ya vencieron.
+ * No es lo que bloquea el acceso (eso ya lo hace obtenerSesionActivaValida en
+ * cada request) -- es para que el historial de sesiones quede prolijo y auditable.
  */
 export async function cerrarSesionesInactivas() {
   const resultado = await db
     .prepare(
-      `UPDATE sesiones_activas
+      `UPDATE sesiones_activas sa
        SET estado = 'cerrada', motivo_cierre = 'timeout', cerrada_en = CURRENT_TIMESTAMP
-       WHERE estado = 'activa'
-         AND ultima_actividad < LOCALTIMESTAMP - (?::int * INTERVAL '1 minute')`
+       WHERE sa.estado = 'activa' AND NOT (${SQL_SESION_VIGENTE})`
     )
-    .run(config.session.timeoutMinutes);
+    .run(config.session.timeoutMinutes, config.session.timeoutMinutes);
 
   return resultado.changes;
+}
+
+// Cierra la sesión activa de un usuario (hay una sola por usuario), por ejemplo cuando el
+// superadmin le restablece la contraseña o el 2FA, o lo da de baja.
+export async function cerrarSesionDelUsuario(usuarioId) {
+  await db
+    .prepare(
+      `UPDATE sesiones_activas SET estado = 'cerrada', motivo_cierre = 'expulsada', cerrada_en = CURRENT_TIMESTAMP
+       WHERE usuario_id = ? AND estado = 'activa'`
+    )
+    .run(usuarioId);
 }

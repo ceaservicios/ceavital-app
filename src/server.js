@@ -16,7 +16,12 @@ import { cerrarSesionesInactivas } from './services/session.service.js';
 import { cerrarSesionesClienteInactivas } from './services/clientes-portal.service.js';
 import { defensaCuerpoIp, defensaIp, iniciarDefensa, rutaApiInexistente } from './services/defensa-ip.service.js';
 import { revisarCuota } from './services/avisos-cuota.service.js';
+import { iniciarColaCorreo } from './services/cola-correo.service.js';
+import { revisarCopiaDiaria } from './services/copias.service.js';
+import { enMantenimiento, mantenimientoMiddleware } from './services/mantenimiento.service.js';
+import { cerrarRestauracionesCortadas } from './services/restauracion.service.js';
 import { asegurarSuperadmin, cerrarSesionesSuperadminInactivas } from './services/superadmin.service.js';
+import { claveDosfaDisponible } from './utils/dosfa.js';
 
 function asegurarCertificado() {
   const certPath = path.join(config.certsDir, 'cert.pem');
@@ -50,8 +55,15 @@ process.on('unhandledRejection', (motivo) => {
 });
 
 await runMigrations();
+// Una restauración que quedó "en curso" se cortó con el servidor (su transacción no se confirmó).
+await cerrarRestauracionesCortadas();
 await asegurarSuperadmin();
+if (!claveDosfaDisponible()) {
+  console.warn('[2fa] falta DOSFA_CLAVE (32 caracteres o más): la verificación en dos pasos solo se puede configurar por mail');
+}
 await iniciarDefensa();
+// Mails en cola (EST-01 §10.3): manda lo pendiente de antes del reinicio y revisa cada 30 s.
+iniciarColaCorreo();
 
 const app = express();
 
@@ -65,6 +77,8 @@ if (config.httpsMode === 'proxy') {
 
 // Primero de todo: una IP bloqueada o un ataque evidente no llega a ninguna otra lógica.
 app.use(defensaIp);
+// Mientras se restaura una copia: solo el panel /sa (503 para el negocio y el portal).
+app.use(mantenimientoMiddleware);
 app.use(helmetMiddleware);
 app.use(buildCorsMiddleware());
 app.use(express.json());
@@ -102,6 +116,7 @@ if (config.httpsMode === 'proxy') {
 // session.service.cerrarSesionesInactivas para el porque de este barrido
 // ademas del chequeo en tiempo real que ya hace el middleware de auth.
 setInterval(async () => {
+  if (enMantenimiento()) return;
   try {
     const cerradas = await cerrarSesionesInactivas();
     if (cerradas > 0) {
@@ -119,8 +134,14 @@ setInterval(async () => {
 
 // Revisión de la cuota: suspensión automática por cuota impaga y avisos por mail (a los 30 s
 // de arrancar y después cada hora). Un mail que no sale se reintenta en la próxima pasada.
-const revisarCuotaSinFallar = () => revisarCuota().catch((err) => console.error('[cuota] revisión fallida:', err.message));
+const revisarCuotaSinFallar = () => !enMantenimiento() && revisarCuota().catch((err) => console.error('[cuota] revisión fallida:', err.message));
 if (config.avisosCuota) {
   setTimeout(revisarCuotaSinFallar, 30_000);
   setInterval(revisarCuotaSinFallar, 60 * 60 * 1000);
 }
+
+// Copia de seguridad automática del día (desde las 3, hora argentina): al minuto de arrancar (si el
+// servidor estuvo caído a esa hora, corre al volver) y después cada 15 minutos.
+const revisarCopiaSinFallar = () => revisarCopiaDiaria().catch((err) => console.error('[copias] revisión fallida:', err.message));
+setTimeout(revisarCopiaSinFallar, 60_000);
+setInterval(revisarCopiaSinFallar, 15 * 60 * 1000);

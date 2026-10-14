@@ -1,18 +1,25 @@
-import config from '../config/env.js';
 import { confirmarIngreso, login as loginService, logout as logoutService } from '../services/auth.service.js';
 import { reenviarCodigo } from '../services/codigo-ingreso.service.js';
 import { esUsuarioSuperadmin } from '../services/superadmin.service.js';
-import { loginSuperadminController } from './superadmin.controller.js';
+import { loginSuperadminController, responderSesionSuperadmin } from './superadmin.controller.js';
+import { pareceCodigoRecuperacion } from '../utils/dosfa.js';
+import { responderSegundoPaso } from './segundo-paso.js';
+import { actorDeSesion, actorDeSuperadmin, registrarAccion } from '../services/registro.service.js';
+import { fijarCookieSesion } from '../middleware/auth.middleware.js';
 
-const OPCIONES_SESION = {
-  httpOnly: true,
-  secure: true,
-  sameSite: 'lax',
-  maxAge: config.session.timeoutMinutes * 60 * 1000,
-};
+// Ingreso al registro de acciones (EST-01 §6). segundoPaso: 'app' | 'mail' | 'recuperacion' | null.
+function registrarIngreso(req, actor, resultado, segundoPaso) {
+  return registrarAccion('ingreso', {
+    actor,
+    ip: req.ip,
+    detalle: { segundo_paso: segundoPaso, sesion_anterior_cerrada: Boolean(resultado.expulsada) },
+  });
+}
 
-// Identificador del navegador para el 2FA de una vez por día. Solo viaja a /api/auth (donde
-// se ingresa); la confianza real (24 h por usuario) vive en la base, no en la cookie.
+const actorDeUsuario = (u) => ({ tipo: 'usuario', id: u.id, nombre: u.usuario, rol: u.rol });
+
+// Identificador del navegador para la verificación en dos pasos (una vez por semana). Solo viaja
+// a /api/auth (donde se ingresa); la confianza real (por cuenta) vive en la base, no en la cookie.
 const OPCIONES_DISPOSITIVO = {
   httpOnly: true,
   secure: true,
@@ -22,7 +29,7 @@ const OPCIONES_DISPOSITIVO = {
 };
 
 function responderSesion(res, resultado) {
-  res.cookie('sesion_token', resultado.token, OPCIONES_SESION);
+  fijarCookieSesion(res, resultado.token);
   res.json({ usuario: resultado.usuario, expulsoSesionAnterior: resultado.expulsada });
 }
 
@@ -33,20 +40,20 @@ export async function loginController(req, res) {
     return res.status(400).json({ error: 'Usuario y contraseña son requeridos' });
   }
 
-  // Un solo ingreso para todos: el usuario del superadmin entra al panel de CEA (cookie y
-  // sesión propias); cualquier otro entra al sistema del negocio.
+  // Un solo ingreso para todos: el mail del superadmin entra al panel de CEA (cookie y sesión
+  // propias); cualquier otro entra al sistema del negocio.
   if (await esUsuarioSuperadmin(usuario.trim())) return loginSuperadminController(req, res);
 
   try {
     const resultado = await loginService(usuario, password, { dispositivo: req.cookies?.dispositivo });
-    if (resultado.requiereCodigo) {
-      // Contraseña correcta, pero falta el código que se le acaba de mandar por mail.
-      res.set('Cache-Control', 'no-store');
-      return res.json({ requiere_codigo: true, desafio: resultado.desafio, email: resultado.email });
-    }
+    if (resultado.requiereCodigo) return responderSegundoPaso(res, resultado);
+    await registrarIngreso(req, actorDeUsuario(resultado.usuario), resultado, null);
     responderSesion(res, resultado);
   } catch (err) {
     if (err.codigo === 'USUARIO_BLOQUEADO') {
+      if (err.recienBloqueado) {
+        await registrarAccion('cuenta-bloqueada', { actor: err.cuenta, ip: req.ip, detalle: { cuenta: err.cuenta.nombre } });
+      }
       return res.status(423).json({ error: err.message });
     }
     if (err.codigo === 'CREDENCIALES_INVALIDAS') {
@@ -69,10 +76,18 @@ export async function codigoController(req, res) {
   const desafio = leerDesafio(req, res);
   if (!desafio) return;
   const codigo = typeof req.body.codigo === 'string' ? req.body.codigo.trim() : '';
-  if (!/^\d{6}$/.test(codigo)) return res.status(400).json({ error: 'Ingresá el código de 6 números que te llegó por mail' });
+  // 6 números (mail o app) o un código de recuperación (XXXXX-XXXXX, solo con la app).
+  if (!/^\d{6}$/.test(codigo) && !pareceCodigoRecuperacion(codigo)) {
+    return res.status(400).json({ error: 'Ingresá el código de 6 números' });
+  }
 
   const resultado = await confirmarIngreso(desafio, codigo, { dispositivo: req.cookies?.dispositivo });
   if (resultado.dispositivo) res.cookie('dispositivo', resultado.dispositivo, OPCIONES_DISPOSITIVO);
+  if (resultado.tipo === 'superadmin') {
+    await registrarIngreso(req, actorDeSuperadmin(resultado.superadmin), resultado, resultado.segundoPaso);
+    return responderSesionSuperadmin(res, resultado);
+  }
+  await registrarIngreso(req, actorDeUsuario(resultado.usuario), resultado, resultado.segundoPaso);
   responderSesion(res, resultado);
 }
 
@@ -84,6 +99,7 @@ export async function reenviarCodigoController(req, res) {
 
 export async function logoutController(req, res) {
   await logoutService(req.sesion.id);
+  await registrarAccion('salida', { actor: actorDeSesion(req.sesion), ip: req.ip });
   res.clearCookie('sesion_token');
   res.json({ ok: true });
 }
@@ -94,5 +110,6 @@ export async function meController(req, res) {
     usuario: req.sesion.usuario,
     nombre: req.sesion.nombre,
     rol: req.sesion.rol,
+    pendiente: req.sesion.pendiente,
   });
 }

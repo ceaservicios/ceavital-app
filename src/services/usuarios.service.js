@@ -2,11 +2,16 @@ import { esUsuarioSuperadmin } from './superadmin.service.js';
 import db from '../db/connection.js';
 import { ApiError } from '../utils/api-error.js';
 import { hashPassword } from '../utils/password.js';
-import { cerrarSesion } from './session.service.js';
+import { cerrarSesionDelUsuario } from './session.service.js';
 import { correoDisponible } from './mail.service.js';
 import { cuposPorRol } from './instancia.service.js';
 
 const ROLES = ['admin', 'encargado', 'cajero'];
+// EST-01 §5: a los Administradores los da de alta, restablece y da de baja solo el superadmin
+// (administradores.service); el Admin del negocio gestiona Encargados y Cajeros.
+const ROLES_DEL_ADMIN = ['encargado', 'cajero'];
+const MENSAJE_ADMIN_DE_CEA =
+  'A los Administradores los gestiona CEA Servicios (alta, contraseña, verificación en dos pasos y baja).';
 const ETIQUETA_ROL = { admin: 'Administrador', encargado: 'Encargado', cajero: 'Cajero' };
 
 // Topes de longitud de nombre y usuario (sin tope, un nombre de 90.000 caracteres se guardaba).
@@ -15,16 +20,19 @@ const MAX_USUARIO = 100;
 const MAX_EMAIL = 100; // el email de los usuarios nuevos es también su usuario (mismo tope)
 const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Los códigos de ingreso (verificar el email, 2FA) salen por el correo de la empresa: sin él
-// un usuario con email no podría entrar, así que no se deja crearlo ni activarle el 2FA.
+// Los códigos de ingreso (verificar el email, 2FA) salen por el correo de la empresa. Sin él la app
+// funciona igual (EST-01 §10.2): los usuarios se crean y la verificación del email queda en pausa
+// hasta que se configure (codigo-ingreso.service > segundoPasoDeEmpleado). Lo único que no se puede
+// es activar el 2FA por mail, porque no habría cómo mandar el código.
 const MENSAJE_SIN_CORREO =
-  'Falta configurar el correo de la empresa (lo hace CEA Servicios): sin él no se pueden crear usuarios, cambiar emails ni activar el 2FA.';
+  'Falta configurar el correo de la empresa (lo hace CEA Servicios): sin él no se puede activar el 2FA, que manda el código por mail.';
 
 // Nunca se selecciona password_hash -- ni siquiera para Admin. Explícito acá
 // (no "SELECT *") para que un campo nuevo agregado a la tabla en el futuro no
 // se filtre por accidente a una respuesta HTTP.
 const COLUMNAS_SEGURAS = `
   id, nombre, usuario, email, email_verificado_en, dos_fa, rol, intentos_fallidos, bloqueado_hasta,
+  debe_cambiar_password, (dosfa_metodo IS NOT NULL) AS dosfa_configurado, ultimo_acceso,
   eliminado_en, creado_en, actualizado_en
 `;
 
@@ -41,6 +49,7 @@ function validarString(valor, campo, { requerido = true, maxLength = MAX_NOMBRE 
 
 function validarRol(valor) {
   if (!ROLES.includes(valor)) throw new ApiError(400, `rol tiene que ser uno de: ${ROLES.join(', ')}`);
+  if (!ROLES_DEL_ADMIN.includes(valor)) throw new ApiError(403, MENSAJE_ADMIN_DE_CEA);
   return valor;
 }
 
@@ -64,15 +73,16 @@ function validarBooleano(valor, campo) {
   return valor;
 }
 
-async function verificarEmailLibre(email, excluirId = null) {
+export async function verificarEmailLibre(email, excluirId = null) {
   const existente = await db
     .prepare(`SELECT id FROM usuarios WHERE LOWER(email) = LOWER(?) AND eliminado_en IS NULL AND id != ?`)
     .get(email, excluirId ?? -1);
   if (existente) throw new ApiError(409, 'Ya hay otro usuario activo con ese email');
+  if (await esUsuarioSuperadmin(email)) throw new ApiError(409, 'Ese email está reservado');
 }
 
 // Topes por rol que carga el superadmin (instancia.service > cuposPorRol).
-async function verificarLugarLibre(rol) {
+export async function verificarLugarLibre(rol) {
   const cupo = (await cuposPorRol()).find((c) => c.rol === rol);
   if (cupo.tope === null) {
     throw new ApiError(409, `Todavía no hay lugares habilitados para ${ETIQUETA_ROL[rol]}. Pedíselos a CEA Servicios.`);
@@ -93,35 +103,12 @@ async function obtenerUsuarioActivo(id) {
   return usuario;
 }
 
-async function verificarLoginLibre(login, excluirId = null) {
+export async function verificarLoginLibre(login, excluirId = null) {
   const existente = await db
     .prepare(`SELECT id FROM usuarios WHERE LOWER(usuario) = LOWER(?) AND eliminado_en IS NULL AND id != ?`)
     .get(login, excluirId ?? -1);
   if (existente) throw new ApiError(409, 'Ya existe un usuario activo con ese login');
   if (await esUsuarioSuperadmin(login)) throw new ApiError(409, 'Ese nombre de usuario está reservado');
-}
-
-// Cuántos Admin activos quedan sin contar `excluirId` -- usado para bloquear
-// la operación que dejaría al sistema sin nadie que pueda gestionar usuarios/
-// configuración (Docs/Instructivo-Funcional.md: esas dos áreas son Admin-only,
-// y la recuperación de contraseña del Admin exige acceso físico a la PC
-// servidor -- si además no queda ninguna fila con rol admin, no hay forma de
-// recuperar el acceso administrativo sin tocar la base a mano).
-async function contarAdminsActivos(excluirId = null) {
-  const fila = await db
-    .prepare(`SELECT COUNT(*) AS c FROM usuarios WHERE rol = 'admin' AND eliminado_en IS NULL AND id != ?`)
-    .get(excluirId ?? -1);
-  return fila.c;
-}
-
-// Cambiar el rol o la contraseña de un usuario es seguridad-sensible: si tiene
-// una sesión activa, cerrarla para que el cambio rija de inmediato (si no,
-// podría seguir operando con el rol/contraseña viejos hasta 30 min de timeout).
-async function cerrarSesionActivaDelUsuario(usuarioId) {
-  const sesion = await db
-    .prepare(`SELECT id FROM sesiones_activas WHERE usuario_id = ? AND estado = 'activa'`)
-    .get(usuarioId);
-  if (sesion) await cerrarSesion(sesion.id, 'expulsada');
 }
 
 export function listarUsuarios() {
@@ -132,15 +119,16 @@ export function obtenerUsuario(id) {
   return obtenerUsuarioActivo(id);
 }
 
-// Usuario nuevo: entra con su email (usuario = email), que se verifica con un código la
-// primera vez que ingresa. Solo si queda lugar libre en su rol (tope del superadmin).
+// Usuario nuevo (Encargado o Cajero): entra con su email (usuario = email), que se verifica con
+// un código la primera vez que ingresa (en pausa mientras no haya correo de la empresa). Solo si
+// queda lugar libre en su rol (tope del superadmin).
 export async function crearUsuario(datos) {
   const nombre = validarString(datos.nombre, 'nombre', { maxLength: MAX_NOMBRE });
   const email = validarEmail(datos.email);
   const rol = validarRol(datos.rol);
   validarPassword(datos.password);
   const dosFa = datos.dos_fa === undefined ? false : validarBooleano(datos.dos_fa, 'dos_fa');
-  if (!correoDisponible()) throw new ApiError(503, MENSAJE_SIN_CORREO);
+  if (dosFa && !correoDisponible()) throw new ApiError(503, MENSAJE_SIN_CORREO);
 
   const passwordHash = await hashPassword(datos.password);
 
@@ -160,6 +148,7 @@ export async function crearUsuario(datos) {
 export async function editarUsuario(id, datos) {
   await db.transaction(async () => {
     const actual = await obtenerUsuarioActivo(id);
+    if (actual.rol === 'admin') throw new ApiError(403, MENSAJE_ADMIN_DE_CEA);
 
     const actualizaciones = {};
 
@@ -170,12 +159,11 @@ export async function editarUsuario(id, datos) {
       await verificarLoginLibre(actualizaciones.usuario, id);
     }
 
-    // Email nuevo: queda sin verificar (se verifica con el código en su próximo ingreso).
-    // Si el usuario entraba con su email, pasa a entrar con el nuevo.
+    // Email nuevo: queda sin verificar (se verifica con el código en su próximo ingreso, o cuando
+    // se configure el correo de la empresa). Si el usuario entraba con su email, pasa a entrar con el nuevo.
     if (datos.email !== undefined) {
       const email = validarEmail(datos.email);
       if (email.toLowerCase() !== (actual.email ?? '').toLowerCase()) {
-        if (!correoDisponible()) throw new ApiError(503, MENSAJE_SIN_CORREO);
         await verificarEmailLibre(email, id);
         actualizaciones.email = email;
         actualizaciones.email_verificado_en = null;
@@ -188,13 +176,10 @@ export async function editarUsuario(id, datos) {
 
     if (datos.rol !== undefined) {
       actualizaciones.rol = validarRol(datos.rol);
-      if (actual.rol === 'admin' && actualizaciones.rol !== 'admin' && (await contarAdminsActivos(id)) === 0) {
-        throw new ApiError(409, 'No se le puede quitar el rol Admin al único usuario Admin activo');
-      }
       if (actualizaciones.rol !== actual.rol) await verificarLugarLibre(actualizaciones.rol);
     }
 
-    // 2FA: el código de cada ingreso (una vez por día por dispositivo) llega a su email.
+    // 2FA: el código de cada ingreso (una vez por semana en cada navegador) llega a su email.
     if (datos.dos_fa !== undefined) {
       actualizaciones.dos_fa = validarBooleano(datos.dos_fa, 'dos_fa');
       if (actualizaciones.dos_fa && !actual.dos_fa) {
@@ -223,7 +208,7 @@ export async function editarUsuario(id, datos) {
     // Solo si el rol cambió de verdad (la pantalla manda el rol en cada guardado: antes,
     // cambiarle el nombre a alguien le cerraba la sesión).
     if ((actualizaciones.rol !== undefined && actualizaciones.rol !== actual.rol) || datos.password !== undefined) {
-      await cerrarSesionActivaDelUsuario(id);
+      await cerrarSesionDelUsuario(id);
     }
   });
 
@@ -233,12 +218,9 @@ export async function editarUsuario(id, datos) {
 export async function eliminarUsuario(id) {
   await db.transaction(async () => {
     const usuario = await obtenerUsuarioActivo(id);
-
-    if (usuario.rol === 'admin' && (await contarAdminsActivos(id)) === 0) {
-      throw new ApiError(409, 'No se puede eliminar el único usuario Admin activo');
-    }
+    if (usuario.rol === 'admin') throw new ApiError(403, MENSAJE_ADMIN_DE_CEA);
 
     await db.prepare('UPDATE usuarios SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
-    await cerrarSesionActivaDelUsuario(id);
+    await cerrarSesionDelUsuario(id);
   });
 }

@@ -68,6 +68,11 @@
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+/* Código de recuperación (XXXXX-XXXXX): más largo, entra en la tarjeta con menos espacio. */
+.login-codigo-recuperacion {
+  font-size: 19px;
+  letter-spacing: 3px;
+}
 .login-aviso {
   background: rgba(14, 75, 56, 0.08);
   color: var(--color-primary);

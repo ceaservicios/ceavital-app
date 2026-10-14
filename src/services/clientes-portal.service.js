@@ -4,8 +4,9 @@ import config from '../config/env.js';
 import { ApiError } from '../utils/api-error.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
 import { AuthError } from './auth.service.js';
-import { armarCorreoAcceso, correoDisponible, enviarCorreo } from './mail.service.js';
-import { asegurarInstanciaActiva } from './instancia.service.js';
+import { armarCorreoAcceso, correoDisponible } from './mail.service.js';
+import { encolarCorreo } from './cola-correo.service.js';
+import { asegurarInstanciaActiva, cupoPortal } from './instancia.service.js';
 import { moduloActivo } from './modulos.service.js';
 
 // Portal del cliente-empresa: credenciales que carga el Admin/Encargado desde
@@ -47,6 +48,21 @@ async function verificarUsuarioLibre(usuario, excluirId) {
   if (existente) throw new ApiError(409, 'Ese usuario de acceso ya lo usa otro cliente');
 }
 
+// Tope de clientes con acceso que carga el superadmin (EST-01 §3). Se llama dentro de la
+// transacción del cambio: dos habilitaciones simultáneas no pasan las dos el último lugar.
+async function verificarLugarPortal() {
+  const cupo = await cupoPortal();
+  if (cupo.tope === null) {
+    throw new ApiError(409, 'Todavía no hay lugares habilitados para clientes con acceso al portal. Pedíselos a CEA Servicios.');
+  }
+  if (cupo.libres <= 0) {
+    throw new ApiError(
+      409,
+      `No quedan lugares para clientes con acceso al portal (el tope es ${cupo.tope}). Para sumar más, pedíselo a CEA Servicios.`
+    );
+  }
+}
+
 async function obtenerClienteActivoParaAcceso(id) {
   // Columnas explícitas: nunca se lee portal_password_hash fuera del login.
   const fila = await db
@@ -64,6 +80,7 @@ async function obtenerClienteActivoParaAcceso(id) {
 async function aAcceso(fila) {
   return {
     portal_disponible: await moduloActivo('portal'),
+    razon_social: fila.razon_social,
     configurado: Boolean(fila.portal_usuario && fila.tiene_password),
     usuario: fila.portal_usuario ?? null,
     habilitado: Boolean(fila.portal_habilitado),
@@ -110,11 +127,10 @@ export async function enviarAccesoPorCorreo(clienteEmpresaId, { password, enlace
     password,
   });
 
-  // El envío se reserva antes de mandarlo, en una transacción: dos clicks
-  // simultáneos con 4 ya enviados no pueden pasar los dos. El mail sale fuera
-  // de la transacción (se reintenta ante conflictos, no puede tener efectos
-  // afuera de la base); si el SMTP falla, la reserva queda marcada y no cuenta.
-  const reserva = await db.transaction(async () => {
+  // El envío se cuenta y se encola en una sola transacción: dos clicks
+  // simultáneos con 4 ya enviados no pueden pasar los dos. El mail sale por
+  // la cola cuando la transacción se confirma (con reintentos si el SMTP falla).
+  await db.transaction(async () => {
     const { enviados } = await db
       .prepare(
         `SELECT COUNT(*) AS enviados FROM envios_acceso_portal
@@ -127,15 +143,9 @@ export async function enviarAccesoPorCorreo(clienteEmpresaId, { password, enlace
         `Ya se enviaron ${MAX_ENVIOS_ACCESO_POR_HORA} mails de acceso a este cliente en la última hora. Esperá un rato y volvé a intentar.`
       );
     }
-    return db.prepare('INSERT INTO envios_acceso_portal (cliente_empresa_id) VALUES (?) RETURNING id').get(clienteEmpresaId);
+    await db.prepare('INSERT INTO envios_acceso_portal (cliente_empresa_id) VALUES (?)').run(clienteEmpresaId);
+    await encolarCorreo({ para: cliente.email, asunto, texto, html }, { tipo: 'acceso-portal' });
   });
-
-  try {
-    await enviarCorreo({ para: cliente.email, asunto, texto, html });
-  } catch (err) {
-    await db.prepare('UPDATE envios_acceso_portal SET fallido_en = CURRENT_TIMESTAMP WHERE id = ?').run(reserva.id);
-    throw err;
-  }
   return { enviado_a: cliente.email };
 }
 
@@ -185,6 +195,10 @@ export async function configurarAcceso(clienteEmpresaId, { usuario, password, ha
     const claves = Object.keys(cambios);
     if (claves.length === 0) throw new ApiError(400, 'No se envió ningún cambio');
 
+    // Pasa a ocupar un lugar del tope (acceso configurado y habilitado) quien no lo ocupaba.
+    const ocupaba = Boolean(actual.portal_habilitado) && yaConfigurado;
+    if (Boolean(cambios.portal_habilitado ?? actual.portal_habilitado) && !ocupaba) await verificarLugarPortal();
+
     const set = claves.map((c) => `${c} = ?`).join(', ');
     await db
       .prepare(`UPDATE clientes_empresa SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`)
@@ -222,12 +236,10 @@ export async function loginCliente(usuarioLogin, passwordPlano) {
     throw new AuthError('Usuario o contraseña incorrectos', 'CREDENCIALES_INVALIDAS');
   }
 
-  if (cliente.bloqueado) {
-    throw new AuthError(
-      `Acceso bloqueado temporalmente por intentos fallidos. Reintentá en ${config.login.bloqueoMinutos} minutos.`,
-      'USUARIO_BLOQUEADO'
-    );
-  }
+  const bloqueadoAhora = () =>
+    new AuthError(`Acceso bloqueado temporalmente por intentos fallidos. Reintentá en ${config.login.bloqueoMinutos} minutos.`, 'USUARIO_BLOQUEADO');
+
+  if (cliente.bloqueado) throw bloqueadoAhora();
 
   const passwordOk = await verifyPassword(passwordPlano, cliente.portal_password_hash);
 
@@ -242,26 +254,40 @@ export async function loginCliente(usuarioLogin, passwordPlano) {
       )
       .get(cliente.id);
     if (intentos >= config.login.maxIntentos) {
-      await db
+      // Bloqueo condicionado (mismo criterio que auth.service): en una ráfaga lo activa y lo anota
+      // un solo pedido; si un ingreso correcto reinició el contador mientras tanto, no se bloquea.
+      const bloqueo = await db
         .prepare(
-          `UPDATE clientes_empresa SET portal_bloqueado_hasta = LOCALTIMESTAMP + (?::int * INTERVAL '1 minute') WHERE id = ?`
+          `UPDATE clientes_empresa SET portal_bloqueado_hasta = LOCALTIMESTAMP + (?::int * INTERVAL '1 minute')
+           WHERE id = ? AND portal_intentos_fallidos >= ?
+             AND (portal_bloqueado_hasta IS NULL OR portal_bloqueado_hasta <= LOCALTIMESTAMP)
+           RETURNING id`
         )
-        .run(config.login.bloqueoMinutos, cliente.id);
-      throw new AuthError(
+        .get(config.login.bloqueoMinutos, cliente.id, config.login.maxIntentos);
+      const error = new AuthError(
         `Acceso bloqueado por ${config.login.maxIntentos} intentos fallidos. Reintentá en ${config.login.bloqueoMinutos} minutos.`,
         'USUARIO_BLOQUEADO'
       );
+      // recienBloqueado + cuenta: el controlador lo anota en el registro de acciones.
+      if (bloqueo) {
+        Object.assign(error, { recienBloqueado: true, cuenta: { tipo: 'cliente', id: cliente.id, nombre: cliente.razon_social, rol: 'cliente' } });
+      }
+      throw error;
     }
     throw new AuthError('Usuario o contraseña incorrectos', 'CREDENCIALES_INVALIDAS');
   }
 
-  await db
+  // Contraseña correcta: reinicia el contador solo si el acceso no quedó bloqueado mientras se
+  // comparaba la contraseña (intentos fallidos simultáneos). Si quedó bloqueado, no entra.
+  const reiniciado = await db
     .prepare(
       `UPDATE clientes_empresa
        SET portal_intentos_fallidos = 0, portal_bloqueado_hasta = NULL, portal_ultimo_acceso = CURRENT_TIMESTAMP
-       WHERE id = ?`
+       WHERE id = ? AND (portal_bloqueado_hasta IS NULL OR portal_bloqueado_hasta <= LOCALTIMESTAMP)
+       RETURNING id`
     )
-    .run(cliente.id);
+    .get(cliente.id);
+  if (!reiniciado) throw bloqueadoAhora();
 
   const token = crypto.randomBytes(32).toString('hex');
   await db.prepare('INSERT INTO sesiones_cliente (cliente_empresa_id, token) VALUES (?, ?)').run(cliente.id, token);

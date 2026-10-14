@@ -106,7 +106,7 @@ export async function registrarPago(datos = {}) {
     const reactivada = estado.estado === 'suspendida' && estado.suspension_por_cuota && !estado.sigue_para_suspender;
     if (reactivada) await aplicarReactivacion();
 
-    return { id, cuota_vence: hasta, reactivada };
+    return { id, cuota_vence: hasta, reactivada, monto: pago.monto, meses: pago.meses };
   });
 
   return { ...resultado, avisado_a: resultado.reactivada ? await avisarReactivacion() : null };

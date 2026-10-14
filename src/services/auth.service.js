@@ -1,9 +1,16 @@
 import db from '../db/connection.js';
 import config from '../config/env.js';
 import { verifyPassword } from '../utils/password.js';
-import { crearSesion, cerrarSesion } from './session.service.js';
+import { crearSesion, cerrarSesion, pendienteDeCuenta } from './session.service.js';
 import { asegurarInstanciaActiva } from './instancia.service.js';
-import { confirmarCodigo, iniciarDesafio, necesitaCodigo, recordarDispositivo } from './codigo-ingreso.service.js';
+import {
+  confirmarCodigo,
+  iniciarDesafio,
+  recordarDispositivo,
+  segundoPasoDeEmpleado,
+  segundoPasoObligatorio,
+} from './codigo-ingreso.service.js';
+import { abrirSesionSuperadmin } from './superadmin.service.js';
 
 export class AuthError extends Error {
   constructor(mensaje, codigo) {
@@ -12,17 +19,33 @@ export class AuthError extends Error {
   }
 }
 
-const datosPublicos = (usuario) => ({ id: usuario.id, nombre: usuario.nombre, usuario: usuario.usuario, rol: usuario.rol });
+const datosPublicos = (usuario) => ({
+  id: usuario.id,
+  nombre: usuario.nombre,
+  usuario: usuario.usuario,
+  rol: usuario.rol,
+  pendiente: pendienteDeCuenta(usuario),
+});
 
-// Paso 1 del ingreso: usuario y contraseña. Si el usuario tiene que confirmar un código por
-// mail (email sin verificar, o 2FA en un dispositivo no confiable) no se abre la sesión:
-// devuelve { requiereCodigo, desafio, email } y la sesión se abre en confirmarIngreso.
-// `dispositivo`: identificador del navegador (cookie), para el 2FA de una vez por día.
+async function abrirSesion(usuario) {
+  const { token, expulsada } = await crearSesion(usuario);
+  await db.prepare('UPDATE usuarios SET ultimo_acceso = CURRENT_TIMESTAMP WHERE id = ?').run(usuario.id);
+  return { token, expulsada, usuario: datosPublicos(usuario) };
+}
+
+// Paso 1 del ingreso: usuario y contraseña. Si hace falta un segundo paso no se abre la sesión:
+// devuelve { requiereCodigo, desafio, metodo, email } y la sesión se abre en confirmarIngreso.
+//  - Admin: verificación en dos pasos obligatoria (EST-01 §4) con el método que eligió (app o
+//    mail), una vez por semana en cada navegador. Si todavía no la configuró, entra y la sesión
+//    queda pendiente hasta configurarla (ver auth.middleware).
+//  - Encargado y Cajero: código por mail para verificar el email la primera vez y, si el Admin
+//    les activó el 2FA, una vez por semana en cada navegador.
+// `dispositivo`: identificador del navegador (cookie).
 export async function login(usuarioLogin, passwordPlano, { dispositivo } = {}) {
   await asegurarInstanciaActiva();
 
-  // El flag "bloqueado" se calcula en SQL (datetime('now')) para evitar
-  // parseo de fechas en JS -- mismo criterio que session.service.
+  // El flag "bloqueado" se calcula en SQL para evitar parseo de fechas en JS -- mismo criterio
+  // que session.service.
   const usuario = await db
     .prepare(
       `SELECT *, (bloqueado_hasta IS NOT NULL AND bloqueado_hasta > LOCALTIMESTAMP) AS bloqueado
@@ -56,40 +79,76 @@ export async function login(usuarioLogin, passwordPlano, { dispositivo } = {}) {
       .get(usuario.id);
 
     if (intentos >= config.login.maxIntentos) {
-      await db
-        .prepare(`UPDATE usuarios SET bloqueado_hasta = LOCALTIMESTAMP + (?::int * INTERVAL '1 minute') WHERE id = ?`)
-        .run(config.login.bloqueoMinutos, usuario.id);
+      // Bloqueo condicionado: en una ráfaga simultánea lo activa un solo pedido (los demás ya la
+      // encuentran bloqueada) y si un ingreso correcto reinició el contador mientras tanto, no se
+      // bloquea. Solo el pedido que la bloquea lo anota en el registro de acciones.
+      const bloqueo = await db
+        .prepare(
+          `UPDATE usuarios SET bloqueado_hasta = LOCALTIMESTAMP + (?::int * INTERVAL '1 minute')
+           WHERE id = ? AND intentos_fallidos >= ? AND (bloqueado_hasta IS NULL OR bloqueado_hasta <= LOCALTIMESTAMP)
+           RETURNING id`
+        )
+        .get(config.login.bloqueoMinutos, usuario.id, config.login.maxIntentos);
 
-      throw new AuthError(
+      const error = new AuthError(
         `Usuario bloqueado por ${config.login.maxIntentos} intentos fallidos. Reintentar en ${config.login.bloqueoMinutos} minutos.`,
         'USUARIO_BLOQUEADO'
       );
+      // recienBloqueado + cuenta: el controlador lo anota en el registro de acciones.
+      if (bloqueo) {
+        Object.assign(error, { recienBloqueado: true, cuenta: { tipo: 'usuario', id: usuario.id, nombre: usuario.usuario, rol: usuario.rol } });
+      }
+      throw error;
     }
 
     throw new AuthError('Usuario o contraseña incorrectos', 'CREDENCIALES_INVALIDAS');
   }
 
-  await db
+  // Contraseña correcta: reinicia el contador solo si la cuenta no quedó bloqueada mientras se
+  // comparaba la contraseña (intentos fallidos simultáneos). Si quedó bloqueada, no entra.
+  const reiniciado = await db
     .prepare(
-    `UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`
-  ).run(usuario.id);
-
-  if (await necesitaCodigo(usuario, dispositivo)) {
-    return { requiereCodigo: true, ...(await iniciarDesafio(usuario)) };
+      `UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL, actualizado_en = CURRENT_TIMESTAMP
+       WHERE id = ? AND (bloqueado_hasta IS NULL OR bloqueado_hasta <= LOCALTIMESTAMP) RETURNING id`
+    )
+    .get(usuario.id);
+  if (!reiniciado) {
+    throw new AuthError(
+      `Usuario bloqueado temporalmente por intentos fallidos. Reintentar en ${config.login.bloqueoMinutos} minutos.`,
+      'USUARIO_BLOQUEADO'
+    );
   }
 
-  const { token, expulsada } = await crearSesion(usuario);
-  return { token, expulsada, usuario: datosPublicos(usuario) };
+  const metodo =
+    usuario.rol === 'admin'
+      ? await segundoPasoObligatorio('usuario', usuario, dispositivo)
+      : await segundoPasoDeEmpleado(usuario, dispositivo);
+  if (metodo) {
+    return { requiereCodigo: true, ...(await iniciarDesafio('usuario', usuario, metodo)) };
+  }
+
+  return abrirSesion(usuario);
 }
 
-// Paso 2: el código que llegó por mail. Abre la sesión y, si el usuario tiene 2FA, deja
-// este navegador como confiable por 24 h (devuelve su identificador para la cookie).
+// Paso 2: el código (de la app o del mail). Sirve para los usuarios del negocio y para el
+// superadmin (el desafío dice de quién es). Abre la sesión y, si la cuenta tiene verificación en
+// dos pasos, deja este navegador como de confianza por una semana (devuelve su identificador
+// para la cookie).
+// segundoPaso ('app' | 'mail' | 'recuperacion') va al registro de acciones.
 export async function confirmarIngreso(desafio, codigo, { dispositivo } = {}) {
+  const { tipo, cuenta, metodo, recuperacion } = await confirmarCodigo(desafio, codigo);
+  const segundoPaso = recuperacion ? 'recuperacion' : metodo;
+
+  if (tipo === 'superadmin') {
+    const sesion = await abrirSesionSuperadmin(cuenta);
+    return { tipo, segundoPaso, ...sesion, dispositivo: await recordarDispositivo('superadmin', cuenta.id, dispositivo) };
+  }
+
   await asegurarInstanciaActiva();
-  const usuario = await confirmarCodigo(desafio, codigo);
-  const { token, expulsada } = await crearSesion(usuario);
-  const dispositivoConfiable = usuario.dos_fa ? await recordarDispositivo(usuario.id, dispositivo) : null;
-  return { token, expulsada, usuario: datosPublicos(usuario), dispositivo: dispositivoConfiable };
+  const sesion = await abrirSesion(cuenta);
+  const conDosfa = cuenta.rol === 'admin' ? Boolean(cuenta.dosfa_metodo) : cuenta.dos_fa;
+  const dispositivoConfiable = conDosfa ? await recordarDispositivo('usuario', cuenta.id, dispositivo) : null;
+  return { tipo, segundoPaso, ...sesion, dispositivo: dispositivoConfiable };
 }
 
 export async function logout(sesionId) {

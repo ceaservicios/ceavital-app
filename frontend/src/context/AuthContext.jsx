@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { api, setCsrfSuperadmin, setUnauthorizedHandler } from '../api/client.js';
+import { api, setCsrfSuperadmin, setPendienteHandler, setUnauthorizedHandler } from '../api/client.js';
 
 const AuthContext = createContext(null);
 
@@ -10,6 +10,8 @@ export function AuthProvider({ children }) {
   // Módulos activos según el plan de la instalación (GET /modulos, público).
   // null = todavía cargando; si el pedido falla se muestra solo el núcleo.
   const [modulos, setModulos] = useState(null);
+  // EST-01 §3: si el ingreso cerró una sesión abierta en otro dispositivo, se le avisa acá.
+  const [avisoIngreso, setAvisoIngreso] = useState(null);
 
   // Si el superadmin cambia el plan con la app abierta, los módulos se muestran u ocultan
   // solos (pedido del usuario 2026-10-11): se vuelven a pedir al cambiar de pantalla, al
@@ -63,10 +65,20 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  const descartarAvisoIngreso = useCallback(() => setAvisoIngreso(null), []);
+
+  const actualizarPendiente = useCallback((pendiente) => {
+    setUsuario((actual) => (actual ? { ...actual, pendiente: pendiente ?? null } : actual));
+  }, []);
+
   useEffect(() => {
     setUnauthorizedHandler(() => setUsuario(null));
-    return () => setUnauthorizedHandler(null);
-  }, []);
+    setPendienteHandler(actualizarPendiente);
+    return () => {
+      setUnauthorizedHandler(null);
+      setPendienteHandler(null);
+    };
+  }, [actualizarPendiente]);
 
   const guardarUsuario = useCallback((data) => {
     setUsuario({
@@ -74,7 +86,9 @@ export function AuthProvider({ children }) {
       usuario: data.usuario.usuario,
       nombre: data.usuario.nombre,
       rol: data.usuario.rol,
+      pendiente: data.usuario.pendiente ?? null,
     });
+    setAvisoIngreso(data.expulsoSesionAnterior ? 'Tenías una sesión abierta en otro dispositivo: se cerró al entrar acá.' : null);
     return data;
   }, []);
 
@@ -87,16 +101,23 @@ export function AuthProvider({ children }) {
         setCsrfSuperadmin(data.csrf_token);
         return data;
       }
-      // Falta el código que le llegó por mail (email sin verificar o 2FA): la sesión
-      // se abre recién en confirmarCodigo.
+      // Falta el segundo paso (código de la app o del mail): la sesión se abre recién en confirmarCodigo.
       if (data.requiere_codigo) return data;
       return guardarUsuario(data);
     },
     [guardarUsuario]
   );
 
+  // El código también puede ser del superadmin (el ingreso es uno solo): su sesión es aparte.
   const confirmarCodigo = useCallback(
-    async (desafio, codigo) => guardarUsuario(await api.post('/auth/codigo', { desafio, codigo })),
+    async (desafio, codigo) => {
+      const data = await api.post('/auth/codigo', { desafio, codigo });
+      if (data.tipo === 'superadmin') {
+        setCsrfSuperadmin(data.csrf_token);
+        return data;
+      }
+      return guardarUsuario(data);
+    },
     [guardarUsuario]
   );
 
@@ -118,6 +139,9 @@ export function AuthProvider({ children }) {
         login,
         confirmarCodigo,
         logout,
+        actualizarPendiente,
+        avisoIngreso,
+        descartarAvisoIngreso,
       }}
     >
       {children}

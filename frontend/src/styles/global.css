@@ -184,6 +184,12 @@ a.btn-primary:hover {
   color: #a13640;
   border: 1px solid rgba(224, 90, 101, 0.3);
 }
+/* Aviso que no es un error (Dorado, como pide marca.md para los avisos). */
+.alert-aviso {
+  background: rgba(243, 192, 67, 0.16);
+  color: #6b5000;
+  border: 1px solid rgba(243, 192, 67, 0.5);
+}
 
 /* Columnas de las "tablas" armadas con flex (Stock, Vencimientos, Proveedores,
    Costos, Usuarios, Cierre de Caja, carrito de Caja): cada columna recibe su

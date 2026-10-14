@@ -13,5 +13,10 @@ export default function RequireAuth({ children }) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 
+  // Contraseña provisoria o Admin sin verificación en dos pasos: primero "Mi cuenta" (EST-01).
+  if (usuario.pendiente && location.pathname !== '/cuenta') {
+    return <Navigate to="/cuenta" replace />;
+  }
+
   return children;
 }

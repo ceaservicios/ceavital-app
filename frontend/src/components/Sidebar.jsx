@@ -184,11 +184,18 @@ export default function Sidebar({ abierto = false }) {
       </nav>
 
       <div className="sidebar-footer">
-        <div className="sidebar-avatar">{iniciales(usuario?.nombre)}</div>
-        <div className="sidebar-user">
-          <span className="sidebar-user-name">{usuario?.nombre}</span>
-          <span className="sidebar-user-role">{etiquetaRol(rol)}</span>
-        </div>
+        {/* El nombre lleva a "Mi cuenta": contraseña y verificación en dos pasos propias. */}
+        <NavLink
+          to="/cuenta"
+          className={({ isActive }) => `sidebar-cuenta${isActive ? ' sidebar-cuenta-activa' : ''}`}
+          title="Mi cuenta"
+        >
+          <div className="sidebar-avatar">{iniciales(usuario?.nombre)}</div>
+          <div className="sidebar-user">
+            <span className="sidebar-user-name">{usuario?.nombre}</span>
+            <span className="sidebar-user-role">{etiquetaRol(rol)}</span>
+          </div>
+        </NavLink>
         <button type="button" className="sidebar-logout" title="Cerrar sesión" onClick={logout}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

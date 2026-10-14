@@ -200,6 +200,23 @@
   gap: 16px;
   overflow: auto;
 }
+/* Ficha de solo lectura de un Administrador (los gestiona CEA). */
+.usuarios-ficha {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 14px;
+  font-size: 13.5px;
+}
+.usuarios-ficha dt {
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.usuarios-ficha dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .usuarios-panel-vacio {
   margin: auto;
   text-align: center;

@@ -14,7 +14,8 @@
     "set-plan": "node src/db/set-plan.js",
     "reset-admin-password": "node src/db/reset-admin-password.js",
     "reset-superadmin-password": "node src/db/reset-superadmin-password.js",
-    "desbloquear-ip": "node src/db/desbloquear-ip.js"
+    "desbloquear-ip": "node src/db/desbloquear-ip.js",
+    "restablecer-2fa-superadmin": "node src/db/restablecer-2fa-superadmin.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -28,6 +29,7 @@
     "nodemailer": "^10.0.10",
     "pdfkit": "^0.20.2",
     "pg": "^8.23.0",
+    "qrcode": "^1.5.4",
     "selfsigned": "^2.4.1"
   },
   "devDependencies": {

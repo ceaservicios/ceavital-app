@@ -3,6 +3,7 @@ import { ApiError } from '../utils/api-error.js';
 import * as clientesEmpresaService from '../services/clientes-empresa.service.js';
 import * as portalService from '../services/clientes-portal.service.js';
 import { enviarResumenCuentaPdf } from '../services/resumen-cuenta-pdf.service.js';
+import { actorDeSesion, registrarAccion } from '../services/registro.service.js';
 
 function parsearId(valor, campo = 'id') {
   const id = Number(valor);
@@ -66,7 +67,22 @@ export async function obtenerAccesoController(req, res) {
 // async (hashea la contraseña): se registra con asyncHandler en las rutas.
 export async function configurarAccesoController(req, res) {
   const id = parsearId(req.params.id, 'cliente_empresa_id');
-  res.json(await portalService.configurarAcceso(id, req.body || {}));
+  const antes = await portalService.obtenerAcceso(id);
+  const despues = await portalService.configurarAcceso(id, req.body || {});
+  // Registro de acciones (EST-01 §6): el acceso al portal es una cuenta del cliente.
+  const cambios = [];
+  if (!antes.configurado) cambios.push('acceso creado');
+  else if (antes.usuario !== despues.usuario) cambios.push('usuario nuevo');
+  if (antes.configurado && req.body?.password) cambios.push('contraseña nueva');
+  if (antes.configurado && antes.habilitado !== despues.habilitado) cambios.push(despues.habilitado ? 'habilitado' : 'deshabilitado');
+  if (cambios.length) {
+    await registrarAccion('acceso-portal', {
+      actor: actorDeSesion(req.sesion),
+      ip: req.ip,
+      detalle: { cliente: despues.razon_social, cliente_id: id, cambios },
+    });
+  }
+  res.json(despues);
 }
 
 // Enlace del portal para el mail: PUBLIC_URL si está configurada, y si no el

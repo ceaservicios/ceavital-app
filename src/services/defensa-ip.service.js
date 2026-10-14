@@ -3,7 +3,9 @@ import db from '../db/connection.js';
 import config from '../config/env.js';
 import { ApiError } from '../utils/api-error.js';
 import { obtenerSesionClienteValida } from './clientes-portal.service.js';
-import { correoCeaDisponible, enviarCorreo, escaparHtml } from './mail.service.js';
+import { correoCeaDisponible, escaparHtml } from './mail.service.js';
+import { encolarCorreo } from './cola-correo.service.js';
+import { enMantenimiento } from './mantenimiento.service.js';
 import { obtenerSesionActivaValida } from './session.service.js';
 import { obtenerSesionSuperadminValida } from './superadmin.service.js';
 
@@ -20,13 +22,15 @@ import { obtenerSesionSuperadminValida } from './superadmin.service.js';
 //   xss           <script>, javascript:, onerror=, etc. en URL o cuerpo
 //   comando       cat /etc/passwd, whoami, wget http..., bash -c, etc.
 //   herramienta   User-Agent de sqlmap, nikto, nmap, nuclei, burp, zap...
+//   clonado       User-Agent de un programa que copia el sitio entero: HTTrack, WebCopier,
+//                 SiteSucker, Offline Explorer, Teleport, wget... (EST-01 §9.1, bloqueo por clonado)
 //   enumeracion   15 o más rutas de /api inexistentes en 5 minutos (mapeo/clonado de la API)
 //   rafaga        más de 1200 pedidos por minuto (scraping / clonado masivo / DoS simple)
 //   manual        bloqueada a mano desde el panel del superadmin
 //
 // Los intentos fallidos de ingreso NO bloquean la IP (regla del usuario, 2026-10-08: nunca dejar
 // afuera a una empresa cliente, y no se puede pedir IP fija): de eso se encargan el bloqueo por
-// cuenta (5 intentos, 15 min) y el tope de 20 fallidos por IP que solo frena el ingreso
+// cuenta (10 intentos, 15 min) y el tope de 20 fallidos por IP que solo frena el ingreso
 // (middleware/ingreso-limiter.middleware.js). Hasta esa fecha existía "fuerza_bruta" (15 fallidos
 // en 10 min bloqueaban toda la app, con reincidencia); su motivo queda para mostrar bloqueos viejos.
 //
@@ -53,6 +57,7 @@ export const MOTIVOS = {
   xss: 'Inyección de scripts (XSS)',
   comando: 'Inyección de comandos',
   herramienta: 'Herramienta de hacking',
+  clonado: 'Programa de copiado del sitio (clonado)',
   enumeracion: 'Enumeración de rutas (mapeo o clonado de la API)',
   fuerza_bruta: 'Fuerza bruta de credenciales', // ya no se aplica (2026-10-08): bloqueos viejos
   rafaga: 'Ráfaga de pedidos (scraping / clonado masivo)',
@@ -123,6 +128,11 @@ const PATRON_COMANDO = new RegExp(
 
 const PATRON_HERRAMIENTA =
   /sqlmap|nikto|nmap|masscan|nuclei|burp|zaproxy|owasp[\s_-]?zap|acunetix|nessus|openvas|wpscan|dirbuster|gobuster|ffuf|feroxbuster|hydra|havij|metasploit|zgrab|wfuzz|arachni|w3af|skipfish|jaeles|commix/i;
+
+// Programas que descargan un sitio completo para copiarlo (lista de DaleFit, 2026-10). wget se
+// reconoce por su User-Agent ("Wget/1.21"); curl no está, porque se usa para chequeos puntuales.
+const PATRON_CLONADO =
+  /httrack|webcopier|web\s?copy|cyotek|webzip|offline\s?explorer|sitesucker|teleport\s?(pro|ultra|vlx)?\b|webstripper|webreaper|website\s?(extractor|downloader|ripper)|web\s?downloader|webwhacker|getright|grab-site|scrapy|\bwget\//i;
 
 // Campos que no se revisan (una contraseña puede tener cualquier carácter).
 const CAMPOS_EXENTOS = /pass|clave|token|secret/i;
@@ -212,9 +222,10 @@ export async function iniciarDefensa() {
   detenerDefensa();
   temporizadores = [
     // Vuelve a leer la lista (por si se desbloqueó/bloqueó desde otra instancia) y limpia.
-    setInterval(() => cargarBloqueos().catch((e) => console.error('[defensa] no se pudo recargar:', e.message)), MINUTO),
+    // Mientras se restaura una copia no se toca la base (la restauración recarga los bloqueos al terminar).
+    setInterval(() => !enMantenimiento() && cargarBloqueos().catch((e) => console.error('[defensa] no se pudo recargar:', e.message)), MINUTO),
     setInterval(barrerContadores, 5 * MINUTO),
-    setInterval(() => purgar().catch((e) => console.error('[defensa] no se pudo purgar:', e.message)), 60 * MINUTO),
+    setInterval(() => !enMantenimiento() && purgar().catch((e) => console.error('[defensa] no se pudo purgar:', e.message)), 60 * MINUTO),
   ];
   for (const t of temporizadores) t.unref();
   console.log(`[defensa] activa (${bloqueos.size} IP bloqueada(s) vigente(s))`);
@@ -251,7 +262,7 @@ async function avisarPorMail({ ip, tipo, minutos, reincidencia, ruta, metodo, us
     ['User-Agent', userAgent || '—'],
     ['Hora (UTC)', new Date().toISOString()],
   ];
-  await enviarCorreo(
+  await encolarCorreo(
     {
       para,
       asunto: `[CEAVital] IP bloqueada: ${ip} — ${MOTIVOS[tipo] ?? tipo}`,
@@ -260,7 +271,7 @@ async function avisarPorMail({ ip, tipo, minutos, reincidencia, ruta, metodo, us
         .map(([k, v]) => `<tr><td><b>${escaparHtml(k)}</b></td><td>${escaparHtml(v)}</td></tr>`)
         .join('')}</table><p>Si fue un falso positivo, desbloqueala desde el panel del superadmin (sección Seguridad).</p>`,
     },
-    'cea'
+    { canal: 'cea', tipo: 'alerta-seguridad' }
   );
 }
 
@@ -338,7 +349,9 @@ export function detectarEnPedido(req) {
   if (PATRON_TRAVERSAL.test(decodificada)) return 'traversal';
   const ruta = decodificada.split('?')[0];
   if (PATRON_SONDEO.test(ruta)) return 'sondeo';
-  if (PATRON_HERRAMIENTA.test(req.get('user-agent') || '')) return 'herramienta';
+  const agente = req.get('user-agent') || '';
+  if (PATRON_HERRAMIENTA.test(agente)) return 'herramienta';
+  if (PATRON_CLONADO.test(agente)) return 'clonado';
   return clasificarTexto(decodificada.slice(0, MAX_TEXTO_ESCANEADO));
 }
 

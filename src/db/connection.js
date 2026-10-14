@@ -116,8 +116,10 @@ async function transaction(fn) {
     let conexionRota = false;
     try {
       await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
-      const resultado = await contexto.run({ client }, fn);
+      const store = { client, alConfirmar: [] };
+      const resultado = await contexto.run(store, fn);
       await client.query('COMMIT');
+      for (const tarea of store.alConfirmar) tarea();
       return resultado;
     } catch (err) {
       try {
@@ -145,11 +147,22 @@ async function transaction(fn) {
   }
 }
 
+/**
+ * Corre tarea (sincrónica, sin esperar nada) cuando lo escrito ya es visible para otras conexiones:
+ * al confirmar la transacción en curso, o enseguida si no hay ninguna. Si la transacción se
+ * deshace o se reintenta, la tarea de ese intento no corre. Ej.: avisarle a la cola de correo.
+ */
+function despuesDeConfirmar(tarea) {
+  const store = contexto.getStore();
+  if (store?.client) store.alConfirmar.push(tarea);
+  else tarea();
+}
+
 /** Cierra el pool (scripts de una sola corrida, para que el proceso termine). */
 async function cerrar() {
   await pool.end();
 }
 
-const db = { prepare, exec, transaction, cerrar, pool };
+const db = { prepare, exec, transaction, despuesDeConfirmar, cerrar, pool };
 
 export default db;

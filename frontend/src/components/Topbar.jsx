@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { etiquetaRol } from '../constants/roles.js';
 import './Topbar.css';
@@ -14,6 +14,7 @@ const TITULOS = {
   '/configuracion': 'Configuración',
   '/clientes-empresa': 'Clientes y Cuenta Corriente',
   '/pedidos-cliente': 'Pedidos de Clientes',
+  '/cuenta': 'Mi cuenta',
 };
 
 function tituloDe(pathname) {
@@ -34,13 +35,14 @@ export default function Topbar({ onAbrirMenu }) {
         </svg>
       </button>
       <div className="topbar-title">{titulo}</div>
-      <div className="topbar-pill">
+      {/* El rol lleva a "Mi cuenta" (contraseña y verificación en dos pasos propias). */}
+      <Link to="/cuenta" className="topbar-pill" title="Mi cuenta">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="8" r="4" />
           <path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" />
         </svg>
         {etiquetaRol(usuario?.rol)}
-      </div>
+      </Link>
     </header>
   );
 }

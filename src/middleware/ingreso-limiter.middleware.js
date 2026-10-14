@@ -10,7 +10,7 @@ import rateLimit from 'express-rate-limit';
 //  * los ingresos correctos no cuentan: una oficina con muchos empleados no llega al tope;
 //  * los errores del servidor (5xx, ej. falta el correo) tampoco: no son culpa del que entra;
 //  * solo frena el ingreso: quien ya tiene sesión sigue trabajando.
-// Aparte, cada cuenta se bloquea sola a los 5 intentos fallidos (15 min).
+// Aparte, cada cuenta se bloquea sola a los 10 intentos fallidos (15 min; EST-01 §9.6).
 export const MAX_INGRESOS_FALLIDOS = 20;
 export const MINUTOS_ESPERA_INGRESO = 15;
 

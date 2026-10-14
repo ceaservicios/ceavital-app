@@ -1,9 +1,10 @@
 const BASE = '/api';
 
 export class ApiError extends Error {
-  constructor(message, status) {
+  constructor(message, status, codigo = null) {
     super(message);
     this.status = status;
+    this.codigo = codigo;
   }
 }
 
@@ -17,6 +18,13 @@ export class ApiError extends Error {
 let onUnauthorized = null;
 export function setUnauthorizedHandler(fn) {
   onUnauthorized = fn;
+}
+
+// La cuenta tiene algo que resolver antes de seguir (contraseña provisoria, Admin sin verificación
+// en dos pasos): el servidor responde 403 con codigo CUENTA_PENDIENTE y AuthContext manda a "Mi cuenta".
+let onPendiente = null;
+export function setPendienteHandler(fn) {
+  onPendiente = fn;
 }
 
 // El ingreso (contraseña y código por mail): un 401 ahí es "dato incorrecto", no "se venció
@@ -66,7 +74,8 @@ async function request(path, { method = 'GET', body } = {}) {
     if (res.status === 401 && !esRutaDeIngreso(path) && !esRutaDelPortal(path) && !esRutaDelSuperadmin(path)) {
       onUnauthorized?.();
     }
-    throw new ApiError(data?.error || 'Ocurrió un error inesperado', res.status);
+    if (res.status === 403 && data?.codigo === 'CUENTA_PENDIENTE') onPendiente?.(data.pendiente);
+    throw new ApiError(data?.error || 'Ocurrió un error inesperado', res.status, data?.codigo ?? null);
   }
 
   return data;

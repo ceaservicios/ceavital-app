@@ -1,6 +1,8 @@
 import db from '../db/connection.js';
-import { correoCeaDisponible, enviarCorreo, armarCorreoCuota } from './mail.service.js';
+import { correoCeaDisponible, armarCorreoCuota } from './mail.service.js';
+import { encolarCorreo } from './cola-correo.service.js';
 import { obtenerInstancia, suspenderPorCuotaSiCorresponde } from './instancia.service.js';
+import { registrarAccion } from './registro.service.js';
 
 // Revisión de la cuota (a los 30 s de arrancar y cada hora, ver server.js): suspende sola la
 // instalación cuando la cuota lleva los días configurados vencida, y le manda los avisos por
@@ -35,12 +37,13 @@ export function avisosQueTocan(instancia) {
   return tipos.filter(Boolean);
 }
 
-// Se reserva cada aviso ANTES de mandarlo (la restricción única evita el doble envío si dos
-// procesos corren a la vez) y, si el envío falla, se libera para reintentar en la próxima
-// pasada. La suspensión no depende del correo: se hace aunque no haya SMTP configurado.
-// Devuelve { suspendida, avisos } (los tipos de aviso enviados).
+// Cada aviso se anota y se encola en una sola transacción (la restricción única evita el doble
+// envío si dos procesos corren a la vez); los reintentos del envío los hace la cola. La
+// suspensión no depende del correo: se hace aunque no haya SMTP configurado.
+// Devuelve { suspendida, avisos } (los tipos de aviso encolados).
 export async function revisarCuota() {
   const suspendida = await suspenderPorCuotaSiCorresponde();
+  if (suspendida) await registrarAccion('instalacion-suspendida', { detalle: { automatica: true, motivo: 'Cuota impaga' } });
   if (suspendida) console.log('[cuota] instalación suspendida automáticamente por cuota impaga');
 
   const avisos = [];
@@ -50,22 +53,22 @@ export async function revisarCuota() {
 
   const { vence, dias_restantes: diasRestantes, suspende_el: suspendeEl } = instancia.cuota;
   for (const tipo of avisosQueTocan(instancia)) {
-    const reserva = await db
-      .prepare(
-        `INSERT INTO cuota_avisos (tipo, cuota_vence, destinatario) VALUES (?, ?, ?)
-         ON CONFLICT (tipo, cuota_vence) DO NOTHING RETURNING id`
-      )
-      .get(tipo, vence, instancia.empresa_email);
-    if (!reserva) continue; // ya se avisó
-
-    try {
-      await enviarCorreo({ para: instancia.empresa_email, ...armarCorreoCuota({ tipo, vence, diasRestantes, suspendeEl }) }, 'cea');
-    } catch (err) {
-      await db.prepare('DELETE FROM cuota_avisos WHERE id = ?').run(reserva.id);
-      console.error(`[cuota] no se pudo mandar el aviso "${tipo}", se reintenta en la próxima revisión:`, err.message);
-      continue;
-    }
-    console.log(`[cuota] aviso "${tipo}" enviado`);
+    const encolado = await db.transaction(async () => {
+      const reserva = await db
+        .prepare(
+          `INSERT INTO cuota_avisos (tipo, cuota_vence, destinatario) VALUES (?, ?, ?)
+           ON CONFLICT (tipo, cuota_vence) DO NOTHING RETURNING id`
+        )
+        .get(tipo, vence, instancia.empresa_email);
+      if (!reserva) return false; // ya se avisó
+      await encolarCorreo(
+        { para: instancia.empresa_email, ...armarCorreoCuota({ tipo, vence, diasRestantes, suspendeEl }) },
+        { canal: 'cea', tipo: 'aviso-cuota' }
+      );
+      return true;
+    });
+    if (!encolado) continue;
+    console.log(`[cuota] aviso "${tipo}" encolado`);
     avisos.push(tipo);
   }
   return { suspendida, avisos };
