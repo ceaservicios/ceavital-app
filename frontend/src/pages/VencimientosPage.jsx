@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -23,6 +23,9 @@ export default function VencimientosPage() {
   const [error, setError] = useState(null);
   const [confirmandoLoteId, setConfirmandoLoteId] = useState(null);
   const [retirando, setRetirando] = useState(false);
+  // Guardia sincrónica de "Sí" (retirar): `disabled={retirando}` no alcanza contra dos clicks en el
+  // mismo tick (el segundo DELETE volvía con "Lote no encontrado").
+  const retirandoRef = useRef(false);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -42,6 +45,8 @@ export default function VencimientosPage() {
   }, [cargar]);
 
   async function retirarLote(loteVencido) {
+    if (retirandoRef.current) return;
+    retirandoRef.current = true;
     setRetirando(true);
     try {
       await api.delete(`/productos/${loteVencido.producto_id}/lotes/${loteVencido.lote_id}`);
@@ -51,6 +56,7 @@ export default function VencimientosPage() {
       setError(err instanceof ApiError ? err.message : 'No se pudo retirar el lote.');
       setConfirmandoLoteId(null);
     } finally {
+      retirandoRef.current = false;
       setRetirando(false);
     }
   }

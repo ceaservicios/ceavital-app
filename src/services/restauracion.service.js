@@ -276,6 +276,16 @@ async function avisar({ ok, copia, resguardo, detalle }) {
   }
 }
 
+// psql y pg_restore, al fallar, pueden copiar en el error valores de la copia: los de una clave
+// (DETAIL), una fila entera (DETAIL "Failing row contains", CONTEXT de un COPY) con nombres, mails o
+// hashes. Eso no puede quedar en el registro inmutable, en el panel ni en el mail a CEA: de ahí va
+// solo la línea del ERROR (o la primera, si no hay), sin las que siguen.
+export function errorSinDatos(mensaje) {
+  const lineas = String(mensaje).split(/\r?\n/);
+  const linea = lineas.find((l) => /\bERROR:/.test(l)) ?? lineas[0];
+  return linea.replace(/\s+/g, ' ').trim().slice(0, 300);
+}
+
 async function correrRestauracion(id, copia, superadmin, ip) {
   const esquema = esquemaPrevio(id);
   const avanzar = (fase, { resguardo = null, previo = null } = {}) =>
@@ -326,13 +336,14 @@ async function correrRestauracion(id, copia, superadmin, ip) {
     resultado = { ok: true, detalle: migraciones.length ? `Se aplicaron ${migraciones.length} actualizaciones del sistema.` : '' };
     console.log(`[restauracion] #${id} OK: ${copia.nombre} (resguardo ${resguardo}, base anterior en ${esquema})`);
   } catch (err) {
-    const error = String(err?.message ?? err).slice(0, 2000);
-    console.error(`[restauracion] #${id} falló en ${fase}: ${error}`);
+    // El detalle completo, solo al log del servidor; a la base, al registro y al mail, sin datos.
+    console.error(`[restauracion] #${id} falló en ${fase}: ${String(err?.message ?? err).slice(0, 2000)}`);
+    const error = errorSinDatos(err?.message ?? err);
     await db
       .prepare(`UPDATE restauraciones SET estado = 'error', terminada_en = CURRENT_TIMESTAMP, detalle = ? WHERE id = ? AND estado = 'en_curso'`)
       .run(error, id)
       .catch((e) => console.error('[restauracion] no se pudo guardar la falla:', e.message));
-    await registrarAccion('restauracion-fallida', { actor: ACTOR_SISTEMA, detalle: { restauracion_id: Number(id), fase, error: error.slice(0, 300) } });
+    await registrarAccion('restauracion-fallida', { actor: ACTOR_SISTEMA, detalle: { restauracion_id: Number(id), fase, error } });
     resultado = { ok: false, detalle: error };
   } finally {
     salirDeMantenimiento();

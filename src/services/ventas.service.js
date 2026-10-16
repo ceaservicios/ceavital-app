@@ -247,21 +247,25 @@ export { obtenerVentaConItems };
 // endpoint nunca tocó nada del ledger. Para corregir un medio_pago='cta_cte'
 // mal cargado, anular la venta (revierte el cargo con un AJUSTE) y volver a
 // registrarla bien.
+// Corrige solo el medio de pago (regla de septiembre; con botón en Caja desde 2026-10-16, decisión
+// D3 del usuario). Devuelve la venta y el medio anterior (null si no cambió), para el registro.
 export async function editarMedioPago(id, { medio_pago }) {
   const medioPago = await validarMedioPago(medio_pago);
 
-  await db.transaction(async () => {
+  const anterior = await db.transaction(async () => {
     const venta = await db.prepare('SELECT id, estado, medio_pago FROM ventas WHERE id = ?').get(id);
     if (!venta) throw new ApiError(404, 'Venta no encontrada');
     if (venta.estado === 'anulada') throw new ApiError(409, 'No se puede editar una venta anulada');
     if (venta.medio_pago === 'cta_cte' || medioPago === 'cta_cte') {
-      throw new ApiError(409, 'No se puede editar el medio de pago hacia o desde "cta_cte" -- anulá la venta y volvé a registrarla');
+      throw new ApiError(409, 'No se puede cambiar el medio de pago a ni desde Cuenta Corriente: anulá la venta y volvé a cobrarla');
     }
+    if (venta.medio_pago === medioPago) return null;
 
     await db.prepare('UPDATE ventas SET medio_pago = ? WHERE id = ?').run(medioPago, id);
+    return venta.medio_pago;
   });
 
-  return obtenerVentaConItems(id);
+  return { venta: await obtenerVentaConItems(id), anterior };
 }
 
 export async function anularVenta(id, { usuarioId }) {

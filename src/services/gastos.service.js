@@ -51,20 +51,25 @@ export async function registrarGasto({ concepto, monto, proveedor_id }, { usuari
   const conceptoValido = validarConcepto(concepto);
   const montoValido = validarMonto(monto);
   const proveedorId = proveedor_id != null ? Number(proveedor_id) : null;
-  await verificarProveedorActivo(proveedorId);
 
-  return db
-    .prepare(`INSERT INTO gastos_caja (usuario_id, concepto, monto, proveedor_id) VALUES (?, ?, ?, ?) RETURNING *`)
-    .get(usuarioId, conceptoValido, montoValido, proveedorId);
+  // Leer-decidir-escribir en una transacción: el proveedor no puede darse de baja entre el chequeo y el alta.
+  return db.transaction(async () => {
+    await verificarProveedorActivo(proveedorId);
+    return db
+      .prepare(`INSERT INTO gastos_caja (usuario_id, concepto, monto, proveedor_id) VALUES (?, ?, ?, ?) RETURNING *`)
+      .get(usuarioId, conceptoValido, montoValido, proveedorId);
+  });
 }
 
 // Eliminar (corregir un gasto mal cargado): Admin+Encargado, no Cajero --
 // mismo criterio que anular una venta: una acción correctiva queda más
 // restringida que la de crear.
 export async function eliminarGasto(id) {
-  const gasto = await db.prepare('SELECT id FROM gastos_caja WHERE id = ? AND eliminado_en IS NULL').get(id);
-  if (!gasto) throw new ApiError(404, 'Gasto no encontrado');
-  await db.prepare('UPDATE gastos_caja SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+  await db.transaction(async () => {
+    const gasto = await db.prepare('SELECT id FROM gastos_caja WHERE id = ? AND eliminado_en IS NULL').get(id);
+    if (!gasto) throw new ApiError(404, 'Gasto no encontrado');
+    await db.prepare('UPDATE gastos_caja SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+  });
 }
 
 export async function totalGastosDelDia(fecha) {

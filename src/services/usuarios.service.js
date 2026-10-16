@@ -53,12 +53,16 @@ function validarRol(valor) {
   return valor;
 }
 
-// Mismo mínimo que seed-admin.js (src/db/seed-admin.js) -- una sola regla de
-// complejidad de contraseña en todo el proyecto, no duplicar el número.
+// Mismo mínimo y máximo que cuenta.service ("Mi cuenta") -- una sola regla de complejidad de
+// contraseña en todo el proyecto. El máximo es el límite real de bcrypt: más allá se ignora en silencio.
+const PASSWORD_MIN = 8;
+const PASSWORD_MAX = 72;
+
 function validarPassword(valor) {
-  if (typeof valor !== 'string' || valor.length < 8) {
-    throw new ApiError(400, 'password tiene que tener al menos 8 caracteres');
+  if (typeof valor !== 'string' || valor.length < PASSWORD_MIN) {
+    throw new ApiError(400, `password tiene que tener al menos ${PASSWORD_MIN} caracteres`);
   }
+  if (valor.length > PASSWORD_MAX) throw new ApiError(400, `password no puede superar ${PASSWORD_MAX} caracteres`);
   return valor;
 }
 

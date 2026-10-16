@@ -24,15 +24,39 @@
   gap: 10px;
   flex-shrink: 0;
 }
-.portal-logo {
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
+/* Logo del negocio (apaisado), 2026-10-14. */
+.portal-logo-negocio {
+  height: 40px;
+  width: auto;
+  display: block;
 }
-.portal-marca-titulo {
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--color-primary);
+/* Pie: contacto del negocio y que el sistema es CEAVital, de CEA Servicios. */
+.portal-pie {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 18px 32px 28px;
+  border-top: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.portal-pie-negocio {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  align-items: baseline;
+}
+.portal-pie-negocio strong {
+  color: var(--text-primary);
+}
+.portal-pie-negocio a {
+  color: inherit;
+  font-weight: 600;
+}
+.portal-pie-cea {
+  font-size: 12px;
 }
 .portal-usuario {
   display: flex;
@@ -119,8 +143,11 @@
   .portal-header {
     padding: 10px 16px;
   }
-  .portal-marca-titulo {
-    display: none;
+  .portal-logo-negocio {
+    height: 32px;
+  }
+  .portal-pie {
+    padding: 16px 16px 24px;
   }
   .portal-contenido {
     padding: 16px 16px 40px;

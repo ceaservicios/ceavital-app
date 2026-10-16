@@ -325,6 +325,23 @@
   width: 290px;
   white-space: normal;
 }
+/* Cambiar email: el campo ocupa la fila y los botones van debajo. */
+.sa-admin-acciones .sa-admin-email-nuevo {
+  flex: 1 1 100%;
+  min-width: 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+.sa-admin-acciones .sa-admin-email-nuevo:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
 /* Registro de acciones */
 .sa-campo-filtro {
   width: 240px;

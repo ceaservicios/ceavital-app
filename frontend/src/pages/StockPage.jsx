@@ -151,6 +151,8 @@ export default function StockPage() {
   // Guardia sincrónica compartida por crear producto, guardar cambios y agregar lote: `disabled={guardando}`
   // no alcanza contra dos clicks en el mismo tick (duplicaba el producto o el lote).
   const guardandoRef = useRef(false);
+  // Misma guardia para eliminar un lote (con dos clicks, el segundo DELETE volvía con "Lote no encontrado").
+  const eliminandoLoteRef = useRef(false);
 
   const mapaProveedores = useMemo(() => new Map(proveedores.map((p) => [p.id, p.nombre])), [proveedores]);
 
@@ -428,6 +430,8 @@ export default function StockPage() {
   }
 
   async function eliminarLote(loteId) {
+    if (eliminandoLoteRef.current) return;
+    eliminandoLoteRef.current = true;
     setPanelError(null);
     try {
       await api.delete(`/productos/${detalle.id}/lotes/${loteId}`);
@@ -435,6 +439,8 @@ export default function StockPage() {
       cargarProductos();
     } catch (err) {
       setPanelError(err instanceof ApiError ? err.message : 'No se pudo eliminar el lote.');
+    } finally {
+      eliminandoLoteRef.current = false;
     }
   }
 

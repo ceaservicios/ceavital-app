@@ -119,10 +119,16 @@ let hashDeRelleno = null;
 
 // Suma un intento fallido y, al llegar al tope, bloquea la cuenta (lo lanza como 423).
 // Incremento atómico en la propia sentencia (con intentos simultáneos, "leer y escribir +1"
-// pierde cuentas y el bloqueo no se activa).
+// pierde cuentas y el bloqueo no se activa). Si ya pasó un bloqueo anterior, arranca de cero
+// (decisión D2 del usuario, 2026-10-16).
 async function registrarIntentoFallido(cuenta) {
   const { intentos_fallidos: intentos } = await db
-    .prepare(`UPDATE superadmin SET intentos_fallidos = intentos_fallidos + 1 WHERE id = ? RETURNING intentos_fallidos`)
+    .prepare(
+      `UPDATE superadmin
+       SET intentos_fallidos = CASE WHEN bloqueado_hasta <= LOCALTIMESTAMP THEN 1 ELSE intentos_fallidos + 1 END,
+           bloqueado_hasta = CASE WHEN bloqueado_hasta <= LOCALTIMESTAMP THEN NULL ELSE bloqueado_hasta END
+       WHERE id = ? RETURNING intentos_fallidos`
+    )
     .get(cuenta.id);
   if (intentos >= config.login.maxIntentos) {
     // Bloqueo condicionado (mismo criterio que auth.service): en una ráfaga lo activa y lo anota

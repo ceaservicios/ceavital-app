@@ -3,7 +3,7 @@ import { api, ApiError } from '../api/client.js';
 import { formatearFechaHora } from '../utils/format.js';
 
 // Tarjeta "Restaurar una copia" de la pestaña Copias (diseño del agente disenador-ux, 2026-10-11).
-// Reemplaza TODOS los datos del depósito por los de una copia del Drive. Va plegada; la lista sale
+// Reemplaza TODOS los datos del negocio por los de una copia del Drive. Va plegada; la lista sale
 // del Drive (no del historial). Para confirmar: contraseña, código de verificación y el dominio
 // escrito. Antes de restaurar el servidor guarda una copia de cómo está todo (el "deshacer").
 // Mientras corre, el sistema queda en mantenimiento y acá se ven las etapas.
@@ -175,7 +175,7 @@ export default function SuperadminRestaurar({ irAlLogin, configuradas, copiaEnCu
         </div>
         <p className="sa-detalle sa-quiebre">{enCurso.archivo}</p>
         <p className="sa-ayuda">
-          Nadie del depósito ni del portal puede usar el sistema mientras tanto. Lleva {duracion(enCurso.iniciada_en)}. Sigue en el servidor aunque
+          Nadie del negocio ni del portal puede usar el sistema mientras tanto. Lleva {duracion(enCurso.iniciada_en)}. Sigue en el servidor aunque
           cierres esta ventana.
         </p>
         <ol className="sa-etapas">
@@ -235,7 +235,7 @@ export default function SuperadminRestaurar({ irAlLogin, configuradas, copiaEnCu
       >
         <summary>Elegir una copia para restaurar</summary>
         <p className="sa-ayuda">
-          Reemplaza <strong>todos</strong> los datos del depósito (stock, clientes y cuentas corrientes, ventas, caja, gastos, proveedores, pedidos y
+          Reemplaza <strong>todos</strong> los datos del negocio (stock, clientes y cuentas corrientes, ventas, caja, gastos, proveedores, pedidos y
           usuarios) por los de la copia que elijas. Usalo solo si se perdió o se rompió algo.
         </p>
         {!configuradas && <p className="sa-ayuda">Las copias no están configuradas en el servidor (ver arriba).</p>}
@@ -293,14 +293,14 @@ export default function SuperadminRestaurar({ irAlLogin, configuradas, copiaEnCu
             <p className="sa-restaurar-perdida">⚠ Se pierde todo lo cargado en {loQueSePierde(elegida.fecha)}</p>
             <ul className="sa-restaurar-puntos">
               <li>
-                Stock, clientes y cuentas corrientes, ventas, caja, gastos, proveedores, pedidos y los usuarios del depósito vuelven a como estaban
+                Stock, clientes y cuentas corrientes, ventas, caja, gastos, proveedores, pedidos y los usuarios del negocio vuelven a como estaban
                 ese día a esa hora. Lo cargado después se pierde.
               </li>
               <li>No vuelven atrás: tu cuenta, el plan, la cuota y sus pagos, la seguridad, el registro de acciones y el historial de copias.</li>
               <li>Antes se guarda una copia de cómo está todo ahora: si te equivocaste, la restaurás desde esta misma lista.</li>
               <li>
-                Tarda unos minutos. Mientras, nadie del depósito ni del portal puede entrar, y al terminar todos tienen que volver a ingresar.{' '}
-                <strong>Avisale al depósito antes.</strong>
+                Tarda unos minutos. Mientras, nadie del negocio ni del portal puede entrar, y al terminar todos tienen que volver a ingresar.{' '}
+                <strong>Avisale al negocio antes.</strong>
               </li>
             </ul>
             {error && <div className="alert alert-danger">{error}</div>}

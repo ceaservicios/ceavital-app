@@ -151,6 +151,10 @@ export default function CajaPage() {
   const [ventasHoy, setVentasHoy] = useState([]);
   const [confirmandoAnulacion, setConfirmandoAnulacion] = useState(false);
   const [anulando, setAnulando] = useState(false);
+  // Cambiar el medio de pago del último ticket (Admin y Encargado, decisión del usuario 2026-10-16).
+  const [cambiandoMedio, setCambiandoMedio] = useState(false);
+  const [nuevoMedio, setNuevoMedio] = useState('');
+  const [guardandoMedio, setGuardandoMedio] = useState(false);
   const [errorBusqueda, setErrorBusqueda] = useState(false);
 
   const [gastosHoy, setGastosHoy] = useState([]);
@@ -174,6 +178,7 @@ export default function CajaPage() {
   const enterEnCursoRef = useRef(new Set());
   const registrandoGastoRef = useRef(false);
   const eliminandoGastoRef = useRef(false);
+  const guardandoMedioRef = useRef(false);
   const rafagasPesoRef = useRef(new Map()); // clave de línea → { antes, ultima }, ver teclaEnPeso
 
   const puedeAnular = PUEDE_ANULAR.has(usuario?.rol);
@@ -534,6 +539,40 @@ export default function CajaPage() {
     }
   }
 
+  // A ni desde Cuenta Corriente no se cambia (eso toca la deuda): se anula y se vuelve a cobrar.
+  const mediosCambiables = mediosVisibles.filter((m) => m.valor !== 'cta_cte');
+  const idUltimaVenta = ultimaVentaRegistrada?.id;
+  // Si entra otra venta mientras está abierto, se cierra: el "último ticket" ya es otro.
+  useEffect(() => {
+    setCambiandoMedio(false);
+  }, [idUltimaVenta]);
+  const puedeCambiarMedio = Boolean(ultimaVentaRegistrada) && ultimaVentaRegistrada.medio_pago !== 'cta_cte';
+  const etiquetaMedio = (valor) => MEDIOS_PAGO.find((m) => m.valor === valor)?.label ?? valor;
+
+  function abrirCambioMedio() {
+    setNuevoMedio(ultimaVentaRegistrada.medio_pago);
+    setCambiandoMedio(true);
+  }
+
+  async function guardarMedioPago() {
+    if (!ultimaVentaRegistrada || guardandoMedioRef.current) return;
+    if (nuevoMedio === ultimaVentaRegistrada.medio_pago) return setCambiandoMedio(false);
+    guardandoMedioRef.current = true;
+    setGuardandoMedio(true);
+    setError(null);
+    try {
+      await api.patch(`/ventas/${ultimaVentaRegistrada.id}`, { medio_pago: nuevoMedio });
+      setExito(`Venta #${ultimaVentaRegistrada.id}: ahora figura como ${etiquetaMedio(nuevoMedio)}.`);
+      setCambiandoMedio(false);
+      cargarResumen();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo cambiar el medio de pago.');
+    } finally {
+      guardandoMedioRef.current = false;
+      setGuardandoMedio(false);
+    }
+  }
+
   const ticketsEmitidos = ventasHoy.filter((v) => v.estado === 'registrada').length;
   const ticketPromedio = ticketsEmitidos > 0 ? Math.round((resumen?.total_general ?? 0) / ticketsEmitidos) : 0;
 
@@ -838,10 +877,41 @@ export default function CajaPage() {
 
             {puedeAnular && ultimaVentaRegistrada && (
               <div className="caja-anular">
-                {!confirmandoAnulacion ? (
-                  <button type="button" className="caja-anular-link" onClick={() => setConfirmandoAnulacion(true)}>
-                    Anular último ticket (#{ultimaVentaRegistrada.id} · {formatearMonto(ultimaVentaRegistrada.total)})
-                  </button>
+                {cambiandoMedio ? (
+                  <div className="caja-medio-cambio">
+                    <label htmlFor="caja-medio-nuevo">Medio de pago del ticket #{ultimaVentaRegistrada.id}</label>
+                    <div className="caja-medio-cambio-fila">
+                      <select id="caja-medio-nuevo" value={nuevoMedio} onChange={(e) => setNuevoMedio(e.target.value)} disabled={guardandoMedio}>
+                        {mediosCambiables.map((m) => (
+                          <option key={m.valor} value={m.valor}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button type="button" className="btn" onClick={() => setCambiandoMedio(false)} disabled={guardandoMedio}>
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={guardarMedioPago}
+                        disabled={guardandoMedio || nuevoMedio === ultimaVentaRegistrada.medio_pago}
+                      >
+                        {guardandoMedio ? 'Guardando…' : 'Guardar'}
+                      </button>
+                    </div>
+                  </div>
+                ) : !confirmandoAnulacion ? (
+                  <div className="caja-anular-links">
+                    <button type="button" className="caja-anular-link" onClick={() => setConfirmandoAnulacion(true)}>
+                      Anular último ticket (#{ultimaVentaRegistrada.id} · {formatearMonto(ultimaVentaRegistrada.total)})
+                    </button>
+                    {puedeCambiarMedio && (
+                      <button type="button" className="caja-anular-link" onClick={abrirCambioMedio}>
+                        Cambiar medio de pago ({etiquetaMedio(ultimaVentaRegistrada.medio_pago)})
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <div className="caja-anular-confirm">
                     <span>¿Confirmás la anulación?</span>

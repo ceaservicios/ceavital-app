@@ -52,6 +52,8 @@ export default function UsuariosPage() {
   // Guardia sincrónica de "Crear Usuario": `disabled={guardando}` no alcanza contra dos clicks en el mismo
   // tick (mandaba dos pedidos).
   const creandoRef = useRef(false);
+  // Misma guardia para "Guardar cambios" (con dos clicks, el segundo PATCH volvía a cerrar la sesión del usuario).
+  const guardandoRef = useRef(false);
 
   async function cargar() {
     setCargando(true);
@@ -126,6 +128,8 @@ export default function UsuariosPage() {
   }
 
   async function guardarUsuario() {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
     setGuardando(true);
     setPanelError(null);
     try {
@@ -142,6 +146,7 @@ export default function UsuariosPage() {
     } catch (err) {
       setPanelError(err instanceof ApiError ? err.message : 'No se pudieron guardar los cambios.');
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   }
@@ -284,7 +289,14 @@ export default function UsuariosPage() {
               </div>
               <div className="field">
                 <label>Contraseña (mínimo 8 caracteres)</label>
-                <input required type="password" minLength={8} value={nuevoUsuario.password} onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, password: e.target.value })} />
+                <input
+                  required
+                  type="password"
+                  minLength={8}
+                  maxLength={72}
+                  value={nuevoUsuario.password}
+                  onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, password: e.target.value })}
+                />
               </div>
               <label className="usuarios-check">
                 <input
@@ -406,7 +418,13 @@ export default function UsuariosPage() {
               </label>
               <div className="field">
                 <label>Nueva contraseña (dejar vacío para no cambiarla)</label>
-                <input type="password" minLength={8} value={edicion.password} onChange={(e) => setEdicion({ ...edicion, password: e.target.value })} />
+                <input
+                  type="password"
+                  minLength={8}
+                  maxLength={72}
+                  value={edicion.password}
+                  onChange={(e) => setEdicion({ ...edicion, password: e.target.value })}
+                />
                 <span className="usuarios-hint">Cambiar el rol o la contraseña cierra la sesión activa de este usuario de inmediato.</span>
               </div>
               <button type="button" className="btn btn-primary" disabled={guardando} onClick={guardarUsuario}>

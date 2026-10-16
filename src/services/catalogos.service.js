@@ -58,12 +58,15 @@ function crearServicioCatalogo(tabla, etiqueta) {
     },
 
     async eliminar(id) {
-      await obtenerActivo(id);
-      // Soft delete -- si algun producto activo sigue apuntando a este id, no
-      // se bloquea (mismo criterio ya usado con proveedores.eliminado_en: un
-      // producto puede seguir referenciando a un proveedor ya eliminado, el
-      // JOIN de listarProductos igual devuelve el nombre historico).
-      await db.prepare(`UPDATE ${tabla} SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+      // Leer-decidir-escribir en una transacción, como crear y editar.
+      await db.transaction(async () => {
+        await obtenerActivo(id);
+        // Soft delete -- si algun producto activo sigue apuntando a este id, no
+        // se bloquea (mismo criterio ya usado con proveedores.eliminado_en: un
+        // producto puede seguir referenciando a un proveedor ya eliminado, el
+        // JOIN de listarProductos igual devuelve el nombre historico).
+        await db.prepare(`UPDATE ${tabla} SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+      });
     },
   };
 }

@@ -17,6 +17,7 @@ import {
   desbloquearSuperadminController,
   desbloquearTodasSuperadminController,
   dosfaAdministradorController,
+  emailAdministradorController,
   empresaEmailSuperadminController,
   estadoDosfaSuperadminController,
   fijarCuposSuperadminController,
@@ -89,6 +90,7 @@ router.post('/defensa/bloquear', bloquearSuperadminController);
 router.post('/administradores', crearAdministradorController);
 router.post('/administradores/:id/password', passwordAdministradorController);
 router.post('/administradores/:id/2fa', dosfaAdministradorController);
+router.post('/administradores/:id/email', emailAdministradorController);
 router.post('/administradores/:id/baja', bajaAdministradorController);
 router.post('/administradores/:id/reactivar', reactivarAdministradorController);
 

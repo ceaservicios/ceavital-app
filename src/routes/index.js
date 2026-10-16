@@ -12,6 +12,7 @@ import clientesEmpresaRoutes from './clientes-empresa.routes.js';
 import pedidosClienteRoutes from './pedidos-cliente.routes.js';
 import portalRoutes from './portal.routes.js';
 import superadminRoutes from './superadmin.routes.js';
+import negocioRoutes from './negocio.routes.js';
 import { requireModulo } from '../middleware/modulo.middleware.js';
 import { asyncHandler } from '../utils/async-handler.js';
 import { modulosActivos } from '../services/modulos.service.js';
@@ -40,6 +41,7 @@ router.use('/ventas', ventasRoutes);
 router.use('/caja', cajaRoutes);
 router.use('/proveedores', proveedoresRoutes);
 router.use('/usuarios', usuariosRoutes);
+router.use('/negocio', negocioRoutes);
 // Módulos apagados por el plan de la instalación: 404 antes de autenticar.
 router.use('/clientes-empresa', requireModulo('clientes_empresa'), clientesEmpresaRoutes);
 router.use('/pedidos-cliente', requireModulo('pedidos'), pedidosClienteRoutes);

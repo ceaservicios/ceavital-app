@@ -6,6 +6,7 @@ import { hashPassword, verifyPassword } from '../utils/password.js';
 import { AuthError } from './auth.service.js';
 import { armarCorreoAcceso, correoDisponible } from './mail.service.js';
 import { encolarCorreo } from './cola-correo.service.js';
+import { datosNegocioParaMail } from './negocio.service.js';
 import { asegurarInstanciaActiva, cupoPortal } from './instancia.service.js';
 import { moduloActivo } from './modulos.service.js';
 
@@ -125,6 +126,7 @@ export async function enviarAccesoPorCorreo(clienteEmpresaId, { password, enlace
     enlace,
     usuario: cliente.portal_usuario,
     password,
+    negocio: await datosNegocioParaMail(),
   });
 
   // El envío se cuenta y se encola en una sola transacción: dos clicks
@@ -214,7 +216,14 @@ export async function configurarAcceso(clienteEmpresaId, { usuario, password, ha
 
 let hashDeRelleno = null;
 
-export async function loginCliente(usuarioLogin, passwordPlano) {
+// Equipos con el portal abierto a la vez por cliente (decisión D1 del usuario, 2026-10-16: un
+// cliente-empresa suele tener más de una persona con el mismo usuario). Al entrar un tercero se
+// cierra la sesión más vieja (motivo 'otro_equipo') y los dos ven un cartel.
+export const MAX_SESIONES_PORTAL = 2;
+
+// tokenActual: la sesión que ya tenía este mismo navegador (vuelve a ingresar sin salir). Se
+// cierra antes de contar, para que no ocupe el lugar de otro equipo.
+export async function loginCliente(usuarioLogin, passwordPlano, tokenActual = null) {
   await asegurarInstanciaActiva();
 
   const cliente = await db
@@ -246,10 +255,13 @@ export async function loginCliente(usuarioLogin, passwordPlano) {
   if (!passwordOk) {
     // Incremento atómico en la propia sentencia (nunca "leer, esperar el hash,
     // escribir +1": con logins simultáneos se perdían intentos y el bloqueo no
-    // se activaba). Y el bloqueo se decide con el valor ya incrementado.
+    // se activaba). Y el bloqueo se decide con el valor ya incrementado. Si ya pasó un bloqueo
+    // anterior, arranca de cero (decisión D2 del usuario, 2026-10-16).
     const { portal_intentos_fallidos: intentos } = await db
       .prepare(
-        `UPDATE clientes_empresa SET portal_intentos_fallidos = portal_intentos_fallidos + 1
+        `UPDATE clientes_empresa
+         SET portal_intentos_fallidos = CASE WHEN portal_bloqueado_hasta <= LOCALTIMESTAMP THEN 1 ELSE portal_intentos_fallidos + 1 END,
+             portal_bloqueado_hasta = CASE WHEN portal_bloqueado_hasta <= LOCALTIMESTAMP THEN NULL ELSE portal_bloqueado_hasta END
          WHERE id = ? RETURNING portal_intentos_fallidos`
       )
       .get(cliente.id);
@@ -289,10 +301,54 @@ export async function loginCliente(usuarioLogin, passwordPlano) {
     .get(cliente.id);
   if (!reiniciado) throw bloqueadoAhora();
 
+  // Se vuelve a mirar la instancia en la misma transacción que crea la sesión (igual que
+  // session.service.crearSesion): una suspensión confirmada mientras se comparaba la contraseña
+  // no deja una sesión nueva abierta (si corren a la vez, chocan y una se reintenta). En la misma
+  // transacción se aplica el tope de equipos: con dos ingresos a la vez, uno se reintenta y cuenta
+  // la sesión del otro.
   const token = crypto.randomBytes(32).toString('hex');
-  await db.prepare('INSERT INTO sesiones_cliente (cliente_empresa_id, token) VALUES (?, ?)').run(cliente.id, token);
+  const cerradas = await db.transaction(async () => {
+    await asegurarInstanciaActiva();
+    if (tokenActual) {
+      await db
+        .prepare(
+          `UPDATE sesiones_cliente SET estado = 'cerrada', motivo_cierre = 'reingreso', cerrada_en = CURRENT_TIMESTAMP
+           WHERE token = ? AND estado = 'activa'`
+        )
+        .run(tokenActual);
+    }
+    // Solo cuentan las que siguen sirviendo (las vencidas por inactividad ya no abren nada).
+    const abiertas = await db
+      .prepare(
+        `SELECT id FROM sesiones_cliente
+         WHERE cliente_empresa_id = ? AND estado = 'activa'
+           AND ultima_actividad >= LOCALTIMESTAMP - (?::int * INTERVAL '1 minute')
+         ORDER BY iniciada_en, id`
+      )
+      .all(cliente.id, config.session.timeoutMinutes);
+    const sobran = abiertas.slice(0, Math.max(0, abiertas.length - (MAX_SESIONES_PORTAL - 1)));
+    for (const { id } of sobran) {
+      await db
+        .prepare(
+          `UPDATE sesiones_cliente SET estado = 'cerrada', motivo_cierre = 'otro_equipo', cerrada_en = CURRENT_TIMESTAMP
+           WHERE id = ? AND estado = 'activa'`
+        )
+        .run(id);
+    }
+    await db.prepare('INSERT INTO sesiones_cliente (cliente_empresa_id, token) VALUES (?, ?)').run(cliente.id, token);
+    return sobran.length;
+  });
 
-  return { token, cliente: { id: cliente.id, razon_social: cliente.razon_social } };
+  return { token, cliente: { id: cliente.id, razon_social: cliente.razon_social }, cerroOtroEquipo: cerradas > 0 };
+}
+
+// Para explicarle al equipo que quedó afuera por qué: true si su sesión se cerró porque entró
+// un tercer equipo con el mismo usuario.
+export async function cerradaPorOtroEquipo(token) {
+  const fila = await db
+    .prepare(`SELECT motivo_cierre FROM sesiones_cliente WHERE token = ? AND estado = 'cerrada'`)
+    .get(token);
+  return fila?.motivo_cierre === 'otro_equipo';
 }
 
 // Sesión válida = activa, sin vencer por inactividad, y el cliente sigue

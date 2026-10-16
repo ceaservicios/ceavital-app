@@ -14,6 +14,7 @@ import {
 import { ingresoLimiter } from '../middleware/ingreso-limiter.middleware.js';
 import { requirePortalAuth } from '../middleware/portal-auth.middleware.js';
 import { asyncHandler } from '../utils/async-handler.js';
+import { obtenerDatosNegocio } from '../services/negocio.service.js';
 
 const router = Router();
 
@@ -33,6 +34,8 @@ const pedidosLimiter = rateLimit({
 router.post('/login', ingresoLimiter, asyncHandler(loginPortalController));
 router.post('/logout', requirePortalAuth, logoutPortalController);
 router.get('/cuenta', requirePortalAuth, cuentaPortalController);
+// Nombre y contacto del negocio para el pie del portal (Configuración > Datos del negocio).
+router.get('/negocio', requirePortalAuth, async (req, res) => res.json(await obtenerDatosNegocio()));
 router.get('/resumen', requirePortalAuth, resumenPortalController);
 router.get('/catalogo', requirePortalAuth, catalogoPortalController);
 router.get('/pedidos', requirePortalAuth, listarPedidosPortalController);

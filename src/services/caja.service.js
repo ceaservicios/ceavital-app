@@ -15,6 +15,10 @@ function validarFecha(valor) {
   return valor;
 }
 
+// Tope de un monto en pesos, el mismo de los gastos (gastos.service.js): Number.isInteger(9e15)
+// es true y sin tope un cierre absurdo quedaba guardado y se heredaba como fondo al día siguiente.
+const MAX_MONTO = 1_000_000_000;
+
 function validarEnteroNoNegativo(valor, campo) {
   // Solo número o texto numérico: Number(true) vale 1 y Number([5]) vale 5, y se aceptaban como monto.
   if (typeof valor !== 'number' && typeof valor !== 'string') {
@@ -24,6 +28,7 @@ function validarEnteroNoNegativo(valor, campo) {
   if (!Number.isInteger(n) || n < 0) {
     throw new ApiError(400, `${campo} tiene que ser un número entero mayor o igual a 0`);
   }
+  if (n > MAX_MONTO) throw new ApiError(400, `${campo} no puede superar ${MAX_MONTO.toLocaleString('es-AR')}`);
   return n;
 }
 

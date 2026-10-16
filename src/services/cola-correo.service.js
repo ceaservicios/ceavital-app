@@ -1,6 +1,6 @@
 import db from '../db/connection.js';
 import { ApiError } from '../utils/api-error.js';
-import { correoDelCanalDisponible, datosDelCanal, mandarPorSmtp } from './mail.service.js';
+import { canalDeSalida, correoDelCanalDisponible, datosDelCanal, mandarPorSmtp } from './mail.service.js';
 import { enMantenimiento } from './mantenimiento.service.js';
 
 // Cola de mails (EST-01 §10.3; tabla `correos`, migración 015). Quien manda un mail lo encola y
@@ -24,7 +24,10 @@ let temporizador = null;
 
 // Encola un mail. tipo: qué mail es (se ve en el panel). venceEnMinutos: si no salió en ese tiempo
 // ya no sirve y se descarta (un código de ingreso). Dentro de una transacción, se guarda con ella.
-export async function encolarCorreo({ para, asunto, texto, html }, { canal = 'empresa', tipo, venceEnMinutos = null } = {}) {
+// Un mail del correo de la empresa a esa misma casilla se guarda y sale por el de CEA (ver
+// canalDeSalida), así el panel muestra por dónde salió de verdad.
+export async function encolarCorreo({ para, asunto, texto, html }, { canal: pedido = 'empresa', tipo, venceEnMinutos = null } = {}) {
+  const canal = canalDeSalida(pedido, para);
   if (!correoDelCanalDisponible(canal)) throw new ApiError(503, 'El envío de mails no está configurado en este servidor');
   await db
     .prepare(

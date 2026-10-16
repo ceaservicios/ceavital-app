@@ -36,6 +36,7 @@ import {
   regenerarCodigos,
 } from '../services/dosfa.service.js';
 import {
+  cambiarEmailAdministrador,
   crearAdministrador,
   darDeBajaAdministrador,
   listarAdministradores,
@@ -207,6 +208,12 @@ export async function bajaAdministradorController(req, res) {
   res.json({ ok: true });
 }
 
+export async function emailAdministradorController(req, res) {
+  const r = await cambiarEmailAdministrador(parsearId(req.params.id), req.body || {});
+  await registrar(req, 'administrador-email', { anterior: r.anterior, email: r.administrador.email });
+  res.json(r.administrador);
+}
+
 export async function reactivarAdministradorController(req, res) {
   const admin = await reactivarAdministrador(parsearId(req.params.id));
   await registrar(req, 'administrador-reactivado', { email: admin.email });
@@ -241,6 +248,7 @@ export async function fijarCuotaSuperadminController(req, res) {
   const { cuota } = instancia;
   await registrar(req, 'cuota-guardada', {
     vence: cuota.vence,
+    monto: cuota.monto,
     aviso_dias: cuota.aviso_dias,
     suspender_dias: cuota.suspender_dias,
     aviso_suspension_dias: cuota.aviso_suspension_dias,

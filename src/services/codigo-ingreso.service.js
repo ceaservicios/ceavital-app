@@ -5,6 +5,7 @@ import { verificarTotp } from '../utils/totp.js';
 import { buscarCodigoRecuperacion, descifrarSecreto } from '../utils/dosfa.js';
 import { armarCorreoCodigo, correoDelCanalDisponible, correoDisponible } from './mail.service.js';
 import { encolarCorreo } from './cola-correo.service.js';
+import { datosNegocioParaMail } from './negocio.service.js';
 
 // Segundo paso del ingreso, para las dos cuentas con ingreso propio: los usuarios del negocio
 // (`usuarios`) y el superadmin de CEA (`superadmin`). Dos métodos:
@@ -77,10 +78,14 @@ function asegurarCorreo(tipo) {
   }
 }
 
-// Sale por la cola; si no salió mientras el código sirve, se descarta.
-async function mandarCodigo(tipo, { nombre, email }, codigo) {
+// Sale por la cola; si no salió mientras el código sirve, se descarta. El de un usuario del
+// negocio lleva la marca del negocio (logo y datos de Configuración > Datos del negocio).
+// `proposito` (el del desafío) decide el asunto y el texto: ingresar, activar el 2FA o restaurar.
+async function mandarCodigo(tipo, { nombre, email }, codigo, proposito = 'ingreso') {
+  const paraCea = tipo === 'superadmin';
+  const negocio = paraCea ? null : await datosNegocioParaMail();
   await encolarCorreo(
-    { para: email, ...armarCorreoCodigo({ nombre, codigo, minutos: MINUTOS_VIGENCIA, paraCea: tipo === 'superadmin' }) },
+    { para: email, ...armarCorreoCodigo({ nombre, codigo, minutos: MINUTOS_VIGENCIA, paraCea, negocio, proposito }) },
     { canal: CUENTAS[tipo].canal, tipo: 'codigo', venceEnMinutos: MINUTOS_VIGENCIA }
   );
 }
@@ -168,7 +173,7 @@ export async function iniciarDesafio(tipo, cuenta, metodo, proposito = 'ingreso'
        VALUES (?, ?, ?, ?, 'mail', ?, LOCALTIMESTAMP + (?::int * INTERVAL '1 minute'))`
     )
     .run(cuenta.id, hash(desafio), hashCodigo(desafio, codigo), email, proposito, MINUTOS_VIGENCIA);
-  await mandarCodigo(tipo, { nombre: cuenta.nombre, email }, codigo);
+  await mandarCodigo(tipo, { nombre: cuenta.nombre, email }, codigo, proposito);
   return { desafio, metodo: 'mail', email: enmascararEmail(email) };
 }
 

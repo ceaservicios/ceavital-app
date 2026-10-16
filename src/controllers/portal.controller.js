@@ -20,12 +20,17 @@ export async function loginPortalController(req, res) {
   }
 
   try {
-    const resultado = await loginCliente(usuario.trim(), password);
-    await registrarAccion('ingreso', { actor: actorCliente(resultado.cliente), ip: req.ip });
+    const resultado = await loginCliente(usuario.trim(), password, req.cookies?.portal_token ?? null);
+    await registrarAccion('ingreso', {
+      actor: actorCliente(resultado.cliente),
+      ip: req.ip,
+      detalle: resultado.cerroOtroEquipo ? { sesion_anterior_cerrada: true } : null,
+    });
 
     fijarCookiePortal(res, resultado.token);
 
-    res.json({ cliente: resultado.cliente });
+    // sesion_cerrada_otro_equipo: ya estaba abierto en 2 equipos y se cerró el más viejo (cartel).
+    res.json({ cliente: resultado.cliente, sesion_cerrada_otro_equipo: resultado.cerroOtroEquipo });
   } catch (err) {
     if (err.codigo === 'USUARIO_BLOQUEADO') {
       if (err.recienBloqueado) {

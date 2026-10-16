@@ -29,10 +29,18 @@ export default function SuperadminAdmins({ administradores, cupo, correoEmpresa,
   const [email, setEmail] = useState('');
   const [credenciales, setCredenciales] = useState(null); // { usuario, sin_email, password, por_mail }
   const [confirmando, setConfirmando] = useState(null); // { id, accion }
+  const [emailNuevo, setEmailNuevo] = useState('');
   const [copiada, setCopiada] = useState(false);
 
   const sinTope = !cupo || cupo.tope === null;
   const hayLugar = !sinTope && cupo.libres > 0;
+  // Al único Administrador activo no se lo da de baja (el negocio quedaría sin Administrador).
+  const unicoActivo = administradores.filter((a) => !a.eliminado_en).length <= 1;
+
+  function pedirEmail(admin) {
+    setEmailNuevo(admin.email ?? '');
+    setConfirmando({ id: admin.id, accion: 'email' });
+  }
 
   function mostrarCredenciales(datos) {
     setCredenciales(datos);
@@ -66,12 +74,14 @@ export default function SuperadminAdmins({ administradores, cupo, correoEmpresa,
         });
       },
       dosfa: () => api.post(`/sa/administradores/${admin.id}/2fa`, {}),
+      email: () => api.post(`/sa/administradores/${admin.id}/email`, { email: emailNuevo }),
       baja: () => api.post(`/sa/administradores/${admin.id}/baja`, {}),
       reactivar: () => api.post(`/sa/administradores/${admin.id}/reactivar`, {}),
     };
     const mensajes = {
       password: 'Contraseña provisoria nueva generada.',
       dosfa: 'Verificación en dos pasos restablecida: la vuelve a configurar al entrar.',
+      email: `Email cambiado: ahora entra con ${emailNuevo.trim()}.`,
       baja: 'Administrador dado de baja.',
       reactivar: 'Administrador reactivado.',
     };
@@ -184,7 +194,34 @@ export default function SuperadminAdmins({ administradores, cupo, correoEmpresa,
                     <td>{METODO[a.dosfa_metodo] ?? 'Sin configurar'}</td>
                     <td className="sa-una-linea">{a.ultimo_acceso ? formatearFechaHora(a.ultimo_acceso) : '—'}</td>
                     <td className="sa-admin-acciones">
-                      {preguntando ? (
+                      {preguntando === 'email' ? (
+                        <form
+                          className="sa-confirmar"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            accionar(a, 'email');
+                          }}
+                        >
+                          <span>Email nuevo: pasa a ser con el que entra. Se le cierra la sesión.</span>
+                          <input
+                            type="email"
+                            className="sa-admin-email-nuevo"
+                            aria-label={`Email nuevo de ${a.nombre}`}
+                            maxLength={100}
+                            value={emailNuevo}
+                            onChange={(e) => setEmailNuevo(e.target.value)}
+                            disabled={ocupado}
+                            required
+                            autoFocus
+                          />
+                          <button type="submit" className="btn sa-btn-chico btn-primary" disabled={ocupado}>
+                            Guardar
+                          </button>
+                          <button type="button" className="btn sa-btn-chico" disabled={ocupado} onClick={() => setConfirmando(null)}>
+                            Cancelar
+                          </button>
+                        </form>
+                      ) : preguntando ? (
                         <div className="sa-confirmar">
                           <span>{PREGUNTA[preguntando]}</span>
                           <button type="button" className="btn sa-btn-chico btn-primary" disabled={ocupado} onClick={() => accionar(a, preguntando)}>
@@ -203,6 +240,9 @@ export default function SuperadminAdmins({ administradores, cupo, correoEmpresa,
                           <button type="button" className="btn sa-btn-chico" disabled={ocupado} onClick={() => setConfirmando({ id: a.id, accion: 'password' })}>
                             Contraseña nueva
                           </button>
+                          <button type="button" className="btn sa-btn-chico" disabled={ocupado} onClick={() => pedirEmail(a)}>
+                            Cambiar email
+                          </button>
                           <button
                             type="button"
                             className="btn sa-btn-chico"
@@ -212,7 +252,13 @@ export default function SuperadminAdmins({ administradores, cupo, correoEmpresa,
                           >
                             Restablecer 2 pasos
                           </button>
-                          <button type="button" className="btn sa-btn-chico sa-btn-peligro" disabled={ocupado} onClick={() => setConfirmando({ id: a.id, accion: 'baja' })}>
+                          <button
+                            type="button"
+                            className="btn sa-btn-chico sa-btn-peligro"
+                            disabled={ocupado || unicoActivo}
+                            title={unicoActivo ? 'Es el único Administrador activo: creá otro antes de darlo de baja.' : undefined}
+                            onClick={() => setConfirmando({ id: a.id, accion: 'baja' })}
+                          >
                             Dar de baja
                           </button>
                         </div>

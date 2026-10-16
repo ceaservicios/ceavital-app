@@ -1,11 +1,23 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import PDFDocument from 'pdfkit';
+import config from '../config/env.js';
 import { hoyNegocio } from '../utils/fecha-negocio.js';
 import { ZONA_NEGOCIO } from './clientes-empresa.service.js';
+import { datosNegocioParaMail } from './negocio.service.js';
 
-// Colores de marca (marca.md): Verde Esmeralda Oscuro para acentos. Rosa Coral y
-// Dorado quedan afuera a propósito -- son exclusivos de alertas urgentes y un
-// saldo a cobrar no lo es.
-const VERDE = '#0e4b38';
+// El resumen es del negocio para su cliente (2026-10-14): lleva el logo, los colores y los datos
+// del negocio (Configuración > Datos del negocio) y, al pie, que lo generó CEAVital, de CEA
+// Servicios. Los acentos (tabla, saldo final) van en el color principal del logo; el secundario,
+// solo en la franja de arriba. Acá el negocio es CEAVital (verde "CEA" y azul "Vital", Book de
+// Marca); Central usa los colores de Mayorista Central (única diferencia con Central, 2026-10-16).
+const PRINCIPAL = '#0e4b38';
+const SECUNDARIO = '#22428c';
+
+// En la imagen de producción está en frontend/dist; en desarrollo, también en frontend/public.
+const LOGO_NEGOCIO = ['dist', 'public']
+  .map((carpeta) => path.join(config.appRoot, 'frontend', carpeta, 'logo-negocio.png'))
+  .find((ruta) => fs.existsSync(ruta));
 const TEXTO = '#1b2622';
 const TEXTO_SUAVE = '#6b7672';
 const BORDE = '#dcdfe2';
@@ -67,13 +79,38 @@ function textoPeriodo(desde, hasta) {
   return 'Todo el historial';
 }
 
-function dibujarEncabezado(doc) {
-  doc.rect(0, 0, ANCHO_PAGINA, 64).fill(VERDE);
-  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(20).text('CEAVital', MARGEN, 22, { lineBreak: false });
-  doc
-    .font('Helvetica')
-    .fontSize(10)
-    .text('Sistema de gestión para negocios', MARGEN, 26, { width: ANCHO_UTIL, align: 'right', lineBreak: false });
+// Franja con los colores del logo, el logo a la izquierda y los datos del negocio a la
+// derecha. Devuelve dónde termina.
+function dibujarEncabezado(doc, negocio) {
+  doc.rect(0, 0, ANCHO_PAGINA * 0.7, 6).fill(PRINCIPAL);
+  doc.rect(ANCHO_PAGINA * 0.7, 0, ANCHO_PAGINA * 0.3, 6).fill(SECUNDARIO);
+
+  const nombre = negocio?.nombre || 'CEAVital';
+  if (LOGO_NEGOCIO) {
+    doc.image(LOGO_NEGOCIO, MARGEN, 22, { fit: [180, 66], align: 'left', valign: 'center' });
+  } else {
+    doc.fillColor(PRINCIPAL).font('Helvetica-Bold').fontSize(20).text(nombre, MARGEN, 40, { width: 260, lineBreak: false });
+  }
+
+  const datos = [
+    negocio?.telefono && `Tel. ${negocio.telefono}`,
+    negocio?.email,
+    negocio?.direccion,
+    negocio?.instagram && `Instagram @${negocio.instagram}`,
+  ].filter(Boolean);
+  const xDatos = MARGEN + 200;
+  const anchoDatos = ANCHO_UTIL - 200;
+  let y = 30 + Math.max(0, 4 - datos.length) * 6;
+  doc.fillColor(TEXTO).font('Helvetica-Bold').fontSize(11).text(nombre, xDatos, y, { width: anchoDatos, align: 'right', lineBreak: false });
+  y += 15;
+  doc.fillColor(TEXTO_SUAVE).font('Helvetica').fontSize(8.5);
+  for (const linea of datos) {
+    doc.text(linea, xDatos, y, { width: anchoDatos, align: 'right', height: 11, ellipsis: true, lineBreak: false });
+    y += 11.5;
+  }
+
+  doc.moveTo(MARGEN, 98).lineTo(MARGEN + ANCHO_UTIL, 98).lineWidth(0.6).strokeColor(BORDE).stroke();
+  return 98;
 }
 
 function dibujarDatosCliente(doc, y, cliente) {
@@ -85,9 +122,17 @@ function dibujarDatosCliente(doc, y, cliente) {
     height: 34,
     ellipsis: true,
   });
+  // CUIT (hasta 200) y condición de pago (hasta 100) con ancho y "…" como la razón social: sin
+  // ancho, uno largo se metía en la columna de la derecha.
+  const anchoIzq = ANCHO_UTIL / 2 - 20;
   doc.fillColor(TEXTO_SUAVE).font('Helvetica').fontSize(9);
-  doc.text(`CUIT: ${cliente.cuit || '—'}`, MARGEN + 14, y + 50, { lineBreak: false });
-  doc.text(`Condición de pago: ${cliente.condicion_pago || '—'}`, MARGEN + 14, y + 62, { lineBreak: false });
+  doc.text(`CUIT: ${cliente.cuit || '—'}`, MARGEN + 14, y + 50, { width: anchoIzq, height: 12, ellipsis: true, lineBreak: false });
+  doc.text(`Condición de pago: ${cliente.condicion_pago || '—'}`, MARGEN + 14, y + 62, {
+    width: anchoIzq,
+    height: 12,
+    ellipsis: true,
+    lineBreak: false,
+  });
 
   const xDer = MARGEN + ANCHO_UTIL / 2 + 10;
   const anchoDer = ANCHO_UTIL / 2 - 24;
@@ -108,6 +153,14 @@ function dibujarDatosCliente(doc, y, cliente) {
   return y + alto;
 }
 
+// Tamaño de letra (de `maximo` para abajo) con el que `texto` entra en `ancho` en una línea, con la
+// fuente ya elegida. Un monto no se corta con "…": se achica.
+function tamanoQueEntra(doc, texto, ancho, maximo, minimo = 6) {
+  let tamano = maximo;
+  while (tamano > minimo && doc.fontSize(tamano).widthOfString(texto) > ancho) tamano -= 0.5;
+  return tamano;
+}
+
 function dibujarTotales(doc, y, resumen) {
   const cajas = [
     { titulo: 'Saldo anterior', valor: resumen.saldo_anterior },
@@ -123,26 +176,27 @@ function dibujarTotales(doc, y, resumen) {
   cajas.forEach((caja, i) => {
     const x = MARGEN + i * (ancho + separacion);
     if (caja.destacada) {
-      doc.roundedRect(x, y, ancho, alto, 6).fill(VERDE);
+      doc.roundedRect(x, y, ancho, alto, 6).fill(PRINCIPAL);
     } else {
       doc.roundedRect(x, y, ancho, alto, 6).lineWidth(0.8).strokeColor(BORDE).stroke();
     }
     doc
-      .fillColor(caja.destacada ? '#bfe0d3' : TEXTO_SUAVE)
+      .fillColor(caja.destacada ? '#c9d3e3' : TEXTO_SUAVE)
       .font('Helvetica')
       .fontSize(8.5)
       .text(caja.titulo, x + 10, y + 9, { width: ancho - 20, lineBreak: false });
-    doc
-      .fillColor(caja.destacada ? '#ffffff' : TEXTO)
-      .font('Helvetica-Bold')
-      .fontSize(12)
-      .text(monto(caja.valor), x + 10, y + 25, { width: ancho - 20, lineBreak: false });
+    // Desde $1.000.000.000 el importe no entraba en la caja (~77 pt) a 12: se achica hasta que entre
+    // y se baja lo que se achicó para que siga centrado en el mismo renglón.
+    const texto = monto(caja.valor);
+    doc.fillColor(caja.destacada ? '#ffffff' : TEXTO).font('Helvetica-Bold');
+    const tamano = tamanoQueEntra(doc, texto, ancho - 20, 12);
+    doc.fontSize(tamano).text(texto, x + 10, y + 25 + (12 - tamano) / 2, { width: ancho - 20, lineBreak: false });
   });
   return y + alto;
 }
 
 function dibujarEncabezadoTabla(doc, y) {
-  doc.rect(MARGEN, y, ANCHO_UTIL, 20).fill(VERDE);
+  doc.rect(MARGEN, y, ANCHO_UTIL, 20).fill(PRINCIPAL);
   let x = MARGEN;
   doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(8);
   for (const col of COLUMNAS) {
@@ -193,7 +247,7 @@ function dibujarPies(doc) {
       .fillColor(TEXTO_SUAVE)
       .font('Helvetica')
       .fontSize(8)
-      .text('Documento generado por CEAVital', MARGEN, ALTO_PAGINA - 36, { lineBreak: false });
+      .text('Generado con CEAVital, un producto de CEA Servicios', MARGEN, ALTO_PAGINA - 36, { lineBreak: false });
     doc.text(`Página ${i + 1} de ${paginas.count}`, MARGEN, ALTO_PAGINA - 36, {
       width: ANCHO_UTIL,
       align: 'right',
@@ -216,31 +270,31 @@ function nombreArchivoSeguro(texto) {
 // Arma el PDF y lo manda como descarga. Lo usan el resumen que baja el
 // Admin/Encargado desde la ficha y el que baja el propio cliente desde su
 // portal (mismo documento, distinto control de acceso).
-export function enviarResumenCuentaPdf(res, resumen) {
+export async function enviarResumenCuentaPdf(res, resumen) {
+  const negocio = await datosNegocioParaMail(); // si no se pueden leer, sale con el nombre CEAVital
   const hoy = hoyNegocio();
   const nombre = `Resumen-cuenta-${nombreArchivoSeguro(resumen.cliente.razon_social) || 'cliente'}-${hoy}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${nombre}"`);
   res.setHeader('Cache-Control', 'no-store');
-  generarResumenCuentaPdf(resumen).pipe(res);
+  generarResumenCuentaPdf(resumen, { negocio }).pipe(res);
 }
 
 // Devuelve el PDFDocument (stream legible): quien lo llama hace doc.pipe(res).
-// `resumen` es lo que devuelve armarResumenCuenta().
-export function generarResumenCuentaPdf(resumen) {
+// `resumen` es lo que devuelve armarResumenCuenta(); `negocio`, los datos del negocio (o null).
+export function generarResumenCuentaPdf(resumen, { negocio = null } = {}) {
   const doc = new PDFDocument({
     size: 'A4',
     margin: MARGEN,
     bufferPages: true,
     info: {
       Title: `Resumen de cuenta corriente - ${resumen.cliente.razon_social}`,
-      Author: 'CEAVital',
+      Author: negocio?.nombre || 'CEAVital',
+      Creator: 'CEAVital (CEA Servicios)',
     },
   });
 
-  dibujarEncabezado(doc);
-
-  let y = 86;
+  let y = dibujarEncabezado(doc, negocio) + 18;
   doc.fillColor(TEXTO).font('Helvetica-Bold').fontSize(16).text('Resumen de cuenta corriente', MARGEN, y, { lineBreak: false });
   y += 24;
   doc

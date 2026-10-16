@@ -14,9 +14,11 @@ export default function PortalPedidos({ onSesionVencida, avisoInicial }) {
   const [exito, setExito] = useState(avisoInicial ?? null);
   const [abierto, setAbierto] = useState(null);
   const [detalle, setDetalle] = useState(null);
+  const [errorDetalle, setErrorDetalle] = useState(null); // el detalle no se pudo cargar (en vez de "Cargando…" para siempre)
   const [confirmando, setConfirmando] = useState(false);
   const [cancelando, setCancelando] = useState(false);
   const cancelandoRef = useRef(false);
+  const abiertoRef = useRef(null); // el pedido desplegado ahora (para descartar respuestas viejas), como en PedidosClientePage
 
   const cargar = useCallback(async () => {
     try {
@@ -34,20 +36,31 @@ export default function PortalPedidos({ onSesionVencida, avisoInicial }) {
     cargar();
   }, [cargar]);
 
+  function cerrarDetalle() {
+    abiertoRef.current = null;
+    setAbierto(null);
+    setDetalle(null);
+    setErrorDetalle(null);
+  }
+
   async function abrir(id) {
     setConfirmando(false);
     if (abierto === id) {
-      setAbierto(null);
-      setDetalle(null);
+      cerrarDetalle();
       return;
     }
+    abiertoRef.current = id;
     setAbierto(id);
     setDetalle(null);
+    setErrorDetalle(null);
     try {
-      setDetalle(await api.get(`/portal/pedidos/${id}`));
+      const cargado = await api.get(`/portal/pedidos/${id}`);
+      // Si mientras tanto se abrió otro pedido, esta respuesta ya no corresponde: se descarta
+      // (si no, quedaba el detalle de A bajo la tarjeta B y "Sí, cancelar" cancelaba B).
+      if (abiertoRef.current === id) setDetalle(cargado);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) return onSesionVencida();
-      setError(err instanceof ApiError ? err.message : 'No se pudo cargar el pedido.');
+      if (abiertoRef.current === id) setErrorDetalle(err instanceof ApiError ? err.message : 'No se pudo cargar el pedido.');
     }
   }
 
@@ -60,8 +73,7 @@ export default function PortalPedidos({ onSesionVencida, avisoInicial }) {
     try {
       await api.post(`/portal/pedidos/${id}/cancelar`);
       setExito(`Cancelaste el pedido #${id}.`);
-      setAbierto(null);
-      setDetalle(null);
+      cerrarDetalle();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) return onSesionVencida();
       // Puede que el negocio lo haya resuelto justo antes: se recarga para mostrarlo.
@@ -97,7 +109,11 @@ export default function PortalPedidos({ onSesionVencida, avisoInicial }) {
               </button>
 
               {abierto === p.id &&
-                (!detalle ? (
+                (errorDetalle ? (
+                  <div className="pedido-detalle">
+                    <div className="alert alert-danger">{errorDetalle}</div>
+                  </div>
+                ) : !detalle ? (
                   <div className="cliente-vacio">Cargando…</div>
                 ) : (
                   <div className="pedido-detalle">

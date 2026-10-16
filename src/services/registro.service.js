@@ -9,6 +9,14 @@ const fecha = (iso) => (iso ? String(iso).split('-').reverse().join('/') : 'sin 
 const METODO = { app: 'app autenticadora', mail: 'código por mail' };
 const ROL = { admin: 'Administrador', encargado: 'Encargado', cajero: 'Cajero' };
 const SEGUNDO_PASO = { app: 'con la app autenticadora', mail: 'con código por mail', recuperacion: 'con un código de recuperación' };
+const MEDIO_PAGO = {
+  efectivo: 'Efectivo',
+  tarjeta: 'Tarjeta',
+  transferencia_qr: 'Transferencia / QR',
+  mercado_pago: 'Mercado Pago',
+  fiado: 'Fiado',
+  cta_cte: 'Cuenta Corriente',
+};
 
 // accion -> categoría, título y cómo se lee el detalle en el panel.
 const CATALOGO = {
@@ -42,6 +50,7 @@ const CATALOGO = {
   'administrador-creado': { categoria: 'cuenta', titulo: 'Creó un Administrador', detalle: (d) => d.email },
   'administrador-contrasena': { categoria: 'cuenta', titulo: 'Contraseña provisoria nueva para un Administrador', detalle: (d) => d.email },
   'administrador-dosfa': { categoria: 'cuenta', titulo: 'Restableció la verificación de un Administrador', detalle: (d) => d.email },
+  'administrador-email': { categoria: 'cuenta', titulo: 'Cambió el email de un Administrador', detalle: (d) => `${d.anterior} → ${d.email}` },
   'administrador-baja': { categoria: 'cuenta', titulo: 'Dio de baja a un Administrador', detalle: (d) => d.email },
   'administrador-reactivado': { categoria: 'cuenta', titulo: 'Reactivó a un Administrador', detalle: (d) => d.email },
   'acceso-portal': {
@@ -53,6 +62,12 @@ const CATALOGO = {
   'contrasena-terminal': { categoria: 'cuenta', titulo: 'Contraseña del superadmin cambiada desde la terminal' },
 
   // Instalación
+  'datos-negocio': { categoria: 'instalacion', titulo: 'Cambió los datos del negocio', detalle: (d) => (d.cambios ?? []).join(', ') },
+  'venta-medio-pago': {
+    categoria: 'instalacion',
+    titulo: 'Cambió el medio de pago de una venta',
+    detalle: (d) => `venta #${d.venta_id} · ${MEDIO_PAGO[d.de] ?? d.de} → ${MEDIO_PAGO[d.a] ?? d.a}`,
+  },
   'plan-cambiado': { categoria: 'instalacion', titulo: 'Cambió el plan', detalle: (d) => `${d.de} → ${d.a}` },
   'instalacion-suspendida': {
     categoria: 'instalacion',
@@ -68,7 +83,7 @@ const CATALOGO = {
     categoria: 'instalacion',
     titulo: 'Guardó la cuota',
     detalle: (d) =>
-      `vence ${fecha(d.vence)} · aviso ${d.aviso_dias} días antes · ${d.suspender_dias ? `se suspende a los ${d.suspender_dias} días` : 'no se suspende sola'}`,
+      `vence ${fecha(d.vence)}${d.monto ? ` · ${Number(d.monto).toLocaleString('es-AR')} por mes` : ''} · aviso ${d.aviso_dias} días antes · ${d.suspender_dias ? `se suspende a los ${d.suspender_dias} días` : 'no se suspende sola'}`,
   },
   'pago-anotado': {
     categoria: 'instalacion',

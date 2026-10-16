@@ -3,6 +3,8 @@ import { hoyNegocio } from '../utils/fecha-negocio.js';
 
 // Los dias se cuentan contra "hoy" en hora argentina (fecha-negocio.js), no contra
 // la fecha UTC del servidor: pasadas las 21:00 argentinas la UTC ya es el dia siguiente.
+// Los lotes en 0 (las ventas FEFO los agotan sin darlos de baja) no son alerta: ya no
+// hay nada que retirar, así que no cuentan en la lista, los totales ni el contador del menú.
 
 // "Por vencer": el producto tiene un umbral de aviso configurado
 // (dias_aviso_vencimiento) y a su lote le quedan esos días o menos, sin haber
@@ -23,6 +25,7 @@ export function listarPorVencer() {
        JOIN productos p ON p.id = l.producto_id
        WHERE l.eliminado_en IS NULL
          AND p.eliminado_en IS NULL
+         AND l.cantidad > 0
          AND l.fecha_vencimiento IS NOT NULL
          AND p.dias_aviso_vencimiento IS NOT NULL
          AND l.fecha_vencimiento >= ?::date
@@ -50,6 +53,7 @@ export function listarVencidos() {
        JOIN productos p ON p.id = l.producto_id
        WHERE l.eliminado_en IS NULL
          AND p.eliminado_en IS NULL
+         AND l.cantidad > 0
          AND l.fecha_vencimiento IS NOT NULL
          AND l.fecha_vencimiento < ?::date
        ORDER BY l.fecha_vencimiento ASC`

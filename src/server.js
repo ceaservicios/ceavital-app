@@ -92,6 +92,13 @@ app.use('/api', rutaApiInexistente);
 // con el frontend en su propio Vite dev server), se omite sin romper nada.
 const frontendDistDir = path.join(config.appRoot, 'frontend', 'dist');
 if (fs.existsSync(frontendDistDir)) {
+  // Los logos de los mails (CEAVital en los avisos de cuota, el del negocio en los demás): se dejan
+  // mostrar desde otros sitios (helmet los limita al propio, y los programas de correo que bajan la
+  // imagen directo no la mostraban).
+  app.get(['/logo-correo.png', '/logo-negocio.png'], (req, res, next) => {
+    res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+  });
   app.use(express.static(frontendDistDir));
   app.use((req, res, next) => {
     if (req.path.startsWith('/api')) return next();

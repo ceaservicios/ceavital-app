@@ -34,6 +34,16 @@ function validarEntero(valor, campo, { requerido = true, minimo = null } = {}) {
   return n;
 }
 
+// Tope de un precio en pesos, el mismo de los gastos (gastos.service.js): Number.isInteger(9e15)
+// es true y sin tope se guardaba un precio absurdo que después rompía los totales.
+const MAX_MONTO = 1_000_000_000;
+
+function validarPrecio(valor, campo, { requerido = true } = {}) {
+  const n = validarEntero(valor, campo, { requerido, minimo: 0 });
+  if (n !== null && n > MAX_MONTO) throw new ApiError(400, `${campo} no puede superar ${MAX_MONTO.toLocaleString('es-AR')}`);
+  return n;
+}
+
 function validarFecha(valor, campo) {
   if (typeof valor !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
     throw new ApiError(400, `${campo} tiene que tener formato YYYY-MM-DD`);
@@ -128,10 +138,10 @@ function validarPack(pack) {
   return {
     pack_nombre: validarString(pack.nombre, 'Nombre del pack', { maxLength: 20 }),
     pack_unidades: unidades,
-    precio_pack: validarEntero(pack.precio, 'Precio del pack', { minimo: 0 }),
+    precio_pack: validarPrecio(pack.precio, 'Precio del pack'),
     codigo_barras_pack: validarString(pack.codigo_barras, 'Código de barras del pack', { requerido: false, maxLength: MAX_CODIGO_BARRAS }),
     // Costo del pack: solo se usa si el producto se vende únicamente por pack (2026-10-11).
-    costo_pack: validarEntero(pack.costo, 'Costo del pack', { requerido: false, minimo: 0 }),
+    costo_pack: validarPrecio(pack.costo, 'Costo del pack', { requerido: false }),
     // Precio por cantidad del pack (migración 020): null o { desde, precio }, contado en packs.
     ...validarPrecioCantidadPack(pack.precio_cantidad ?? null),
   };
@@ -144,7 +154,7 @@ function validarPrecioCantidadPack(valor) {
   if (desde > 100000) throw new ApiError(400, 'A partir de cuántos packs no puede superar 100000');
   return {
     pack_cantidad_desde: desde,
-    precio_pack_cantidad: validarEntero(valor.precio, 'Precio por cantidad del pack', { minimo: 0 }),
+    precio_pack_cantidad: validarPrecio(valor.precio, 'Precio por cantidad del pack'),
   };
 }
 
@@ -199,7 +209,7 @@ function validarPrecioCantidad(valor) {
   if (desde > 10_000_000) throw new ApiError(400, 'A partir de cuántas es demasiado grande');
   return {
     precio_cantidad_desde: desde,
-    precio_cantidad: validarEntero(valor.precio, 'Precio por cantidad', { minimo: 0 }),
+    precio_cantidad: validarPrecio(valor.precio, 'Precio por cantidad'),
   };
 }
 
@@ -335,8 +345,8 @@ export async function crearProducto(datos, { rol }) {
   const formas = resolverFormas({
     medida,
     vende_suelto: vendeSuelto,
-    precio_venta: vendeSuelto ? validarEntero(datos.precio_venta, 'Precio de venta', { minimo: 0 }) : null,
-    precio_costo: vendeSuelto ? validarEntero(datos.precio_costo, 'Costo', { minimo: 0 }) : null,
+    precio_venta: vendeSuelto ? validarPrecio(datos.precio_venta, 'Precio de venta') : null,
+    precio_costo: vendeSuelto ? validarPrecio(datos.precio_costo, 'Costo') : null,
     ...pack,
     ...precioCantidad,
   });
@@ -482,8 +492,8 @@ export async function editarProducto(id, datos, { rol }) {
         }
       }
       if (datos.vende_suelto !== undefined) estado.vende_suelto = validarVendeSuelto(datos.vende_suelto);
-      if (datos.precio_venta !== undefined) estado.precio_venta = validarEntero(datos.precio_venta, 'Precio de venta', { minimo: 0 });
-      if (datos.precio_costo !== undefined) estado.precio_costo = validarEntero(datos.precio_costo, 'Costo', { minimo: 0 });
+      if (datos.precio_venta !== undefined) estado.precio_venta = validarPrecio(datos.precio_venta, 'Precio de venta');
+      if (datos.precio_costo !== undefined) estado.precio_costo = validarPrecio(datos.precio_costo, 'Costo');
       if (datos.pack !== undefined) {
         Object.assign(estado, validarPack(datos.pack));
         if (datos.pack !== null && datos.pack.costo === undefined) estado.costo_pack = actual.costo_pack;
@@ -543,7 +553,7 @@ export async function pasarAPack(id, datos, { rol }) {
   const n = validarEntero(datos.pack_unidades, 'Unidades que trae', { minimo: 2 });
   if (n > 100000) throw new ApiError(400, 'Unidades que trae no puede superar 100000');
   const vendeSuelto = validarVendeSuelto(datos.vende_suelto);
-  const precioUnidad = vendeSuelto ? validarEntero(datos.precio_venta, 'Precio de venta por unidad', { minimo: 0 }) : null;
+  const precioUnidad = vendeSuelto ? validarPrecio(datos.precio_venta, 'Precio de venta por unidad') : null;
   const codigoUnidad = validarString(datos.codigo_barras_unidad, 'Código de barras de la unidad', {
     requerido: false,
     maxLength: MAX_CODIGO_BARRAS,
@@ -618,9 +628,13 @@ export async function pasarAPack(id, datos, { rol }) {
   return obtenerProducto(id, { rol });
 }
 
+// Bajas: leer-decidir-escribir en una transacción, como el resto (con dos bajas a la vez, la
+// segunda ve el registro ya eliminado y responde 404 en vez de pisar la fecha de baja).
 export async function eliminarProducto(id) {
-  await obtenerProductoActivo(id);
-  await db.prepare('UPDATE productos SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+  await db.transaction(async () => {
+    await obtenerProductoActivo(id);
+    await db.prepare('UPDATE productos SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+  });
 }
 
 // `en_packs: true`: la cantidad viene en packs del producto y se guarda en unidades.
@@ -670,7 +684,9 @@ export async function editarLote(productoId, loteId, datos) {
 }
 
 export async function eliminarLote(productoId, loteId) {
-  await obtenerProductoActivo(productoId);
-  await obtenerLoteActivo(productoId, loteId);
-  await db.prepare('UPDATE lotes SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(loteId);
+  await db.transaction(async () => {
+    await obtenerProductoActivo(productoId);
+    await obtenerLoteActivo(productoId, loteId);
+    await db.prepare('UPDATE lotes SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(loteId);
+  });
 }

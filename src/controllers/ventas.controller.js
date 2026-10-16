@@ -1,5 +1,6 @@
 import { ApiError } from '../utils/api-error.js';
 import * as ventasService from '../services/ventas.service.js';
+import { actorDeSesion, registrarAccion } from '../services/registro.service.js';
 
 function parsearId(valor, campo = 'id') {
   const id = Number(valor);
@@ -24,7 +25,15 @@ export async function registrarVentaController(req, res) {
 
 export async function editarMedioPagoController(req, res) {
   const id = parsearId(req.params.id);
-  const venta = await ventasService.editarMedioPago(id, req.body || {});
+  const { venta, anterior } = await ventasService.editarMedioPago(id, req.body || {});
+  // Queda en el registro quién lo cambió y de qué a qué (la anulación ya queda en la venta).
+  if (anterior) {
+    await registrarAccion('venta-medio-pago', {
+      actor: actorDeSesion(req.sesion),
+      ip: req.ip,
+      detalle: { venta_id: id, de: anterior, a: venta.medio_pago },
+    });
+  }
   res.json(venta);
 }
 

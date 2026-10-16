@@ -85,37 +85,43 @@ export async function crearProveedor(datos) {
   return obtenerProveedor(resultado.lastInsertRowid);
 }
 
+// Leer-decidir-escribir en una transacción: si otro da de baja al proveedor en el medio, no se
+// edita uno ya eliminado.
 export async function editarProveedor(id, datos) {
-  await obtenerProveedorActivo(id);
+  await db.transaction(async () => {
+    await obtenerProveedorActivo(id);
 
-  const actualizaciones = {};
-  if (datos.nombre !== undefined) actualizaciones.nombre = validarString(datos.nombre, 'nombre');
-  if (datos.telefono !== undefined) {
-    actualizaciones.telefono = validarString(datos.telefono, 'telefono', { requerido: false });
-  }
-  if (datos.email !== undefined) {
-    actualizaciones.email = validarString(datos.email, 'email', { requerido: false });
-  }
-  if (datos.condicion_pago !== undefined) {
-    actualizaciones.condicion_pago = validarString(datos.condicion_pago, 'condicion_pago', { requerido: false });
-  }
+    const actualizaciones = {};
+    if (datos.nombre !== undefined) actualizaciones.nombre = validarString(datos.nombre, 'nombre');
+    if (datos.telefono !== undefined) {
+      actualizaciones.telefono = validarString(datos.telefono, 'telefono', { requerido: false });
+    }
+    if (datos.email !== undefined) {
+      actualizaciones.email = validarString(datos.email, 'email', { requerido: false });
+    }
+    if (datos.condicion_pago !== undefined) {
+      actualizaciones.condicion_pago = validarString(datos.condicion_pago, 'condicion_pago', { requerido: false });
+    }
 
-  const claves = Object.keys(actualizaciones);
-  if (claves.length === 0) throw new ApiError(400, 'No se envió ningún campo para actualizar');
+    const claves = Object.keys(actualizaciones);
+    if (claves.length === 0) throw new ApiError(400, 'No se envió ningún campo para actualizar');
 
-  const set = claves.map((c) => `${c} = ?`).join(', ');
-  const valores = claves.map((c) => actualizaciones[c]);
+    const set = claves.map((c) => `${c} = ?`).join(', ');
+    const valores = claves.map((c) => actualizaciones[c]);
 
-  await db
-    .prepare(`UPDATE proveedores SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`)
-    .run(...valores, id);
+    await db
+      .prepare(`UPDATE proveedores SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`)
+      .run(...valores, id);
+  });
 
   return obtenerProveedor(id);
 }
 
 export async function eliminarProveedor(id) {
-  await obtenerProveedorActivo(id);
-  await db.prepare('UPDATE proveedores SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+  await db.transaction(async () => {
+    await obtenerProveedorActivo(id);
+    await db.prepare('UPDATE proveedores SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+  });
 }
 
 // -- Pedidos a proveedor --
@@ -150,11 +156,17 @@ function validarItemsPedido(items) {
   }));
 }
 
+// cantidad_items: cuántas líneas (productos) lleva el pedido (columna "Ítems" de Proveedores >
+// Pedidos recientes). Columnas explícitas, no "SELECT *".
 export async function listarPedidos(proveedorId) {
   await obtenerProveedorActivo(proveedorId);
   return db
     .prepare(
-      'SELECT * FROM pedidos_proveedor WHERE proveedor_id = ? AND eliminado_en IS NULL ORDER BY fecha DESC, id DESC'
+      `SELECT pp.id, pp.proveedor_id, pp.usuario_id, pp.estado, pp.fecha, pp.eliminado_en, pp.creado_en, pp.actualizado_en,
+         (SELECT COUNT(*) FROM pedido_items pi WHERE pi.pedido_id = pp.id) AS cantidad_items
+       FROM pedidos_proveedor pp
+       WHERE pp.proveedor_id = ? AND pp.eliminado_en IS NULL
+       ORDER BY pp.fecha DESC, pp.id DESC`
     )
     .all(proveedorId);
 }
@@ -204,21 +216,23 @@ export async function crearPedido(proveedorId, datos, { usuarioId }) {
 // editable de un pedido ya creado) -- no reabre productos/cantidades, eso
 // requiere cancelar y crear un pedido nuevo.
 export async function editarPedido(proveedorId, pedidoId, datos) {
-  await obtenerPedidoActivo(proveedorId, pedidoId);
+  await db.transaction(async () => {
+    await obtenerPedidoActivo(proveedorId, pedidoId);
 
-  const actualizaciones = {};
-  if (datos.estado !== undefined) actualizaciones.estado = validarEstado(datos.estado);
-  if (datos.fecha !== undefined) actualizaciones.fecha = validarFecha(datos.fecha, 'fecha');
+    const actualizaciones = {};
+    if (datos.estado !== undefined) actualizaciones.estado = validarEstado(datos.estado);
+    if (datos.fecha !== undefined) actualizaciones.fecha = validarFecha(datos.fecha, 'fecha');
 
-  const claves = Object.keys(actualizaciones);
-  if (claves.length === 0) throw new ApiError(400, 'No se envió ningún campo para actualizar');
+    const claves = Object.keys(actualizaciones);
+    if (claves.length === 0) throw new ApiError(400, 'No se envió ningún campo para actualizar');
 
-  const set = claves.map((c) => `${c} = ?`).join(', ');
-  const valores = claves.map((c) => actualizaciones[c]);
+    const set = claves.map((c) => `${c} = ?`).join(', ');
+    const valores = claves.map((c) => actualizaciones[c]);
 
-  await db
-    .prepare(`UPDATE pedidos_proveedor SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`)
-    .run(...valores, pedidoId);
+    await db
+      .prepare(`UPDATE pedidos_proveedor SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`)
+      .run(...valores, pedidoId);
+  });
 
   return obtenerPedidoConItems(pedidoId);
 }
@@ -227,6 +241,8 @@ export async function editarPedido(proveedorId, pedidoId, datos) {
 // de estado='cancelado' (acción de negocio real: el pedido no se concretó).
 // Mismo criterio que lotes.eliminado_en (Docs/Modelo-de-Datos.md > lotes).
 export async function eliminarPedido(proveedorId, pedidoId) {
-  await obtenerPedidoActivo(proveedorId, pedidoId);
-  await db.prepare('UPDATE pedidos_proveedor SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(pedidoId);
+  await db.transaction(async () => {
+    await obtenerPedidoActivo(proveedorId, pedidoId);
+    await db.prepare('UPDATE pedidos_proveedor SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(pedidoId);
+  });
 }

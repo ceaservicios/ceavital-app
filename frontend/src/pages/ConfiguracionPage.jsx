@@ -18,6 +18,9 @@ function SeccionCatalogo({ titulo, endpoint, singular, descripcion }) {
   const [confirmandoEliminarId, setConfirmandoEliminarId] = useState(null);
   // Guardia sincrónica de "Agregar": `disabled={guardando}` no alcanza contra dos clicks en el mismo tick.
   const creandoRef = useRef(false);
+  // Lo mismo para "Guardar" (editar) y "Sí, eliminar": con dos clicks, el segundo pedido volvía con un error falso.
+  const editandoRef = useRef(false);
+  const eliminandoRef = useRef(false);
 
   async function cargar() {
     setCargando(true);
@@ -62,6 +65,8 @@ function SeccionCatalogo({ titulo, endpoint, singular, descripcion }) {
   }
 
   async function guardarEdicion(id) {
+    if (editandoRef.current) return;
+    editandoRef.current = true;
     setGuardando(true);
     setError(null);
     try {
@@ -71,11 +76,14 @@ function SeccionCatalogo({ titulo, endpoint, singular, descripcion }) {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo guardar el cambio.');
     } finally {
+      editandoRef.current = false;
       setGuardando(false);
     }
   }
 
   async function eliminar(id) {
+    if (eliminandoRef.current) return;
+    eliminandoRef.current = true;
     setGuardando(true);
     setError(null);
     try {
@@ -85,6 +93,7 @@ function SeccionCatalogo({ titulo, endpoint, singular, descripcion }) {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo eliminar.');
     } finally {
+      eliminandoRef.current = false;
       setGuardando(false);
     }
   }
@@ -168,7 +177,102 @@ function SeccionCatalogo({ titulo, endpoint, singular, descripcion }) {
   );
 }
 
+// Datos del negocio (2026-10-14): van al pie de los mails que manda el sistema a los usuarios y a
+// los clientes del portal, junto al logo del negocio. Vacíos, el mail no los muestra.
+const CAMPOS_NEGOCIO = [
+  { clave: 'nombre', etiqueta: 'Nombre del negocio', max: 100, requerido: true },
+  { clave: 'telefono', etiqueta: 'Teléfono', max: 40, placeholder: 'Ej. 299 412-3456', inputMode: 'tel' },
+  { clave: 'email', etiqueta: 'Mail de contacto', max: 100, placeholder: 'Ej. ventas@tunegocio.com', type: 'email' },
+  { clave: 'direccion', etiqueta: 'Dirección', max: 200, placeholder: 'Ej. Av. San Martín 1234' },
+  { clave: 'instagram', etiqueta: 'Instagram', max: 60, placeholder: 'Ej. tu.negocio' },
+];
+const VACIOS = { nombre: '', telefono: '', email: '', direccion: '', instagram: '' };
+
+function SeccionDatosNegocio() {
+  const [datos, setDatos] = useState(VACIOS);
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState(null);
+  const [aviso, setAviso] = useState(null);
+  const guardandoRef = useRef(false); // contra el doble click
+
+  const aFormulario = (d) => Object.fromEntries(Object.keys(VACIOS).map((k) => [k, d?.[k] ?? '']));
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setDatos(aFormulario(await api.get('/negocio')));
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : 'No se pudieron cargar los datos del negocio.');
+      } finally {
+        setCargando(false);
+      }
+    })();
+  }, []);
+
+  async function guardar(e) {
+    e.preventDefault();
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
+    setGuardando(true);
+    setError(null);
+    setAviso(null);
+    try {
+      setDatos(aFormulario(await api.put('/negocio', datos)));
+      setAviso('Datos guardados. Los próximos mails ya salen con estos datos.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudieron guardar los datos.');
+    } finally {
+      guardandoRef.current = false;
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="card config-catalogo">
+      <div className="config-seccion-cabecera">
+        <span className="config-seccion-titulo">Datos del negocio</span>
+        <p className="config-seccion-desc">
+          Salen, junto al logo, al pie de los mails que el sistema les manda a tus usuarios (códigos de ingreso) y a los clientes del
+          portal (datos de acceso), en el resumen de cuenta en PDF y en el portal. Los que dejes vacíos no aparecen.
+        </p>
+      </div>
+      {error && <div className="alert alert-danger">{error}</div>}
+      {aviso && <div className="alert config-alert-ok">{aviso}</div>}
+      {cargando ? (
+        <div className="config-catalogo-vacio">Cargando…</div>
+      ) : (
+        <form className="config-negocio-form" onSubmit={guardar}>
+          {CAMPOS_NEGOCIO.map((c) => (
+            <div className="field" key={c.clave}>
+              <label htmlFor={`negocio-${c.clave}`}>{c.etiqueta}</label>
+              <input
+                id={`negocio-${c.clave}`}
+                value={datos[c.clave]}
+                onChange={(e) => setDatos((d) => ({ ...d, [c.clave]: e.target.value }))}
+                maxLength={c.max}
+                required={c.requerido}
+                placeholder={c.placeholder}
+                inputMode={c.inputMode}
+                type={c.type ?? 'text'}
+                disabled={guardando}
+              />
+            </div>
+          ))}
+          <div className="config-negocio-acciones">
+            <button type="submit" className="btn btn-primary" disabled={guardando}>
+              Guardar datos
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
 const SECCIONES = [
+  // Datos del negocio: no es un catálogo, tiene su propio formulario (SeccionDatosNegocio).
+  { clave: 'negocio', texto: 'Datos del negocio' },
   {
     clave: 'categorias',
     texto: 'Categorías',
@@ -190,7 +294,7 @@ const SECCIONES = [
 export default function ConfiguracionPage() {
   const { moduloActivo } = useAuth();
   const secciones = SECCIONES.filter((s) => s.clave !== 'pagos' || moduloActivo('clientes_empresa'));
-  const [tab, setTab] = useState('categorias');
+  const [tab, setTab] = useState('negocio');
   const seccion = secciones.find((s) => s.clave === tab) ?? secciones[0];
 
   return (
@@ -214,13 +318,17 @@ export default function ConfiguracionPage() {
         ))}
       </div>
 
-      <SeccionCatalogo
-        key={seccion.clave}
-        titulo={seccion.texto}
-        descripcion={seccion.descripcion}
-        endpoint={seccion.endpoint}
-        singular={seccion.singular}
-      />
+      {seccion.clave === 'negocio' ? (
+        <SeccionDatosNegocio />
+      ) : (
+        <SeccionCatalogo
+          key={seccion.clave}
+          titulo={seccion.texto}
+          descripcion={seccion.descripcion}
+          endpoint={seccion.endpoint}
+          singular={seccion.singular}
+        />
+      )}
     </div>
   );
 }

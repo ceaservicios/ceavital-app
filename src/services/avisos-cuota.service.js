@@ -51,7 +51,7 @@ export async function revisarCuota() {
   const instancia = await obtenerInstancia();
   if (!instancia.empresa_email) return { suspendida, avisos };
 
-  const { vence, dias_restantes: diasRestantes, suspende_el: suspendeEl } = instancia.cuota;
+  const { vence, dias_restantes: diasRestantes, suspende_el: suspendeEl, monto } = instancia.cuota;
   for (const tipo of avisosQueTocan(instancia)) {
     const encolado = await db.transaction(async () => {
       const reserva = await db
@@ -62,7 +62,7 @@ export async function revisarCuota() {
         .get(tipo, vence, instancia.empresa_email);
       if (!reserva) return false; // ya se avisó
       await encolarCorreo(
-        { para: instancia.empresa_email, ...armarCorreoCuota({ tipo, vence, diasRestantes, suspendeEl }) },
+        { para: instancia.empresa_email, ...armarCorreoCuota({ tipo, vence, diasRestantes, suspendeEl, monto }) },
         { canal: 'cea', tipo: 'aviso-cuota' }
       );
       return true;

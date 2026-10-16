@@ -5,8 +5,9 @@ import { fechaHoyISO } from '../utils/format.js';
 // Descarga del resumen de cuenta corriente en PDF: todo el historial o un
 // rango de fechas (desde / hasta, cualquiera de los dos es opcional). `ruta` es
 // el endpoint del resumen: el de la ficha (/clientes-empresa/:id/resumen) o el
-// del portal del cliente (/portal/resumen).
-export default function ResumenCuentaDescarga({ ruta }) {
+// del portal del cliente (/portal/resumen). `onSesionVencida` (solo el portal): un 401 ahí
+// vuelve al ingreso del portal; en el negocio el 401 ya lo maneja AuthContext (api/client.js).
+export default function ResumenCuentaDescarga({ ruta, onSesionVencida }) {
   const [modo, setModo] = useState('todo'); // 'todo' | 'rango'
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
@@ -48,6 +49,7 @@ export default function ResumenCuentaDescarga({ ruta }) {
       enlace.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
+      if (onSesionVencida && err instanceof ApiError && err.status === 401) return onSesionVencida();
       setError(err instanceof ApiError ? err.message : 'No se pudo descargar el resumen.');
     } finally {
       guardaRef.current = false;

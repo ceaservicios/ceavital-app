@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError, setCsrfSuperadmin } from '../api/client.js';
-import { formatearFecha, formatearFechaHora } from '../utils/format.js';
+import { formatearFecha, formatearFechaHora, formatearMonto } from '../utils/format.js';
 import ConfigurarDosfa from '../components/ConfigurarDosfa.jsx';
 import SuperadminAdmins from './SuperadminAdmins.jsx';
 import SuperadminCopias from './SuperadminCopias.jsx';
@@ -91,6 +91,7 @@ export default function SuperadminPage() {
   const [confirmando, setConfirmando] = useState(null); // 'suspender' | 'reactivar' | 'plan:<id>'
   const [motivo, setMotivo] = useState('');
   const [vence, setVence] = useState('');
+  const [montoCuota, setMontoCuota] = useState('');
   const [avisoDias, setAvisoDias] = useState('15');
   const [suspenderDias, setSuspenderDias] = useState('');
   const [avisoSuspension, setAvisoSuspension] = useState('0');
@@ -111,6 +112,7 @@ export default function SuperadminPage() {
     const data = await api.get('/sa/panel');
     setPanel(data);
     setVence(data.instancia.cuota.vence ?? '');
+    setMontoCuota(data.instancia.cuota.monto === null ? '' : String(data.instancia.cuota.monto));
     setAvisoDias(String(data.instancia.cuota.aviso_dias));
     setSuspenderDias(data.instancia.cuota.suspender_dias ? String(data.instancia.cuota.suspender_dias) : '');
     setAvisoSuspension(String(data.instancia.cuota.aviso_suspension_dias));
@@ -410,11 +412,13 @@ export default function SuperadminPage() {
       </div>
       <p className="sa-detalle">
         {instancia.cuota.vence ? `Vence el ${formatearFecha(instancia.cuota.vence)} · ${textoDias(instancia.cuota)}. ` : ''}
+        {instancia.cuota.monto ? `Importe: ${formatearMonto(instancia.cuota.monto)} por mes. ` : ''}
         {textoSuspension(instancia)}
       </p>
       <p className="sa-ayuda">
         Con "Suspender a los … días" la instalación se suspende sola esos días después del vencimiento y se le avisa a la empresa por
-        mail (antes, con el aviso previo, y al suspenderse). Vacío = no se suspende sola.
+        mail (antes, con el aviso previo, y al suspenderse). Vacío = no se suspende sola. El importe por mes sale en esos avisos, junto al
+        alias de Mercado Pago para pagar; vacío = el aviso no dice el importe.
       </p>
       <form
         className="sa-form-cuota"
@@ -424,6 +428,7 @@ export default function SuperadminPage() {
             () =>
               api.put('/sa/cuota', {
                 vence: vence || null,
+                monto: montoCuota.trim() === '' ? null : Number(montoCuota),
                 aviso_dias: Number(avisoDias),
                 suspender_dias: suspenderDias === '' ? null : Number(suspenderDias),
                 aviso_suspension_dias: avisoSuspension === '' ? 0 : Number(avisoSuspension),
@@ -432,6 +437,21 @@ export default function SuperadminPage() {
           );
         }}
       >
+        <div className="field">
+          <label htmlFor="sa-monto">Importe por mes ($)</label>
+          <input
+            id="sa-monto"
+            type="number"
+            min="1"
+            max="1000000000"
+            step="1"
+            inputMode="numeric"
+            value={montoCuota}
+            onChange={(e) => setMontoCuota(e.target.value)}
+            disabled={ocupado}
+            placeholder="Sin cargar"
+          />
+        </div>
         <div className="field">
           <label htmlFor="sa-vence">Vence el</label>
           <input id="sa-vence" type="date" value={vence} onChange={(e) => setVence(e.target.value)} disabled={ocupado} />
@@ -484,7 +504,7 @@ export default function SuperadminPage() {
     </section>
   );
 
-  const seccionPagos = <SuperadminPagos key="pagos" pagos={panel.pagos} ocupado={ocupado} ejecutar={ejecutar} />;
+  const seccionPagos = <SuperadminPagos key="pagos" pagos={panel.pagos} importeMes={instancia.cuota.monto} ocupado={ocupado} ejecutar={ejecutar} />;
 
   const seccionAvisos = (
     <section className="card sa-card" key="avisos">

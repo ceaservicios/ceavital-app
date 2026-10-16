@@ -23,7 +23,7 @@ export async function obtenerInstancia() {
   const fila = await db
     .prepare(
       `SELECT estado, motivo_suspension, suspendida_en, suspension_por_cuota, suspension_auto_vence, empresa_email,
-              cuota_vence, cuota_aviso_dias, cuota_suspender_dias, cuota_aviso_suspension_dias,
+              cuota_vence, cuota_aviso_dias, cuota_suspender_dias, cuota_aviso_suspension_dias, cuota_monto,
               (cuota_vence - ${SQL_HOY_NEGOCIO}) AS cuota_dias_restantes,
               (cuota_vence + cuota_suspender_dias) AS cuota_suspende_el,
               (cuota_vence + cuota_suspender_dias) - ${SQL_HOY_NEGOCIO} AS cuota_dias_para_suspender
@@ -45,6 +45,7 @@ export async function obtenerInstancia() {
     empresa_email: fila.empresa_email ?? null,
     cuota: {
       vence: fila.cuota_vence ?? null,
+      monto: fila.cuota_monto === null || fila.cuota_monto === undefined ? null : Number(fila.cuota_monto), // importe por mes (null = sin cargar)
       aviso_dias: fila.cuota_aviso_dias,
       dias_restantes: fila.cuota_vence ? dias : null,
       estado: cuotaEstado,
@@ -172,11 +173,12 @@ function enteroEntre(valor, minimo, maximo, mensaje) {
 // (pagos-cuota.service). suspender_dias: a los cuántos días de vencida se suspende sola
 // (vacío = nunca); aviso_suspension_dias: cuántos días antes de esa suspensión sale el
 // mail de aviso (0 = sin aviso previo; tiene que ser menor que suspender_dias, así cae
-// con la cuota ya vencida). Un campo que no viene en el pedido conserva su valor
+// con la cuota ya vencida). monto: importe por mes en pesos (vacío = sin cargar), sale en
+// los avisos por mail. Un campo que no viene en el pedido conserva su valor
 // (también vence: antes un pedido sin vence borraba el vencimiento y apagaba la
 // suspensión automática).
 export async function fijarCuota(datos) {
-  const { vence, aviso_dias: avisoDias, suspender_dias: suspenderDias, aviso_suspension_dias: avisoSuspension } = datos;
+  const { vence, aviso_dias: avisoDias, suspender_dias: suspenderDias, aviso_suspension_dias: avisoSuspension, monto } = datos;
   const cambiaVence = 'vence' in datos;
   let fecha = null;
   if (cambiaVence && !vacio(vence)) {
@@ -188,7 +190,7 @@ export async function fijarCuota(datos) {
 
   await db.transaction(async () => {
     const actual = await db
-      .prepare('SELECT cuota_vence, cuota_aviso_dias, cuota_suspender_dias, cuota_aviso_suspension_dias FROM instancia WHERE id = 1')
+      .prepare('SELECT cuota_vence, cuota_aviso_dias, cuota_suspender_dias, cuota_aviso_suspension_dias, cuota_monto FROM instancia WHERE id = 1')
       .get();
     if (!cambiaVence) fecha = actual.cuota_vence;
 
@@ -208,6 +210,11 @@ export async function fijarCuota(datos) {
         ? 0
         : enteroEntre(avisoSuspension, 0, 365, 'Los días de aviso antes de suspender tienen que ser un entero entre 0 y 365');
     }
+    // Importe por mes, en pesos enteros (vacío = sin cargar: el aviso por mail no lo muestra).
+    let importe = actual.cuota_monto;
+    if ('monto' in datos) {
+      importe = vacio(monto) ? null : enteroEntre(monto, 1, 1_000_000_000, 'El importe tiene que ser un número entero de pesos, entre 1 y 1.000.000.000');
+    }
     if (suspender !== null && avisoPrevio >= suspender) {
       throw new ApiError(400, 'El aviso antes de suspender tiene que ser menor que los días para suspender');
     }
@@ -215,12 +222,12 @@ export async function fijarCuota(datos) {
     await db
       .prepare(
         `UPDATE instancia SET cuota_vence = ?, cuota_dia_vence = COALESCE(?, cuota_dia_vence), cuota_aviso_dias = ?,
-                cuota_suspender_dias = ?, cuota_aviso_suspension_dias = ?, actualizado_en = CURRENT_TIMESTAMP
+                cuota_suspender_dias = ?, cuota_aviso_suspension_dias = ?, cuota_monto = ?, actualizado_en = CURRENT_TIMESTAMP
          WHERE id = 1`
       )
       // Si vence no cambió, el día fijo tampoco (puede no coincidir con el día de cuota_vence:
       // un día 31 vence el 30 en los meses de 30 días).
-      .run(fecha, cambiaVence && fecha ? Number(fecha.slice(8)) : null, aviso, suspender, avisoPrevio);
+      .run(fecha, cambiaVence && fecha ? Number(fecha.slice(8)) : null, aviso, suspender, avisoPrevio, importe);
   });
 }
 
@@ -292,18 +299,16 @@ export async function fijarEmpresaEmail(email) {
   await db.prepare('UPDATE instancia SET empresa_email = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = 1').run(valor);
 }
 
-// Manda un mail de prueba al email de la empresa para comprobar que el correo de CEA sale.
+// Manda al email de la empresa un aviso de cuota de prueba, con el diseño real y el estado actual
+// de la cuota (sin vencimiento cargado, uno de ejemplo a 5 días): comprueba que el correo de CEA
+// sale y muestra cómo le llegan los avisos.
 export async function enviarCorreoDePrueba() {
   if (!correoCeaDisponible()) throw new ApiError(503, 'El correo de CEA no está configurado en este servidor (variables SA_SMTP_*)');
-  const { empresa_email: para } = await obtenerInstancia();
+  const { empresa_email: para, estado, cuota } = await obtenerInstancia();
   if (!para) throw new ApiError(400, 'Cargá primero el email de la empresa');
-  await enviarCorreo(
-    {
-      para,
-      asunto: 'CEAVital: mail de prueba',
-      texto: 'Este es un mail de prueba de CEAVital. Si lo recibiste, los avisos de cuota van a llegar a esta dirección.',
-    },
-    'cea'
-  );
+  const vence = cuota.vence ?? new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+  const diasRestantes = cuota.vence ? cuota.dias_restantes : 5;
+  const tipo = estado === 'suspendida' ? 'suspendida' : diasRestantes > 0 ? 'por_vencer' : diasRestantes === 0 ? 'vence_hoy' : 'vencida';
+  await enviarCorreo({ para, ...armarCorreoCuota({ tipo, vence, diasRestantes, monto: cuota.monto, prueba: true }) }, 'cea');
   return { enviado_a: para };
 }

@@ -1,6 +1,7 @@
+import crypto from 'node:crypto';
 import db from '../db/connection.js';
 import config from '../config/env.js';
-import { verifyPassword } from '../utils/password.js';
+import { hashPassword, verifyPassword } from '../utils/password.js';
 import { crearSesion, cerrarSesion, pendienteDeCuenta } from './session.service.js';
 import { asegurarInstanciaActiva } from './instancia.service.js';
 import {
@@ -33,6 +34,8 @@ async function abrirSesion(usuario) {
   return { token, expulsada, usuario: datosPublicos(usuario) };
 }
 
+let hashDeRelleno = null; // ver login: usuario inexistente
+
 // Paso 1 del ingreso: usuario y contraseña. Si hace falta un segundo paso no se abre la sesión:
 // devuelve { requiereCodigo, desafio, metodo, email } y la sesión se abre en confirmarIngreso.
 //  - Admin: verificación en dos pasos obligatoria (EST-01 §4) con el método que eligió (app o
@@ -55,6 +58,11 @@ export async function login(usuarioLogin, passwordPlano, { dispositivo } = {}) {
     .get(usuarioLogin, usuarioLogin);
 
   if (!usuario) {
+    // Se compara igual contra un hash de relleno: si no, "usuario que no existe" responde más rápido
+    // que "contraseña incorrecta" y se podría averiguar qué usuarios existen midiendo el tiempo
+    // (mismo criterio que loginSuperadmin y loginCliente).
+    hashDeRelleno ??= await hashPassword(crypto.randomBytes(32).toString('hex'));
+    await verifyPassword(passwordPlano, hashDeRelleno);
     throw new AuthError('Usuario o contraseña incorrectos', 'CREDENCIALES_INVALIDAS');
   }
 
@@ -70,10 +78,15 @@ export async function login(usuarioLogin, passwordPlano, { dispositivo } = {}) {
   if (!passwordOk) {
     // Incremento atómico en la propia sentencia (nunca "leer, esperar el hash,
     // escribir +1": con logins simultáneos se perdían intentos y el bloqueo no
-    // se activaba). Mismo criterio que loginCliente.
+    // se activaba). Mismo criterio que loginCliente. Si ya pasó un bloqueo anterior, la cuenta
+    // arranca de cero (decisión D2 del usuario, 2026-10-16): antes, al vencer los 15 min, un solo
+    // error más la volvía a bloquear.
     const { intentos_fallidos: intentos } = await db
       .prepare(
-        `UPDATE usuarios SET intentos_fallidos = intentos_fallidos + 1, actualizado_en = CURRENT_TIMESTAMP
+        `UPDATE usuarios
+         SET intentos_fallidos = CASE WHEN bloqueado_hasta <= LOCALTIMESTAMP THEN 1 ELSE intentos_fallidos + 1 END,
+             bloqueado_hasta = CASE WHEN bloqueado_hasta <= LOCALTIMESTAMP THEN NULL ELSE bloqueado_hasta END,
+             actualizado_en = CURRENT_TIMESTAMP
          WHERE id = ? RETURNING intentos_fallidos`
       )
       .get(usuario.id);

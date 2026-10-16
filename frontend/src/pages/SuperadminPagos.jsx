@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
 import { fechaHoyISO, formatearFecha, formatearMonto } from '../utils/format.js';
 
 // Historial de pagos de la cuota (panel /sa). Se anota a mano; anotar un pago corre el
 // vencimiento de la cuota los meses que cubre, desde el vencimiento (no desde el día en
 // que pagó). Las acciones pasan por `ejecutar` del panel, que recarga todo (la tarjeta
-// Cuota muestra el vencimiento nuevo).
+// Cuota muestra el vencimiento nuevo). El monto se completa solo con el importe por mes de la
+// cuota × los meses que cubre (2026-10-14), hasta que se lo cambie a mano.
 
 const MEDIOS = [
   ['transferencia', 'Transferencia'],
@@ -16,23 +17,39 @@ const MEDIOS = [
 ];
 const NOMBRE_MEDIO = Object.fromEntries(MEDIOS);
 
-const pagoVacio = () => ({
+const montoSugerido = (importeMes, meses) => (importeMes && Number(meses) > 0 ? String(importeMes * Number(meses)) : '');
+
+const pagoVacio = (importeMes) => ({
   fecha_pago: fechaHoyISO(),
-  monto: '',
+  monto: montoSugerido(importeMes, 1),
   meses: '1',
   medio_pago: 'transferencia',
   comprobante: '',
   nota: '',
 });
 
-export default function SuperadminPagos({ pagos, ocupado, ejecutar }) {
-  const [pago, setPago] = useState(pagoVacio);
+export default function SuperadminPagos({ pagos, importeMes = null, ocupado, ejecutar }) {
+  const [pago, setPago] = useState(() => pagoVacio(importeMes));
+  const [montoAMano, setMontoAMano] = useState(false); // ya no se completa solo
   const [anulando, setAnulando] = useState(null); // id del pago en confirmación
   const [motivo, setMotivo] = useState('');
 
+  // Si cambia el importe de la cuota (se guardó arriba), el monto sugerido lo sigue.
+  useEffect(() => {
+    if (!montoAMano) setPago((p) => ({ ...p, monto: montoSugerido(importeMes, p.meses) }));
+  }, [importeMes, montoAMano]);
+
   const campo = (nombre) => ({
     value: pago[nombre],
-    onChange: (e) => setPago({ ...pago, [nombre]: e.target.value }),
+    onChange: (e) => {
+      const valor = e.target.value;
+      if (nombre === 'monto') setMontoAMano(true);
+      setPago((p) => ({
+        ...p,
+        [nombre]: valor,
+        ...(nombre === 'meses' && !montoAMano ? { monto: montoSugerido(importeMes, valor) } : {}),
+      }));
+    },
     disabled: ocupado,
   });
 
@@ -41,7 +58,8 @@ export default function SuperadminPagos({ pagos, ocupado, ejecutar }) {
     ejecutar(
       async () => {
         const r = await api.post('/sa/pagos', { ...pago, monto: Number(pago.monto), meses: Number(pago.meses) });
-        setPago(pagoVacio());
+        setPago(pagoVacio(importeMes));
+        setMontoAMano(false);
         return r;
       },
       (r) =>
@@ -68,6 +86,7 @@ export default function SuperadminPagos({ pagos, ocupado, ejecutar }) {
       <p className="sa-ayuda">
         Anotar un pago corre el vencimiento de la cuota los meses que cubre, siempre desde el día de vencimiento: si vence el
         10 y paga el 15, el próximo vencimiento sigue siendo el 10. Un pago mal cargado se anula (el vencimiento vuelve atrás).
+        {importeMes ? ` El monto se completa con el importe por mes (${formatearMonto(importeMes)}) por los meses que cubre; se puede cambiar.` : ''}
       </p>
 
       <form className="sa-form-pago" onSubmit={anotar}>

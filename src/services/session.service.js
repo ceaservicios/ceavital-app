@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import db from '../db/connection.js';
 import config from '../config/env.js';
+import { asegurarInstanciaActiva } from './instancia.service.js';
 
 function generarToken() {
   return crypto.randomBytes(32).toString('hex');
@@ -16,6 +17,12 @@ export async function crearSesion(usuario) {
   const token = generarToken();
 
   return db.transaction(async () => {
+    // El login ya miró la instancia al empezar, pero entre eso (y la contraseña) y este INSERT
+    // el superadmin pudo suspenderla: se vuelve a mirar en esta misma transacción. Si la
+    // suspensión (instancia.service, aplicarSuspension) corre a la vez, las dos chocan
+    // (SERIALIZABLE) y una se reintenta: o esta ve 'suspendida', o la suspensión cierra esta sesión.
+    await asegurarInstanciaActiva();
+
     const activaPrevia = await db
       .prepare(`SELECT id FROM sesiones_activas WHERE usuario_id = ? AND estado = 'activa'`)
       .get(usuario.id);

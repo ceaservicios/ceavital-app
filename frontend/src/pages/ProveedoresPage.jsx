@@ -42,6 +42,11 @@ export default function ProveedoresPage() {
   // Guardia sincrónica de "Crear Proveedor": `disabled={guardando}` no alcanza contra dos clicks en el mismo
   // tick (creaba el proveedor duplicado).
   const creandoRef = useRef(false);
+  // Misma guardia para "Guardar cambios", "Registrar Pedido" (con dos clicks registraba el pedido dos
+  // veces) y el cambio de estado o la baja de un pedido (el segundo pedido volvía con un error falso).
+  const guardandoRef = useRef(false);
+  const registrandoPedidoRef = useRef(false);
+  const pedidoEnCursoRef = useRef(false);
 
   const mapaProductos = useMemo(() => new Map(productos.map((p) => [p.id, p])), [productos]);
 
@@ -156,6 +161,8 @@ export default function ProveedoresPage() {
   }
 
   async function guardarProveedor() {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
     setGuardando(true);
     setPanelError(null);
     try {
@@ -171,6 +178,7 @@ export default function ProveedoresPage() {
     } catch (err) {
       setPanelError(err instanceof ApiError ? err.message : 'No se pudieron guardar los cambios.');
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   }
@@ -210,6 +218,8 @@ export default function ProveedoresPage() {
 
   async function crearPedido(e) {
     e.preventDefault();
+    if (registrandoPedidoRef.current) return;
+    registrandoPedidoRef.current = true;
     setGuardando(true);
     setPanelError(null);
     try {
@@ -225,21 +235,28 @@ export default function ProveedoresPage() {
     } catch (err) {
       setPanelError(err instanceof ApiError ? err.message : 'No se pudo registrar el pedido.');
     } finally {
+      registrandoPedidoRef.current = false;
       setGuardando(false);
     }
   }
 
   async function cambiarEstadoPedido(pedido, estado) {
+    if (pedidoEnCursoRef.current) return;
+    pedidoEnCursoRef.current = true;
     setPanelError(null);
     try {
       await api.patch(`/proveedores/${detalle.id}/pedidos/${pedido.id}`, { estado });
       cargarTodo();
     } catch (err) {
       setPanelError(err instanceof ApiError ? err.message : 'No se pudo actualizar el pedido.');
+    } finally {
+      pedidoEnCursoRef.current = false;
     }
   }
 
   async function eliminarPedido(pedido) {
+    if (pedidoEnCursoRef.current) return;
+    pedidoEnCursoRef.current = true;
     setPanelError(null);
     try {
       await api.delete(`/proveedores/${detalle.id}/pedidos/${pedido.id}`);
@@ -247,6 +264,8 @@ export default function ProveedoresPage() {
       cargarTodo();
     } catch (err) {
       setPanelError(err instanceof ApiError ? err.message : 'No se pudo eliminar el pedido.');
+    } finally {
+      pedidoEnCursoRef.current = false;
     }
   }
 
@@ -302,7 +321,7 @@ export default function ProveedoresPage() {
                       {p.proveedor_nombre}
                     </span>
                     <span style={{ flex: 0.8 }}>{formatearFecha(p.fecha)}</span>
-                    <span style={{ flex: 0.7, textAlign: 'center', fontWeight: 700 }}>—</span>
+                    <span style={{ flex: 0.7, textAlign: 'center', fontWeight: 700 }}>{p.cantidad_items ?? '—'}</span>
                     <span style={{ flex: 0.9 }}>
                       <span className={`proveedores-badge proveedores-badge-${p.estado}`}>{ETIQUETA_ESTADO[p.estado]}</span>
                     </span>

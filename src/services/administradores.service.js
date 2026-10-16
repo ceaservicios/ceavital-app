@@ -15,6 +15,8 @@ import { verificarEmailLibre, verificarLoginLibre, verificarLugarLibre } from '.
 const MAX_NOMBRE = 200;
 const MAX_EMAIL = 100;
 const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MENSAJE_UNICO_ADMIN =
+  'Es el único Administrador activo: el negocio se quedaría sin Administrador. Creá otro antes de darlo de baja (o cambiale el email).';
 
 // Nunca password_hash ni secretos del 2FA.
 const COLUMNAS = `
@@ -46,8 +48,8 @@ async function obtenerAdministrador(id, { activo = true } = {}) {
 }
 
 // Si el correo de la empresa está configurado y la cuenta tiene email, le manda sus datos (por la
-// cola). Un Admin viejo sin email (creado con seed-admin) no recibe nada: la contraseña solo se ve
-// en el panel. Un fallo del correo no deshace el alta.
+// cola). Un Admin viejo sin email (de cuando existía el script seed-admin) no recibe nada: la
+// contraseña solo se ve en el panel. Un fallo del correo no deshace el alta.
 async function mandarDatos(admin, password, enlace, restablecida) {
   if (!admin.email || !correoDisponible()) return false;
   try {
@@ -119,11 +121,44 @@ export async function restablecerDosfaAdministrador(id) {
   return { email: admin.email };
 }
 
+// Nunca deja al negocio sin Administrador (decisión del usuario, 2026-10-14): para reemplazar al
+// único, se crea el nuevo antes (subiendo el tope si hace falta) o se le cambia el email.
 export async function darDeBajaAdministrador(id) {
-  const admin = await obtenerAdministrador(id);
-  await db.prepare('UPDATE usuarios SET eliminado_en = CURRENT_TIMESTAMP, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+  const admin = await db.transaction(async () => {
+    const fila = await obtenerAdministrador(id);
+    const { activos } = await db
+      .prepare(`SELECT COUNT(*)::int AS activos FROM usuarios WHERE rol = 'admin' AND eliminado_en IS NULL`)
+      .get();
+    if (activos <= 1) throw new ApiError(409, MENSAJE_UNICO_ADMIN);
+    await db.prepare('UPDATE usuarios SET eliminado_en = CURRENT_TIMESTAMP, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+    return fila;
+  });
   await cerrarSesionDelUsuario(id);
   return { email: admin.email };
+}
+
+// El email de un Admin es también su usuario de ingreso: cambia los dos, queda sin verificar (como
+// al editar un Encargado o Cajero) y se le cierra la sesión. Si la cuenta pasa a otra persona, CEA
+// le genera además una contraseña nueva y le restablece la verificación en dos pasos.
+export async function cambiarEmailAdministrador(id, datos) {
+  const email = validarTexto(datos?.email, 'El email', MAX_EMAIL);
+  if (!EMAIL_VALIDO.test(email)) throw new ApiError(400, 'El email no tiene un formato válido');
+
+  const anterior = await db.transaction(async () => {
+    const admin = await obtenerAdministrador(id);
+    const previo = admin.email ?? admin.usuario;
+    if (admin.email && admin.email.toLowerCase() === email.toLowerCase()) throw new ApiError(400, 'Es el mismo email que ya tiene');
+    await verificarEmailLibre(email, id);
+    await verificarLoginLibre(email, id);
+    await db
+      .prepare(
+        `UPDATE usuarios SET usuario = ?, email = ?, email_verificado_en = NULL, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`
+      )
+      .run(email, email, id);
+    return previo;
+  });
+  await cerrarSesionDelUsuario(id);
+  return { anterior, administrador: await obtenerAdministrador(id) };
 }
 
 // Vuelve a estar activo si hay lugar en el tope y nadie tomó su mail mientras estuvo de baja.

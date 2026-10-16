@@ -1,5 +1,5 @@
 import config from '../config/env.js';
-import { marcarActividadCliente, obtenerSesionClienteValida } from '../services/clientes-portal.service.js';
+import { cerradaPorOtroEquipo, marcarActividadCliente, obtenerSesionClienteValida } from '../services/clientes-portal.service.js';
 
 // Cookie de la sesión del portal: la fija el ingreso (portal.controller) y la renueva cada uso
 // (requirePortalAuth). La sesión vence a las 8 h sin uso; sin renovar, el navegador borraba la
@@ -26,6 +26,10 @@ export async function requirePortalAuth(req, res, next) {
   const sesion = await obtenerSesionClienteValida(token);
   if (!sesion) {
     res.clearCookie('portal_token');
+    // Cerrada porque entró un tercer equipo con el mismo usuario: el portal muestra el cartel.
+    if (await cerradaPorOtroEquipo(token)) {
+      return res.status(401).json({ error: 'Se cerró tu sesión porque se ingresó desde otro equipo.', codigo: 'SESION_OTRO_EQUIPO' });
+    }
     return res.status(401).json({ error: 'Sesión inválida o expirada' });
   }
 
