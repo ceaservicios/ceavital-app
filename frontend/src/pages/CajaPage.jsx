@@ -141,7 +141,6 @@ export default function CajaPage() {
   const [medioPago, setMedioPago] = useState('efectivo');
   const [clientesEmpresa, setClientesEmpresa] = useState([]);
   const [clienteEmpresaId, setClienteEmpresaId] = useState('');
-  const [montoRecibido, setMontoRecibido] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(null);
   const [exito, setExito] = useState(null);
@@ -412,8 +411,6 @@ export default function CajaPage() {
   // Un producto pesado cuenta como 1 artículo; sin peso, la venta no se puede cobrar.
   const articulos = carrito.reduce((acc, item) => acc + (esLineaPorPeso(item) ? (item.cantidad > 0 ? 1 : 0) : item.cantidad), 0);
   const faltaPeso = carrito.some((item) => esLineaPorPeso(item) && !(item.cantidad > 0));
-  const recibidoNumerico = Number(montoRecibido) || 0;
-  const vuelto = recibidoNumerico - total;
 
   async function confirmarVenta() {
     if (confirmandoVentaRef.current) return;
@@ -437,7 +434,6 @@ export default function CajaPage() {
         .join(' · ');
       setExito(`Venta #${venta.id} registrada por ${formatearMonto(venta.total)}.${quedan ? ` Stock que queda — ${quedan}.` : ''}`);
       setCarrito([]);
-      setMontoRecibido('');
       setClienteEmpresaId('');
       cargarVentasHoy();
     } catch (err) {
@@ -709,25 +705,6 @@ export default function CajaPage() {
               ))}
             </div>
           </div>
-
-          {medioPago === 'efectivo' && (
-            <div className="caja-cambio">
-              <div className="caja-cambio-row">
-                <span>Monto recibido</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={montoRecibido}
-                  onChange={(e) => setMontoRecibido(e.target.value)}
-                  placeholder="0"
-                />
-              </div>
-              <div className="caja-cambio-row">
-                <span>Vuelto</span>
-                <span style={{ fontWeight: 700 }}>{formatearMonto(Math.max(vuelto, 0))}</span>
-              </div>
-            </div>
-          )}
 
           {medioPago === 'cta_cte' && (
             <div className="caja-cliente">
