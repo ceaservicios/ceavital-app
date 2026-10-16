@@ -92,7 +92,7 @@ const MEDIOS_PAGO = [
   },
   {
     valor: 'fiado',
-    label: 'Fiado',
+    label: 'Pago pendiente',
     icono: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="9" />
@@ -116,10 +116,8 @@ const MEDIOS_PAGO = [
 ];
 
 const PUEDE_ANULAR = new Set(['admin', 'encargado']);
-// Gastos y pagos a proveedores (corrección 2026-09-15, decisiones confirmadas
-// 2026-09-18): Crear -- los 3 roles. Eliminar (corregir un gasto mal
-// cargado) -- Admin+Encargado, mismo criterio que anular una venta.
-const PUEDE_ELIMINAR_GASTO = new Set(['admin', 'encargado']);
+// Caja es solo para cobrar (pedido del usuario, 2026-10-16): los números del turno y los gastos
+// y pagos a proveedores pasaron a la pantalla "Ventas diarias" (VentasDiariasPage.jsx).
 
 // Lector de código de barras tipo teclado: manda los caracteres a menos de esto entre sí (una
 // persona tarda más). Largo mínimo bajo a propósito para aceptar códigos internos cortos;
@@ -147,7 +145,6 @@ export default function CajaPage() {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(null);
   const [exito, setExito] = useState(null);
-  const [resumen, setResumen] = useState(null);
   const [ventasHoy, setVentasHoy] = useState([]);
   const [confirmandoAnulacion, setConfirmandoAnulacion] = useState(false);
   const [anulando, setAnulando] = useState(false);
@@ -157,14 +154,6 @@ export default function CajaPage() {
   const [guardandoMedio, setGuardandoMedio] = useState(false);
   const [errorBusqueda, setErrorBusqueda] = useState(false);
 
-  const [gastosHoy, setGastosHoy] = useState([]);
-  const [proveedoresGasto, setProveedoresGasto] = useState([]);
-  const [mostrarFormGasto, setMostrarFormGasto] = useState(false);
-  const [nuevoGasto, setNuevoGasto] = useState({ concepto: '', monto: '', proveedor_id: '' });
-  const [registrandoGasto, setRegistrandoGasto] = useState(false);
-  const [errorGasto, setErrorGasto] = useState(null);
-  const [eliminandoGastoId, setEliminandoGastoId] = useState(null);
-
   const searchInputRef = useRef(null);
   // Guardia real contra doble-click (mismo criterio que "Confirmar Cierre de
   // Caja", ver hallazgo Baja #3 de verificador-funcional 2026-09-10): un ref
@@ -173,48 +162,27 @@ export default function CajaPage() {
   // 2do click antes de que ese re-render se complete.
   const anulandoRef = useRef(false);
   // Guardias sincrónicas: `disabled` no alcanza contra dos clicks en el mismo tick
-  // (duplicaba la venta, el gasto o la baja).
+  // (duplicaba la venta).
   const confirmandoVentaRef = useRef(false);
   const enterEnCursoRef = useRef(new Set());
-  const registrandoGastoRef = useRef(false);
-  const eliminandoGastoRef = useRef(false);
   const guardandoMedioRef = useRef(false);
   const rafagasPesoRef = useRef(new Map()); // clave de línea → { antes, ultima }, ver teclaEnPeso
 
   const puedeAnular = PUEDE_ANULAR.has(usuario?.rol);
-  const puedeEliminarGasto = PUEDE_ELIMINAR_GASTO.has(usuario?.rol);
 
-  const cargarResumen = useCallback(async () => {
+  // Las ventas de hoy: de ahí sale el último ticket (anular / cambiar el medio de pago).
+  const cargarVentasHoy = useCallback(async () => {
     try {
-      const [resumenData, ventasData, gastosData] = await Promise.all([
-        api.get('/caja/resumen'),
-        api.get(`/ventas?fecha=${fechaHoyISO()}`),
-        api.get(`/caja/gastos?fecha=${fechaHoyISO()}`),
-      ]);
-      setResumen(resumenData);
+      const ventasData = await api.get(`/ventas?fecha=${fechaHoyISO()}`);
       setVentasHoy(ventasData.ventas);
-      setGastosHoy(gastosData.gastos);
     } catch {
-      // Los KPIs son informativos -- si fallan, no bloquean el uso de Caja.
+      // Si falla, solo no se ofrece "Anular último ticket": no bloquea el cobro.
     }
   }, []);
 
   useEffect(() => {
-    cargarResumen();
-  }, [cargarResumen]);
-
-  // Proveedores solo para el <select> opcional "pago a proveedor" del
-  // formulario de gasto -- Cajero no tiene acceso a /proveedores (ni
-  // siquiera Ver, ver proveedores.routes.js), así que ese select se omite
-  // para ese rol en vez de intentar un fetch que le va a devolver 403.
-  useEffect(() => {
-    if (usuario?.rol === 'admin' || usuario?.rol === 'encargado') {
-      api
-        .get('/proveedores')
-        .then((data) => setProveedoresGasto(data.proveedores))
-        .catch(() => setProveedoresGasto([]));
-    }
-  }, [usuario?.rol]);
+    cargarVentasHoy();
+  }, [cargarVentasHoy]);
 
   // Lista de clientes-empresa para el selector de "Cuenta Corriente": los 3
   // roles la necesitan para cobrar una venta a cuenta corriente (el backend
@@ -227,44 +195,6 @@ export default function CajaPage() {
       .then((data) => setClientesEmpresa(data.clientes))
       .catch(() => setClientesEmpresa([]));
   }, [cuentaCorrienteActiva]);
-
-  async function registrarGasto(e) {
-    e.preventDefault();
-    if (registrandoGastoRef.current) return;
-    registrandoGastoRef.current = true;
-    setRegistrandoGasto(true);
-    setErrorGasto(null);
-    try {
-      await api.post('/caja/gastos', {
-        concepto: nuevoGasto.concepto,
-        monto: Number(nuevoGasto.monto),
-        proveedor_id: nuevoGasto.proveedor_id === '' ? null : Number(nuevoGasto.proveedor_id),
-      });
-      setNuevoGasto({ concepto: '', monto: '', proveedor_id: '' });
-      setMostrarFormGasto(false);
-      cargarResumen();
-    } catch (err) {
-      setErrorGasto(err instanceof ApiError ? err.message : 'No se pudo registrar el gasto.');
-    } finally {
-      registrandoGastoRef.current = false;
-      setRegistrandoGasto(false);
-    }
-  }
-
-  async function eliminarGasto(id) {
-    if (eliminandoGastoRef.current) return;
-    eliminandoGastoRef.current = true;
-    setEliminandoGastoId(id);
-    try {
-      await api.delete(`/caja/gastos/${id}`);
-      cargarResumen();
-    } catch (err) {
-      setErrorGasto(err instanceof ApiError ? err.message : 'No se pudo eliminar el gasto.');
-    } finally {
-      eliminandoGastoRef.current = false;
-      setEliminandoGastoId(null);
-    }
-  }
 
   useEffect(() => {
     if (query.trim().length < 1) {
@@ -509,7 +439,7 @@ export default function CajaPage() {
       setCarrito([]);
       setMontoRecibido('');
       setClienteEmpresaId('');
-      cargarResumen();
+      cargarVentasHoy();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo registrar la venta. Probá de nuevo.');
     } finally {
@@ -529,7 +459,7 @@ export default function CajaPage() {
       await api.delete(`/ventas/${ultimaVentaRegistrada.id}`);
       setExito(`Venta #${ultimaVentaRegistrada.id} anulada.`);
       setConfirmandoAnulacion(false);
-      cargarResumen();
+      cargarVentasHoy();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo anular la venta.');
       setConfirmandoAnulacion(false);
@@ -564,7 +494,7 @@ export default function CajaPage() {
       await api.patch(`/ventas/${ultimaVentaRegistrada.id}`, { medio_pago: nuevoMedio });
       setExito(`Venta #${ultimaVentaRegistrada.id}: ahora figura como ${etiquetaMedio(nuevoMedio)}.`);
       setCambiandoMedio(false);
-      cargarResumen();
+      cargarVentasHoy();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo cambiar el medio de pago.');
     } finally {
@@ -573,32 +503,8 @@ export default function CajaPage() {
     }
   }
 
-  const ticketsEmitidos = ventasHoy.filter((v) => v.estado === 'registrada').length;
-  const ticketPromedio = ticketsEmitidos > 0 ? Math.round((resumen?.total_general ?? 0) / ticketsEmitidos) : 0;
-
   return (
     <div className="caja-page">
-      <div className="caja-kpis">
-        <div className="card caja-kpi">
-          <span className="caja-kpi-label">Ventas del turno</span>
-          <span className="caja-kpi-value">{formatearMonto(resumen?.total_general ?? 0)}</span>
-        </div>
-        <div className="card caja-kpi">
-          <span className="caja-kpi-label">Tickets emitidos</span>
-          <span className="caja-kpi-value">{ticketsEmitidos}</span>
-        </div>
-        <div className="card caja-kpi">
-          <span className="caja-kpi-label">Ticket promedio</span>
-          <span className="caja-kpi-value">{formatearMonto(ticketPromedio)}</span>
-        </div>
-        <div className="card caja-kpi">
-          <span className="caja-kpi-label">Gastos del turno</span>
-          <span className="caja-kpi-value" style={{ color: (resumen?.total_gastos ?? 0) > 0 ? 'var(--color-danger)' : undefined }}>
-            {formatearMonto(resumen?.total_gastos ?? 0)}
-          </span>
-        </div>
-      </div>
-
       <div className="caja-body">
         <div className="card caja-carrito">
           <div className="caja-search">
@@ -926,87 +832,6 @@ export default function CajaPage() {
               </div>
             )}
           </div>
-        </div>
-      </div>
-
-      <div className="card caja-gastos">
-        <div className="caja-gastos-header">
-          <span className="caja-section-label" style={{ marginBottom: 0 }}>
-            Gastos y pagos a proveedores
-          </span>
-          {!mostrarFormGasto && (
-            <button type="button" className="btn" onClick={() => setMostrarFormGasto(true)}>
-              + Registrar gasto
-            </button>
-          )}
-        </div>
-
-        {errorGasto && <div className="alert alert-danger">{errorGasto}</div>}
-
-        {mostrarFormGasto && (
-          <form className="caja-gasto-form" onSubmit={registrarGasto}>
-            <input
-              required
-              placeholder="Concepto (ej. flete, limpieza…)"
-              value={nuevoGasto.concepto}
-              onChange={(e) => setNuevoGasto({ ...nuevoGasto, concepto: e.target.value })}
-            />
-            <input
-              required
-              type="number"
-              min="1"
-              placeholder="Monto"
-              value={nuevoGasto.monto}
-              onChange={(e) => setNuevoGasto({ ...nuevoGasto, monto: e.target.value })}
-            />
-            {proveedoresGasto.length > 0 && (
-              <select
-                value={nuevoGasto.proveedor_id}
-                onChange={(e) => setNuevoGasto({ ...nuevoGasto, proveedor_id: e.target.value })}
-              >
-                <option value="">Sin proveedor asociado</option>
-                {proveedoresGasto.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre}
-                  </option>
-                ))}
-              </select>
-            )}
-            <button type="submit" className="btn btn-primary" disabled={registrandoGasto}>
-              {registrandoGasto ? 'Guardando…' : 'Guardar'}
-            </button>
-            <button type="button" className="btn" onClick={() => setMostrarFormGasto(false)}>
-              Cancelar
-            </button>
-          </form>
-        )}
-
-        <div className="caja-gastos-lista">
-          {gastosHoy.length === 0 ? (
-            <div className="caja-gastos-vacio">Todavía no se registró ningún gasto hoy.</div>
-          ) : (
-            gastosHoy.map((g) => (
-              <div className="caja-gasto-row" key={g.id}>
-                <span className="caja-gasto-concepto">{g.concepto}</span>
-                <span className="caja-gasto-monto">{formatearMonto(g.monto)}</span>
-                {puedeEliminarGasto && (
-                  <button
-                    type="button"
-                    className="caja-gasto-eliminar"
-                    disabled={eliminandoGastoId === g.id}
-                    onClick={() => eliminarGasto(g.id)}
-                    title="Eliminar gasto"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 6h18" />
-                      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            ))
-          )}
         </div>
       </div>
     </div>

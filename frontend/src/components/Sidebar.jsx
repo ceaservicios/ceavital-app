@@ -48,6 +48,13 @@ const ICONOS = {
       <path d="M16 10a4 4 0 0 1-8 0" />
     </svg>
   ),
+  // Ventas diarias (2026-10-16): un ticket con renglones.
+  'ventas-diarias': (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2h12v20l-3-2-3 2-3-2-3 2z" />
+      <path d="M9 7h6M9 11h6M9 15h4" />
+    </svg>
+  ),
   cierre: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 2v4" />
@@ -89,6 +96,7 @@ const SECCIONES = [
     titulo: 'OPERACIÓN',
     items: [
       { modulo: 'caja', to: '/caja', label: 'Caja y Punto de Venta' },
+      { modulo: 'ventas-diarias', to: '/ventas-diarias', label: 'Ventas diarias' },
       { modulo: 'stock', to: '/stock', label: 'Stock y Lotes' },
       { modulo: 'vencimientos', to: '/vencimientos', label: 'Vencimientos' },
       { modulo: 'proveedores', to: '/proveedores', label: 'Proveedores y Pedidos' },

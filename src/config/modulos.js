@@ -12,7 +12,7 @@ export const MODULOS = {
     nombre: 'Gestión del comercio',
     dependeDe: [],
     detalle: [
-      'Caja y punto de venta con lector de código de barras: efectivo, tarjeta, transferencia o QR, Mercado Pago y fiado',
+      'Caja y punto de venta con lector de código de barras: efectivo, tarjeta, transferencia o QR, Mercado Pago y pago pendiente',
       'Stock con lotes, vencimientos y aviso de stock bajo',
       'Proveedores y pedidos a proveedores',
       'Cierre de caja con fondo, gastos y diferencia',

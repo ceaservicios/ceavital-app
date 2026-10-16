@@ -5,6 +5,7 @@ import './Topbar.css';
 
 const TITULOS = {
   '/caja': 'Caja y Punto de Venta',
+  '/ventas-diarias': 'Ventas diarias',
   '/stock': 'Stock y Lotes',
   '/vencimientos': 'Vencimientos',
   '/proveedores': 'Proveedores y Pedidos',

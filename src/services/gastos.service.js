@@ -1,6 +1,6 @@
 import db from '../db/connection.js';
 import { ApiError } from '../utils/api-error.js';
-import { sqlDiaNegocio } from '../utils/fecha-negocio.js';
+import { esDiaValido, sqlDiaNegocio } from '../utils/fecha-negocio.js';
 
 const MAX_CONCEPTO = 200;
 // Tope de un monto en pesos (Number.isInteger(1e21) es true): sin él un gasto
@@ -34,14 +34,32 @@ async function verificarProveedorActivo(proveedorId) {
 // arqueo físico del cajón, ver caja.service.calcularResumenDelDia). Si algún
 // día hace falta un gasto no-efectivo, sumar un campo medio_pago recién ahí --
 // no se anticipa acá sin un caso real.
-export function listarGastos({ fecha } = {}) {
-  const condiciones = ['eliminado_en IS NULL'];
+// Con desde/hasta: los gastos de un período (pantalla "Ventas diarias", 2026-10-16), con quién
+// lo cargó y el proveedor.
+export function listarGastos({ fecha, desde, hasta } = {}) {
+  const condiciones = ['g.eliminado_en IS NULL'];
   const params = [];
-  if (fecha) {
-    condiciones.push(`${sqlDiaNegocio('creado_en')} = ?`);
+  if (desde !== undefined || hasta !== undefined) {
+    const dia1 = desde;
+    const dia2 = hasta ?? desde;
+    if (!esDiaValido(dia1) || !esDiaValido(dia2)) throw new ApiError(400, 'desde y hasta tienen que ser fechas válidas (AAAA-MM-DD)');
+    if (dia1 > dia2) throw new ApiError(400, 'La fecha "desde" no puede ser posterior a "hasta"');
+    condiciones.push(`${sqlDiaNegocio('g.creado_en')} BETWEEN ?::date AND ?::date`);
+    params.push(dia1, dia2);
+  } else if (fecha) {
+    condiciones.push(`${sqlDiaNegocio('g.creado_en')} = ?`);
     params.push(fecha);
   }
-  return db.prepare(`SELECT * FROM gastos_caja WHERE ${condiciones.join(' AND ')} ORDER BY creado_en DESC`).all(...params);
+  return db
+    .prepare(
+      `SELECT g.*, u.nombre AS usuario_nombre, p.nombre AS proveedor_nombre
+       FROM gastos_caja g
+       JOIN usuarios u ON u.id = g.usuario_id
+       LEFT JOIN proveedores p ON p.id = g.proveedor_id
+       WHERE ${condiciones.join(' AND ')}
+       ORDER BY g.creado_en DESC, g.id DESC`
+    )
+    .all(...params);
 }
 
 // Crear: los 3 roles (decisión 2026-09-18 -- cualquiera en caja puede

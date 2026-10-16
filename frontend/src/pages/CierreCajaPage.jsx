@@ -11,7 +11,7 @@ const MEDIOS = [
   { campo: 'total_tarjeta', label: 'Tarjeta (débito / crédito)', icono: 'tarjeta' },
   { campo: 'total_transferencia_qr', label: 'Transferencia / QR', icono: 'qr' },
   { campo: 'total_mercado_pago', label: 'Mercado Pago', icono: 'mp' },
-  { campo: 'total_fiado', label: 'Fiado', icono: 'fiado' },
+  { campo: 'total_fiado', label: 'Pago pendiente', icono: 'fiado' },
   { campo: 'total_cta_cte', label: 'Cuenta Corriente (clientes-empresa)', icono: 'ctacte' },
 ];
 

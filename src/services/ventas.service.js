@@ -2,7 +2,7 @@ import db from '../db/connection.js';
 import { ApiError } from '../utils/api-error.js';
 import { existeClienteActivo, registrarAjustePorAnulacion, registrarCargoPorVenta } from './clientes-empresa.service.js';
 import { stockDisponible } from './reservas.service.js';
-import { sqlDiaNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
+import { esDiaValido, sqlDiaNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
 import { mediosPagoPermitidos } from './modulos.service.js';
 import { armarLinea, COLUMNAS_PRESENTACION, describirCantidad, juntarLineas, validarPresentacion } from './presentacion.js';
 
@@ -91,6 +91,104 @@ export function listarVentas({ fecha } = {}) {
       .all(fecha);
   }
   return db.prepare('SELECT * FROM ventas ORDER BY creado_en DESC, id DESC').all();
+}
+
+// Ventas diarias (2026-10-16): el listado con filtros de la pantalla "Ventas diarias". Los
+// totales son siempre de las ventas registradas (las anuladas no suman, como en Caja y en el
+// cierre), aunque la lista muestre las anuladas. El cliente es el de Cuenta Corriente: las
+// demás ventas no guardan cliente (decisión del usuario).
+const MEDIOS_FILTRO = ['efectivo', 'tarjeta', 'transferencia_qr', 'mercado_pago', 'fiado', 'cta_cte'];
+const ESTADOS_FILTRO = ['registrada', 'anulada', 'todas'];
+const TOPE_LISTADO = 1000;
+
+function diaFiltro(valor, campo) {
+  if (!esDiaValido(valor)) throw new ApiError(400, `${campo} tiene que ser una fecha válida (AAAA-MM-DD)`);
+  return valor;
+}
+
+function idFiltro(valor, campo) {
+  if (valor === undefined || valor === null || valor === '') return null;
+  if (typeof valor !== 'string' && typeof valor !== 'number') throw new ApiError(400, `${campo} inválido`);
+  const id = Number(valor);
+  if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, `${campo} inválido`);
+  return id;
+}
+
+export async function buscarVentas({ desde, hasta, medio_pago, cliente_empresa_id, usuario_id, estado } = {}) {
+  const dia1 = diaFiltro(desde, 'desde');
+  const dia2 = diaFiltro(hasta ?? desde, 'hasta');
+  if (dia1 > dia2) throw new ApiError(400, 'La fecha "desde" no puede ser posterior a "hasta"');
+  const estadoLista = estado || 'registrada';
+  if (!ESTADOS_FILTRO.includes(estadoLista)) throw new ApiError(400, `estado tiene que ser uno de: ${ESTADOS_FILTRO.join(', ')}`);
+
+  const enRango = `${sqlDiaNegocio('v.creado_en')} BETWEEN ?::date AND ?::date`;
+  const condiciones = [enRango];
+  const params = [dia1, dia2];
+  if (medio_pago) {
+    if (!MEDIOS_FILTRO.includes(medio_pago)) throw new ApiError(400, `medio_pago tiene que ser uno de: ${MEDIOS_FILTRO.join(', ')}`);
+    condiciones.push('v.medio_pago = ?');
+    params.push(medio_pago);
+  }
+  const clienteId = idFiltro(cliente_empresa_id, 'cliente_empresa_id');
+  if (clienteId) {
+    condiciones.push('v.cliente_empresa_id = ?');
+    params.push(clienteId);
+  }
+  const usuarioId = idFiltro(usuario_id, 'usuario_id');
+  if (usuarioId) {
+    condiciones.push('v.usuario_id = ?');
+    params.push(usuarioId);
+  }
+  const filtros = condiciones.join(' AND ');
+
+  const filas = await db
+    .prepare(
+      `SELECT v.id, v.creado_en, v.medio_pago, v.total, v.estado, v.anulada_en, v.usuario_id, v.cliente_empresa_id,
+              u.nombre AS usuario_nombre, ua.nombre AS anulada_por_nombre, ce.razon_social AS cliente_razon_social,
+              (SELECT COUNT(DISTINCT vi.producto_id::text || '|' || COALESCE(vi.pack_nombre, ''))
+                 FROM venta_items vi WHERE vi.venta_id = v.id) AS cantidad_productos
+       FROM ventas v
+       JOIN usuarios u ON u.id = v.usuario_id
+       LEFT JOIN usuarios ua ON ua.id = v.anulada_por
+       LEFT JOIN clientes_empresa ce ON ce.id = v.cliente_empresa_id
+       WHERE ${filtros}${estadoLista === 'todas' ? '' : ' AND v.estado = ?'}
+       ORDER BY v.creado_en DESC, v.id DESC
+       LIMIT ${TOPE_LISTADO + 1}`
+    )
+    .all(...params, ...(estadoLista === 'todas' ? [] : [estadoLista]));
+
+  const porMedio = await db
+    .prepare(
+      `SELECT v.medio_pago, COUNT(*) AS cantidad, COALESCE(SUM(v.total), 0) AS total
+       FROM ventas v WHERE ${filtros} AND v.estado = 'registrada'
+       GROUP BY v.medio_pago`
+    )
+    .all(...params);
+  const anuladas = await db
+    .prepare(`SELECT COUNT(*) AS cantidad FROM ventas v WHERE ${filtros} AND v.estado = 'anulada'`)
+    .get(...params);
+  // Para el filtro "Cobró": quienes vendieron en esas fechas (sin mirar los otros filtros).
+  const vendedores = await db
+    .prepare(
+      `SELECT DISTINCT u.id, u.nombre FROM ventas v JOIN usuarios u ON u.id = v.usuario_id
+       WHERE ${enRango} ORDER BY u.nombre`
+    )
+    .all(dia1, dia2);
+
+  const totales = { total: 0, tickets: 0, anuladas: Number(anuladas.cantidad), por_medio: {} };
+  for (const fila of porMedio) {
+    const cantidad = Number(fila.cantidad);
+    const total = Number(fila.total);
+    totales.por_medio[fila.medio_pago] = { cantidad, total };
+    totales.tickets += cantidad;
+    totales.total += total;
+  }
+  return {
+    ventas: filas.slice(0, TOPE_LISTADO),
+    hay_mas: filas.length > TOPE_LISTADO,
+    totales,
+    vendedores,
+  };
 }
 
 export function obtenerVenta(id) {

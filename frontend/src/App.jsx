@@ -5,6 +5,7 @@ import RequireRole from './components/RequireRole.jsx';
 import AppLayout from './components/AppLayout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import CajaPage from './pages/CajaPage.jsx';
+import VentasDiariasPage from './pages/VentasDiariasPage.jsx';
 import StockPage from './pages/StockPage.jsx';
 import VencimientosPage from './pages/VencimientosPage.jsx';
 import ProveedoresPage from './pages/ProveedoresPage.jsx';
@@ -47,6 +48,7 @@ export default function App() {
           <Route index element={<Navigate to="/caja" replace />} />
           <Route path="cuenta" element={<CuentaPage />} />
           <Route path="caja" element={<CajaPage />} />
+          <Route path="ventas-diarias" element={<VentasDiariasPage />} />
           <Route path="stock" element={<StockPage />} />
           <Route path="vencimientos" element={<VencimientosPage />} />
           <Route

@@ -14,7 +14,7 @@ const MEDIO_PAGO = {
   tarjeta: 'Tarjeta',
   transferencia_qr: 'Transferencia / QR',
   mercado_pago: 'Mercado Pago',
-  fiado: 'Fiado',
+  fiado: 'Pago pendiente',
   cta_cte: 'Cuenta Corriente',
 };
 

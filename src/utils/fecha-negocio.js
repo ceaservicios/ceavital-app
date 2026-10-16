@@ -33,6 +33,13 @@ export function hoyNegocio(ahora = new Date()) {
   return `${p.year}-${p.month}-${p.day}`;
 }
 
+// 'AAAA-MM-DD' que existe en el calendario (un 2026-02-30 no pasa).
+export function esDiaValido(valor) {
+  if (typeof valor !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
+  const fecha = new Date(`${valor}T00:00:00Z`);
+  return !Number.isNaN(fecha.getTime()) && fecha.toISOString().slice(0, 10) === valor;
+}
+
 // Día argentino de un 'AAAA-MM-DD HH:MM:SS' guardado en UTC en la base.
 export function diaNegocioDeUtc(datetimeUtc) {
   return hoyNegocio(new Date(`${datetimeUtc.replace(' ', 'T')}Z`));

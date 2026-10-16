@@ -8,7 +8,8 @@ function parsearId(valor) {
 }
 
 export async function listarGastosController(req, res) {
-  res.json({ gastos: await gastosService.listarGastos({ fecha: req.query.fecha }) });
+  const { fecha, desde, hasta } = req.query;
+  res.json({ gastos: await gastosService.listarGastos({ fecha, desde, hasta }) });
 }
 
 export async function registrarGastoController(req, res) {

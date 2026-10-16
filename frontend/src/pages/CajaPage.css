@@ -6,63 +6,32 @@
   min-height: 0;
 }
 
-.caja-kpis {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.caja-kpi {
-  flex: 1;
-  min-width: 180px;
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.caja-kpi-label {
-  font-size: 12.5px;
-  color: var(--text-tertiary);
-  font-weight: 600;
-}
-.caja-kpi-value {
-  font-size: 26px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
 .caja-body {
   flex: 1;
   display: flex;
   gap: 16px;
   /* sin min-height: 0: si el contenido es más alto que la ventana, la página crece y scrollea en vez de pisar lo que sigue */
 }
-/* Pantallas anchas: carrito y gastos en la columna izquierda, cobro a la
-   derecha ocupando toda la altura. Así los gastos no quedan escondidos debajo
-   del fondo de la ventana y la página solo scrollea si el cobro no entra. */
+/* Pantallas anchas: carrito a la izquierda y cobro a la derecha, los dos a toda la altura.
+   Desde 2026-10-16 Caja es solo para cobrar: las tarjetas del turno y los gastos están en
+   "Ventas diarias", así que el carrito ya no comparte la columna. */
 @media (min-width: 1201px) {
   .caja-page {
     display: grid;
     grid-template-columns: 1.6fr 1fr;
-    grid-template-rows: auto minmax(0, 1fr) auto;
-    gap: 18px 16px;
-  }
-  .caja-kpis {
-    grid-column: 1 / -1;
+    grid-template-rows: minmax(0, 1fr);
+    gap: 16px;
   }
   .caja-body {
     display: contents;
   }
   .caja-carrito {
     grid-column: 1;
-    grid-row: 2;
-  }
-  .caja-gastos {
-    grid-column: 1;
-    grid-row: 3;
+    grid-row: 1;
   }
   .caja-cobro {
     grid-column: 2;
-    grid-row: 2 / 4;
+    grid-row: 1;
     /* Si igual no entra, scrollea dentro de la tarjeta en vez de salirse de ella. */
     overflow-y: auto;
   }
@@ -439,73 +408,6 @@
   .caja-medio-cambio-fila .btn {
     flex: 1;
   }
-}
-
-.caja-gastos {
-  padding: 18px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.caja-gastos-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.caja-gasto-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-.caja-gasto-form input,
-.caja-gasto-form select {
-  flex: 1;
-  min-width: 160px;
-  padding: 9px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--border-default);
-  font: inherit;
-  font-size: 13.5px;
-}
-.caja-gastos-lista {
-  display: flex;
-  flex-direction: column;
-}
-.caja-gastos-vacio {
-  padding: 14px 4px;
-  text-align: center;
-  color: var(--text-tertiary);
-  font-size: 13.5px;
-}
-.caja-gasto-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 9px 4px;
-  border-bottom: 1px solid var(--bg-app);
-}
-.caja-gasto-concepto {
-  flex: 1;
-  font-size: 13.5px;
-  font-weight: 600;
-}
-.caja-gasto-monto {
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--color-danger);
-  font-variant-numeric: tabular-nums;
-}
-.caja-gasto-eliminar {
-  border: none;
-  background: transparent;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  display: flex;
-  padding: 2px;
-}
-.caja-gasto-eliminar:hover {
-  color: var(--color-danger);
 }
 
 /* Celular: el mensaje de carrito vacío no lleva el ancho mínimo de las filas del

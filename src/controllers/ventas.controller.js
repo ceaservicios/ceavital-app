@@ -1,5 +1,6 @@
 import { ApiError } from '../utils/api-error.js';
 import * as ventasService from '../services/ventas.service.js';
+import { calcularResumenDelDia } from '../services/caja.service.js';
 import { actorDeSesion, registrarAccion } from '../services/registro.service.js';
 
 function parsearId(valor, campo = 'id') {
@@ -9,7 +10,29 @@ function parsearId(valor, campo = 'id') {
 }
 
 export async function listarVentasController(req, res) {
-  const ventas = await ventasService.listarVentas({ fecha: req.query.fecha });
+  const q = req.query;
+  // Con desde/hasta es el listado de "Ventas diarias" (filtros y totales); con fecha, el de Caja.
+  if (q.desde !== undefined || q.hasta !== undefined) {
+    const resultado = await ventasService.buscarVentas({
+      desde: q.desde,
+      hasta: q.hasta,
+      medio_pago: q.medio_pago,
+      cliente_empresa_id: q.cliente_empresa_id,
+      usuario_id: q.usuario_id,
+      estado: q.estado,
+    });
+    // Plata del cajón de ese día (tarjetas "Fondo" y "Efectivo en caja", 2026-10-16): el mismo
+    // cálculo que Cierre de Caja, sin los filtros de ventas. Solo para un día: cada cierre retira
+    // la plata, así que sumar varios días daría un número que no existe.
+    let caja = null;
+    if ((q.hasta ?? q.desde) === q.desde) {
+      const resumen = await calcularResumenDelDia(q.desde);
+      caja = { fondo: resumen.fondo_heredado, fondo_fecha: resumen.fondo_fecha, efectivo_en_caja: resumen.total_efectivo_esperado };
+    }
+    res.json({ ...resultado, caja });
+    return;
+  }
+  const ventas = await ventasService.listarVentas({ fecha: q.fecha });
   res.json({ ventas });
 }
 

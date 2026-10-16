@@ -40,11 +40,12 @@ function fechaHoy() {
 // efectivo esperado del dia siguiente (decision confirmada con el usuario
 // 2026-09-18: "se deja un monto del dia anterior... se suma a las ventas del
 // dia"). Si nunca se dejo fondo, o es el primer cierre del negocio, es 0.
+// Devuelve también la fecha de ese cierre (Ventas diarias la muestra junto al fondo, 2026-10-16).
 async function fondoHeredado(fecha) {
   const fila = await db
-    .prepare(`SELECT fondo_dejado FROM cierres_caja WHERE fecha < ?::date ORDER BY fecha DESC, id DESC LIMIT 1`)
+    .prepare(`SELECT fondo_dejado, fecha FROM cierres_caja WHERE fecha < ?::date ORDER BY fecha DESC, id DESC LIMIT 1`)
     .get(fecha);
-  return fila?.fondo_dejado ?? 0;
+  return { fondo: fila?.fondo_dejado ?? 0, fecha: fila?.fecha ?? null };
 }
 
 // Totales del dia (fecha, default hoy) agrupados por medio de pago, en base a
@@ -74,12 +75,13 @@ export async function calcularResumenDelDia(fechaParam) {
   for (const fila of filas) totales[fila.medio_pago] = fila.total;
 
   const total_general = MEDIOS_PAGO.reduce((acc, m) => acc + totales[m], 0);
-  const fondo_heredado = await fondoHeredado(fecha);
+  const { fondo: fondo_heredado, fecha: fondo_fecha } = await fondoHeredado(fecha);
   const total_gastos = await totalGastosDelDia(fecha);
 
   return {
     fecha,
     fondo_heredado,
+    fondo_fecha,
     total_gastos,
     total_efectivo_esperado: totales.efectivo + fondo_heredado - total_gastos,
     total_tarjeta: totales.tarjeta,
