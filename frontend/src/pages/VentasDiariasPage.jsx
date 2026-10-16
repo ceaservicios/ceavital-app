@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { fechaHoyISO, formatearFecha, formatearFechaHora, formatearMonto } from '../utils/format.js';
+import { cuandoFueElCierre, fechaHoyISO, formatearFecha, formatearFechaHora, formatearMonto } from '../utils/format.js';
 import { ItemsPedido } from './pedidosComun.jsx';
 import './ClientesEmpresaPage.css';
 import './Pedidos.css';
@@ -9,8 +9,8 @@ import './VentasDiariasPage.css';
 
 // Ventas diarias (pedido del usuario, 2026-10-16): el detalle del día a día que Caja no tenía.
 // Las ventas de un período con filtros, los totales y los gastos y pagos a proveedores (que
-// salieron de Caja), más el fondo con el que arrancó el día y el efectivo que tendría que haber
-// en la caja (2026-10-16). La entran los 3 roles y ven cualquier fecha (decisión del usuario).
+// salieron de Caja), más el fondo y el efectivo que tendría que haber en la caja en el turno
+// abierto (2026-10-16). La entran los 3 roles y ven cualquier fecha (decisión del usuario).
 // Solo consulta: anular o cambiar el medio de pago sigue siendo del último ticket, en Caja.
 
 const MEDIOS = [
@@ -237,9 +237,10 @@ export default function VentasDiariasPage() {
   const tickets = totales?.tickets ?? 0;
   const totalGastos = gastos.reduce((acc, g) => acc + g.monto, 0);
   const ventas = datos?.ventas ?? [];
-  // Plata del cajón (Fondo y Efectivo en caja): la calcula el servidor igual que Cierre de Caja,
-  // solo para un día y sin los filtros de ventas.
-  const unDia = desde === hasta;
+  // Plata del cajón (Fondo y Efectivo en caja): la del turno abierto, calculada por el servidor
+  // igual que Cierre de Caja y sin los filtros de ventas. Solo cuando se mira hoy: el cierre es
+  // por turno y cada cierre retira la plata.
+  const esHoy = desde === hoy && hasta === hoy;
   const caja = datos?.caja;
   const mediosConVentas = MEDIOS.filter((m) => totales?.por_medio?.[m.valor]?.total > 0);
   const mediosDelFiltro = MEDIOS.filter((m) => m.valor !== 'cta_cte' || conClientes);
@@ -329,9 +330,9 @@ export default function VentasDiariasPage() {
       <div className="cliente-kpis vd-kpis">
         <div className="card cliente-kpi">
           <span className="cliente-kpi-label">Fondo</span>
-          <span className="cliente-kpi-value">{unDia ? formatearMonto(caja?.fondo ?? 0) : '—'}</span>
+          <span className="cliente-kpi-value">{esHoy ? formatearMonto(caja?.fondo ?? 0) : '—'}</span>
           <span className="vd-kpi-nota">
-            {!unDia ? 'Elegí un solo día' : caja?.fondo_fecha ? `Dejado en el cierre del ${formatearFecha(caja.fondo_fecha)}` : 'Sin cierres anteriores'}
+            {!esHoy ? 'Solo para hoy' : caja?.fondo_desde ? `Dejado en el cierre ${cuandoFueElCierre(caja.fondo_desde)}` : 'Sin cierres anteriores'}
           </span>
         </div>
         <div className="card cliente-kpi">
@@ -355,8 +356,8 @@ export default function VentasDiariasPage() {
         </div>
         <div className="card cliente-kpi vd-kpi-caja">
           <span className="cliente-kpi-label">Efectivo en caja</span>
-          <span className="cliente-kpi-value">{unDia ? formatearMonto(caja?.efectivo_en_caja ?? 0) : '—'}</span>
-          <span className="vd-kpi-nota">{unDia ? 'Fondo + ventas en efectivo − gastos' : 'Elegí un solo día'}</span>
+          <span className="cliente-kpi-value">{esHoy ? formatearMonto(caja?.efectivo_en_caja ?? 0) : '—'}</span>
+          <span className="vd-kpi-nota">{esHoy ? 'Turno abierto: fondo + ventas en efectivo − gastos' : 'Solo para hoy'}</span>
         </div>
       </div>
 

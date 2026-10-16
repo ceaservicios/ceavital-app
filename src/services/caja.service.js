@@ -1,22 +1,13 @@
 import db from '../db/connection.js';
-import { hoyNegocio, sqlDiaNegocio } from '../utils/fecha-negocio.js';
+import { hoyNegocio, sqlDiaNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
 import { ApiError } from '../utils/api-error.js';
-import { totalGastosDelDia } from './gastos.service.js';
 
 // Se suman todos los medios que existan en los datos, aunque el plan actual no
 // ofrezca 'cta_cte': una venta ya registrada nunca se descarta del total.
 const MEDIOS_PAGO = ['efectivo', 'tarjeta', 'transferencia_qr', 'mercado_pago', 'fiado', 'cta_cte'];
 
-function validarFecha(valor) {
-  if (valor === undefined || valor === null) return null;
-  if (typeof valor !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
-    throw new ApiError(400, 'fecha tiene que tener formato YYYY-MM-DD');
-  }
-  return valor;
-}
-
 // Tope de un monto en pesos, el mismo de los gastos (gastos.service.js): Number.isInteger(9e15)
-// es true y sin tope un cierre absurdo quedaba guardado y se heredaba como fondo al día siguiente.
+// es true y sin tope un cierre absurdo quedaba guardado y se heredaba como fondo al turno siguiente.
 const MAX_MONTO = 1_000_000_000;
 
 function validarEnteroNoNegativo(valor, campo) {
@@ -32,57 +23,67 @@ function validarEnteroNoNegativo(valor, campo) {
   return n;
 }
 
-function fechaHoy() {
-  return hoyNegocio();
-}
-
-// Fondo dejado en el cierre mas reciente ANTERIOR a esta fecha -- se suma al
-// efectivo esperado del dia siguiente (decision confirmada con el usuario
-// 2026-09-18: "se deja un monto del dia anterior... se suma a las ventas del
-// dia"). Si nunca se dejo fondo, o es el primer cierre del negocio, es 0.
-// Devuelve también la fecha de ese cierre (Ventas diarias la muestra junto al fondo, 2026-10-16).
-async function fondoHeredado(fecha) {
-  const fila = await db
-    .prepare(`SELECT fondo_dejado, fecha FROM cierres_caja WHERE fecha < ?::date ORDER BY fecha DESC, id DESC LIMIT 1`)
-    .get(fecha);
-  return { fondo: fila?.fondo_dejado ?? 0, fecha: fila?.fecha ?? null };
-}
-
-// Totales del dia (fecha, default hoy) agrupados por medio de pago, en base a
-// las ventas REGISTRADAS (no anuladas) de ese dia -- calculo en vivo, no lee
-// de cierres_caja (esa tabla guarda la FOTO de un cierre ya ejecutado, ver
-// Docs/Modelo-de-Datos.md > cierres_caja). Es lo que ven los 3 roles como
-// "Cierre de caja -- Ver" antes de que Admin/Encargado ejecuten el cierre.
+// El cierre de caja es POR TURNO (decisión del usuario, 2026-10-16): cada cierre cuenta lo que
+// pasó desde el cierre anterior, aunque sea del mismo día, y arranca con el fondo que dejó ese
+// cierre. Antes era por día: un segundo cierre del mismo día volvía a contar todo el día.
 //
-// El efectivo esperado no es solo la venta en efectivo del dia (corregido
-// 2026-09-15/2026-09-18): tambien suma el fondo heredado del cierre anterior
-// y resta los gastos/pagos a proveedores del dia (se asumen en efectivo,
-// salen fisicamente del cajon -- ver gastos.service.js) -- si no, el arqueo
-// nunca cuadraria con lo que realmente queda en la caja fisica.
-export async function calcularResumenDelDia(fechaParam) {
-  const fecha = validarFecha(fechaParam) ?? fechaHoy();
+// Dónde arranca el turno:
+// - Desde el último cierre (de cualquier día). Cada cierre guarda hasta qué venta y qué gasto
+//   contó (hasta_venta_id / hasta_gasto_id, migración 024): el turno siguiente arranca exacto,
+//   sin depender de la hora (dos movimientos del mismo segundo no se pierden ni se cuentan dos veces).
+// - Un cierre anterior a la 024 no tiene esos datos: se usa su hora.
+// - Si nunca hubo un cierre, desde el inicio del día (hora argentina).
+async function ultimoCierre() {
+  return db
+    .prepare('SELECT id, fecha, creado_en, fondo_dejado, hasta_venta_id, hasta_gasto_id FROM cierres_caja ORDER BY id DESC LIMIT 1')
+    .get();
+}
+
+function condicionDelTurno(anterior, columnaHasta) {
+  if (anterior && anterior[columnaHasta] != null) return { sql: 'id > ?', params: [anterior[columnaHasta]] };
+  if (anterior) return { sql: 'creado_en > ?::timestamp', params: [anterior.creado_en] };
+  return { sql: `${sqlDiaNegocio('creado_en')} = ${SQL_HOY_NEGOCIO}`, params: [] };
+}
+
+// Totales del turno abierto, agrupados por medio de pago, en base a las ventas REGISTRADAS (no
+// anuladas) -- cálculo en vivo; cierres_caja guarda la FOTO de cada cierre ya hecho. Es lo que
+// ven los 3 roles en Cierre de Caja antes de que Admin/Encargado confirmen el cierre.
+//
+// Efectivo que tiene que haber en la caja = fondo que dejó el cierre anterior + ventas en
+// efectivo del turno − gastos y pagos a proveedores del turno (se asumen en efectivo: salen del
+// cajón, ver gastos.service.js).
+export async function calcularResumenDelTurno() {
+  const anterior = await ultimoCierre();
+  const ventasTurno = condicionDelTurno(anterior, 'hasta_venta_id');
+  const gastosTurno = condicionDelTurno(anterior, 'hasta_gasto_id');
 
   const filas = await db
     .prepare(
       `SELECT medio_pago, COALESCE(SUM(total), 0) AS total
        FROM ventas
-       WHERE estado = 'registrada' AND ${sqlDiaNegocio('creado_en')} = ?::date
+       WHERE estado = 'registrada' AND ${ventasTurno.sql}
        GROUP BY medio_pago`
     )
-    .all(fecha);
-
+    .all(...ventasTurno.params);
   const totales = Object.fromEntries(MEDIOS_PAGO.map((m) => [m, 0]));
-  for (const fila of filas) totales[fila.medio_pago] = fila.total;
+  for (const fila of filas) totales[fila.medio_pago] = Number(fila.total);
+
+  const gastos = await db
+    .prepare(`SELECT COALESCE(SUM(monto), 0) AS total FROM gastos_caja WHERE eliminado_en IS NULL AND ${gastosTurno.sql}`)
+    .get(...gastosTurno.params);
 
   const total_general = MEDIOS_PAGO.reduce((acc, m) => acc + totales[m], 0);
-  const { fondo: fondo_heredado, fecha: fondo_fecha } = await fondoHeredado(fecha);
-  const total_gastos = await totalGastosDelDia(fecha);
+  const fondo_heredado = Number(anterior?.fondo_dejado ?? 0);
+  const total_gastos = Number(gastos.total);
 
   return {
-    fecha,
+    fecha: hoyNegocio(),
+    // Inicio del turno: el cierre anterior (UTC, como lo guarda la base) o null si no hubo ninguno.
+    desde: anterior?.creado_en ?? null,
+    cierre_anterior_id: anterior?.id ?? null,
     fondo_heredado,
-    fondo_fecha,
     total_gastos,
+    total_efectivo: totales.efectivo,
     total_efectivo_esperado: totales.efectivo + fondo_heredado - total_gastos,
     total_tarjeta: totales.tarjeta,
     total_transferencia_qr: totales.transferencia_qr,
@@ -94,7 +95,13 @@ export async function calcularResumenDelDia(fechaParam) {
 }
 
 export function listarCierres() {
-  return db.prepare('SELECT * FROM cierres_caja ORDER BY creado_en DESC').all();
+  return db
+    .prepare(
+      `SELECT c.*, u.nombre AS usuario_nombre
+       FROM cierres_caja c JOIN usuarios u ON u.id = c.usuario_id
+       ORDER BY c.id DESC`
+    )
+    .all();
 }
 
 export async function obtenerCierre(id) {
@@ -105,58 +112,55 @@ export async function obtenerCierre(id) {
 
 // "Cierre de caja -- Editar" (Admin+Encargado, no Cajero -- confirmado en
 // Docs/Resumen-Ejecutivo.md: "Cajero... ve el cierre de caja, sin editar").
-// Guarda una FOTO de los totales al momento del cierre (no se recalculan
-// despues). Solo efectivo tiene "esperado vs. contado": es el unico medio que
-// se cuenta fisicamente y puede tener diferencia; los demas son registros
+// Guarda una FOTO de los totales del turno al momento del cierre (no se recalculan
+// después). Solo efectivo tiene "esperado vs. contado": es el único medio que
+// se cuenta físicamente y puede tener diferencia; los demás son registros
 // digitales exactos que ya coinciden con lo esperado.
-export async function registrarCierre({ fecha, total_efectivo_contado, fondo_dejado }, { usuarioId }) {
+export async function registrarCierre({ total_efectivo_contado, fondo_dejado }, { usuarioId }) {
   const contado = validarEnteroNoNegativo(total_efectivo_contado, 'total_efectivo_contado');
-  // Fondo que este cierre deja para el turno/dia siguiente (corregido
-  // 2026-09-15) -- opcional, default 0 (mismo comportamiento de siempre si no
-  // se carga nada).
+  // Fondo que este cierre deja en el cajón para el turno siguiente (opcional, 0 si no se carga).
   const fondoDejado = fondo_dejado != null ? validarEnteroNoNegativo(fondo_dejado, 'fondo_dejado') : 0;
+  if (fondoDejado > contado) throw new ApiError(400, 'El fondo a dejar no puede ser mayor que lo que contaste.');
 
-  // Transaccion: el resumen, la guardia de duplicado y el insert tienen que
-  // ver el mismo estado (con dos cierres simultaneos, uno de los dos reintenta
-  // y encuentra al otro ya registrado).
   return db.transaction(async () => {
-    const resumen = await calcularResumenDelDia(fecha);
-    const diferencia = contado - resumen.total_efectivo_esperado;
+    // Los cierres van de a uno, y mientras se arma uno nadie registra ni anula ventas ni anota
+    // gastos (esperan un instante): así lo que cuenta este cierre y lo que arranca el turno
+    // siguiente se parten exacto. Los LOCK van antes de cualquier consulta, para que la
+    // transacción vea todo lo confirmado hasta ese momento.
+    await db.exec('LOCK TABLE cierres_caja IN SHARE ROW EXCLUSIVE MODE');
+    await db.exec('LOCK TABLE ventas, gastos_caja IN SHARE MODE');
 
-    // Guardia de idempotencia (hallazgo Media, verificador-funcional 2026-09-10):
-    // un doble-click en "Confirmar Cierre de Caja" manda 2 POST con exactamente
-    // los mismos totales en el mismo instante -- sin este check, ambos se
-    // insertaban como cierres "distintos" (2 filas idénticas). Si el cierre más
-    // reciente de este mismo usuario/día tiene los mismos totales Y se registró
-    // hace menos de 5 segundos, se lo trata como el mismo submit repetido y se
-    // rechaza -- nunca bloquea un cierre distinto legítimo más tarde (fecha/hora
-    // siempre resuelta en la base, mismo criterio que el resto del proyecto).
-    const duplicado = await db
-      .prepare(
-        `SELECT id FROM cierres_caja
-         WHERE usuario_id = ? AND fecha = ?::date
-           AND total_efectivo_contado = ? AND total_general = ? AND total_efectivo_esperado = ?
-           AND creado_en >= LOCALTIMESTAMP - INTERVAL '5 seconds'
-         ORDER BY id DESC LIMIT 1`
-      )
-      .get(usuarioId, resumen.fecha, contado, resumen.total_general, resumen.total_efectivo_esperado);
-
-    if (duplicado) {
-      throw new ApiError(409, 'Ya se registró un cierre idéntico hace instantes -- probablemente un doble envío.');
+    // Doble envío (hallazgo Media, verificador-funcional 2026-09-10): un doble click en
+    // "Confirmar" mandaba 2 POST seguidos. Con el cierre por turno el segundo ya no repetiría los
+    // mismos totales (contaría un turno vacío), así que se rechaza cualquier cierre que llegue
+    // menos de 5 segundos después de otro.
+    const reciente = await db
+      .prepare(`SELECT id FROM cierres_caja WHERE creado_en >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '5 seconds' LIMIT 1`)
+      .get();
+    if (reciente) {
+      throw new ApiError(409, 'Se acaba de registrar un cierre. Si querías cerrar otro turno, esperá unos segundos y volvé a intentar.');
     }
 
-    // total_general usa el total esperado/real de ventas (no el contado): es un
-    // total de auditoria de lo que se vendio, separado del desvio de caja
-    // fisica que ya queda aislado en diferencia_efectivo. fondo_heredado/
-    // total_gastos se guardan tal cual estaban en el momento del cierre (misma
-    // logica de "foto" que el resto de la tabla -- nunca se recalculan despues).
+    const resumen = await calcularResumenDelTurno();
+    const diferencia = contado - resumen.total_efectivo_esperado;
+    const hasta = await db
+      .prepare(
+        `SELECT (SELECT COALESCE(MAX(id), 0) FROM ventas) AS venta,
+                (SELECT COALESCE(MAX(id), 0) FROM gastos_caja) AS gasto`
+      )
+      .get();
+
+    // total_general usa el total real de ventas (no el contado): es un total de auditoría de lo
+    // que se vendió, separado del desvío de caja física que queda en diferencia_efectivo.
+    // fondo_heredado/total_gastos se guardan tal cual estaban en el momento del cierre (misma
+    // lógica de "foto" que el resto de la tabla -- nunca se recalculan después).
     return db
       .prepare(
         `INSERT INTO cierres_caja
            (usuario_id, fecha, total_efectivo_esperado, total_efectivo_contado, diferencia_efectivo,
             total_tarjeta, total_transferencia_qr, total_mercado_pago, total_fiado, total_cta_cte, total_general,
-            fondo_dejado, fondo_heredado, total_gastos)
-         VALUES (?, ?::date, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            fondo_dejado, fondo_heredado, total_gastos, hasta_venta_id, hasta_gasto_id)
+         VALUES (?, ?::date, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING *`
       )
       .get(
@@ -173,7 +177,9 @@ export async function registrarCierre({ fecha, total_efectivo_contado, fondo_dej
         resumen.total_general,
         fondoDejado,
         resumen.fondo_heredado,
-        resumen.total_gastos
+        resumen.total_gastos,
+        Number(hasta.venta),
+        Number(hasta.gasto)
       );
   });
 }

@@ -31,7 +31,7 @@ async function verificarProveedorActivo(proveedorId) {
 
 // Gastos y pagos a proveedores en Caja (corrección pedida 2026-09-15) -- se
 // asumen SIEMPRE en efectivo (es lo que motiva registrarlos acá: afectan el
-// arqueo físico del cajón, ver caja.service.calcularResumenDelDia). Si algún
+// arqueo físico del cajón, ver caja.service.calcularResumenDelTurno). Si algún
 // día hace falta un gasto no-efectivo, sumar un campo medio_pago recién ahí --
 // no se anticipa acá sin un caso real.
 // Con desde/hasta: los gastos de un período (pantalla "Ventas diarias", 2026-10-16), con quién
@@ -88,11 +88,4 @@ export async function eliminarGasto(id) {
     if (!gasto) throw new ApiError(404, 'Gasto no encontrado');
     await db.prepare('UPDATE gastos_caja SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
   });
-}
-
-export async function totalGastosDelDia(fecha) {
-  const fila = await db
-    .prepare(`SELECT COALESCE(SUM(monto), 0) AS total FROM gastos_caja WHERE eliminado_en IS NULL AND ${sqlDiaNegocio('creado_en')} = ?`)
-    .get(fecha);
-  return fila.total;
 }

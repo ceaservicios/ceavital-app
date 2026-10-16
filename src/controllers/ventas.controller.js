@@ -1,6 +1,7 @@
 import { ApiError } from '../utils/api-error.js';
 import * as ventasService from '../services/ventas.service.js';
-import { calcularResumenDelDia } from '../services/caja.service.js';
+import { calcularResumenDelTurno } from '../services/caja.service.js';
+import { hoyNegocio } from '../utils/fecha-negocio.js';
 import { actorDeSesion, registrarAccion } from '../services/registro.service.js';
 
 function parsearId(valor, campo = 'id') {
@@ -21,13 +22,13 @@ export async function listarVentasController(req, res) {
       usuario_id: q.usuario_id,
       estado: q.estado,
     });
-    // Plata del cajón de ese día (tarjetas "Fondo" y "Efectivo en caja", 2026-10-16): el mismo
-    // cálculo que Cierre de Caja, sin los filtros de ventas. Solo para un día: cada cierre retira
-    // la plata, así que sumar varios días daría un número que no existe.
+    // Plata del cajón (tarjetas "Fondo" y "Efectivo en caja", 2026-10-16): la del turno abierto,
+    // el mismo cálculo que Cierre de Caja y sin los filtros de ventas. Solo cuando se mira hoy: el
+    // cierre es por turno y cada cierre retira la plata, así que para otros días ese número no existe.
     let caja = null;
-    if ((q.hasta ?? q.desde) === q.desde) {
-      const resumen = await calcularResumenDelDia(q.desde);
-      caja = { fondo: resumen.fondo_heredado, fondo_fecha: resumen.fondo_fecha, efectivo_en_caja: resumen.total_efectivo_esperado };
+    if ((q.hasta ?? q.desde) === q.desde && q.desde === hoyNegocio()) {
+      const resumen = await calcularResumenDelTurno();
+      caja = { fondo: resumen.fondo_heredado, fondo_desde: resumen.desde, efectivo_en_caja: resumen.total_efectivo_esperado };
     }
     res.json({ ...resultado, caja });
     return;

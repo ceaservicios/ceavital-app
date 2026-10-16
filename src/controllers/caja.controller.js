@@ -8,7 +8,7 @@ function parsearId(valor, campo = 'id') {
 }
 
 export async function obtenerResumenController(req, res) {
-  res.json(await cajaService.calcularResumenDelDia(req.query.fecha));
+  res.json(await cajaService.calcularResumenDelTurno());
 }
 
 export async function listarCierresController(req, res) {

@@ -28,3 +28,23 @@ export function formatearFechaHora(datetimeUtc) {
 export function fechaHoyISO() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 }
+
+const ZONA_NEGOCIO = 'America/Argentina/Buenos_Aires';
+
+// Día argentino ('AAAA-MM-DD') de un 'AAAA-MM-DD HH:MM:SS' guardado en UTC en la base.
+export function diaDeUtc(datetimeUtc) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA_NEGOCIO }).format(new Date(`${datetimeUtc.replace(' ', 'T')}Z`));
+}
+
+// Hora argentina ('14:05', 24 h) de un 'AAAA-MM-DD HH:MM:SS' guardado en UTC en la base.
+export function formatearHora(datetimeUtc) {
+  return new Intl.DateTimeFormat('es-AR', { timeZone: ZONA_NEGOCIO, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(
+    new Date(`${datetimeUtc.replace(' ', 'T')}Z`)
+  );
+}
+
+// Cuándo fue un cierre de caja: "de hoy a las 14:05" o "del 15/10/2026 a las 21:15" (cierre por turno, 2026-10-16).
+export function cuandoFueElCierre(datetimeUtc) {
+  const dia = diaDeUtc(datetimeUtc);
+  return dia === fechaHoyISO() ? `de hoy a las ${formatearHora(datetimeUtc)}` : `del ${formatearFecha(dia)} a las ${formatearHora(datetimeUtc)}`;
+}
