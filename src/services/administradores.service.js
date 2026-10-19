@@ -21,7 +21,7 @@ const MENSAJE_UNICO_ADMIN =
 // Nunca password_hash ni secretos del 2FA.
 const COLUMNAS = `
   id, nombre, email, usuario, eliminado_en, bloqueado_hasta, debe_cambiar_password, ultimo_acceso, creado_en,
-  dosfa_metodo
+  dosfa_metodo, dosfa_desactivada
 `;
 
 function validarTexto(valor, campo, maximo) {
@@ -115,9 +115,42 @@ export async function restablecerPasswordAdministrador(id, { enlace }) {
 
 // Para cuando perdió el acceso a su segundo paso: al entrar lo vuelve a configurar.
 export async function restablecerDosfaAdministrador(id) {
-  const admin = await obtenerAdministrador(id);
-  await restablecerDosfa('usuario', id);
-  await cerrarSesionDelUsuario(id);
+  const admin = await db.transaction(async () => {
+    const fila = await obtenerAdministrador(id);
+    if (fila.dosfa_desactivada) {
+      throw new ApiError(409, 'Tiene la verificación en dos pasos desactivada: no hay nada que restablecer');
+    }
+    await restablecerDosfa('usuario', id); // se une a esta transacción
+    await cerrarSesionDelUsuario(id);
+    return fila;
+  });
+  return { email: admin.email };
+}
+
+// Verificación en dos pasos apagada para este Admin (decisión del usuario, 2026-10-19, apartándose
+// de EST-01 §4): entra solo con la contraseña y no la puede activar desde "Mi cuenta". Se borra lo
+// que tenía configurado, como al restablecerla. No se le cierra la sesión: puede seguir trabajando
+// (y si estaba frenado en "activá la verificación", se destraba).
+export async function desactivarDosfaAdministrador(id) {
+  const admin = await db.transaction(async () => {
+    const fila = await obtenerAdministrador(id);
+    if (fila.dosfa_desactivada) throw new ApiError(409, 'La verificación en dos pasos ya está desactivada');
+    await db.prepare('UPDATE usuarios SET dosfa_desactivada = TRUE, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+    await restablecerDosfa('usuario', id); // en la misma transacción: no queda marcada a medias
+    return fila;
+  });
+  return { email: admin.email };
+}
+
+// Vuelve a ser obligatoria: se le cierra la sesión y la configura de cero al entrar.
+export async function activarDosfaAdministrador(id) {
+  const admin = await db.transaction(async () => {
+    const fila = await obtenerAdministrador(id);
+    if (!fila.dosfa_desactivada) throw new ApiError(409, 'La verificación en dos pasos ya está activa');
+    await db.prepare('UPDATE usuarios SET dosfa_desactivada = FALSE, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+    await cerrarSesionDelUsuario(id);
+    return fila;
+  });
   return { email: admin.email };
 }
 

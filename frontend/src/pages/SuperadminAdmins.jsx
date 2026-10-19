@@ -4,7 +4,8 @@ import { formatearFechaHora } from '../utils/format.js';
 
 // Administradores del negocio (EST-01 §5): los da de alta solo el superadmin, con una contraseña
 // provisoria que se ve una sola vez (y sale por mail si el correo de la empresa está configurado).
-// Al entrar eligen su contraseña y activan la verificación en dos pasos.
+// Al entrar eligen su contraseña y activan la verificación en dos pasos, salvo que el superadmin
+// se la desactive: entonces entra solo con la contraseña y no la puede activar él desde "Mi cuenta".
 
 const METODO = { app: 'App', mail: 'Mail' };
 
@@ -21,6 +22,8 @@ function estadoDe(a) {
 const PREGUNTA = {
   password: '¿Generar una contraseña provisoria nueva? Se le cierra la sesión.',
   dosfa: '¿Restablecer su verificación en dos pasos? La vuelve a configurar al entrar.',
+  desactivar: '¿Desactivar su verificación en dos pasos? Entra solo con la contraseña y se borra lo que tenía configurado.',
+  activar: '¿Activar su verificación en dos pasos? Se le cierra la sesión y la configura al entrar.',
   baja: '¿Dar de baja a este Administrador? Se le cierra la sesión; sus datos se conservan.',
 };
 
@@ -74,6 +77,8 @@ export default function SuperadminAdmins({ administradores, cupo, correoEmpresa,
         });
       },
       dosfa: () => api.post(`/sa/administradores/${admin.id}/2fa`, {}),
+      desactivar: () => api.post(`/sa/administradores/${admin.id}/2fa/desactivar`, {}),
+      activar: () => api.post(`/sa/administradores/${admin.id}/2fa/activar`, {}),
       email: () => api.post(`/sa/administradores/${admin.id}/email`, { email: emailNuevo }),
       baja: () => api.post(`/sa/administradores/${admin.id}/baja`, {}),
       reactivar: () => api.post(`/sa/administradores/${admin.id}/reactivar`, {}),
@@ -81,6 +86,8 @@ export default function SuperadminAdmins({ administradores, cupo, correoEmpresa,
     const mensajes = {
       password: 'Contraseña provisoria nueva generada.',
       dosfa: 'Verificación en dos pasos restablecida: la vuelve a configurar al entrar.',
+      desactivar: 'Verificación en dos pasos desactivada: entra solo con la contraseña.',
+      activar: 'Verificación en dos pasos activada: la configura al entrar.',
       email: `Email cambiado: ahora entra con ${emailNuevo.trim()}.`,
       baja: 'Administrador dado de baja.',
       reactivar: 'Administrador reactivado.',
@@ -104,8 +111,12 @@ export default function SuperadminAdmins({ administradores, cupo, correoEmpresa,
     <section className="card sa-card">
       <h2 className="sa-h2">Administradores del negocio</h2>
       <p className="sa-ayuda">
-        Los da de alta CEA. Al entrar por primera vez eligen su contraseña y activan la verificación en dos pasos.{' '}
-        {sinTope ? 'Cargá el tope de Administradores (arriba) para poder crear uno.' : `Tope ${cupo.tope} · en uso ${cupo.usados}.`}
+        Los da de alta CEA. Al entrar por primera vez eligen su contraseña y activan la verificación en dos pasos, que podés
+        desactivar para cada uno.{' '}
+        {/* Con espacios que no cortan: "Tope 5 · en uso 3." no se parte en dos líneas. */}
+        {sinTope
+          ? 'Cargá el tope de Administradores (arriba) para poder crear uno.'
+          : `Tope\u00a0${cupo.tope}\u00a0·\u00a0en\u00a0uso\u00a0${cupo.usados}.`}
       </p>
 
       {credenciales && (
@@ -191,7 +202,13 @@ export default function SuperadminAdmins({ administradores, cupo, correoEmpresa,
                     <td>
                       <span className={`sa-chip ${estado.clase}`}>{estado.texto}</span>
                     </td>
-                    <td>{METODO[a.dosfa_metodo] ?? 'Sin configurar'}</td>
+                    <td>
+                      {a.dosfa_desactivada ? (
+                        <span className="sa-chip sa-chip-aviso">Desactivada</span>
+                      ) : (
+                        (METODO[a.dosfa_metodo] ?? 'Sin configurar')
+                      )}
+                    </td>
                     <td className="sa-una-linea">{a.ultimo_acceso ? formatearFechaHora(a.ultimo_acceso) : '—'}</td>
                     <td className="sa-admin-acciones">
                       {preguntando === 'email' ? (
@@ -246,11 +263,25 @@ export default function SuperadminAdmins({ administradores, cupo, correoEmpresa,
                           <button
                             type="button"
                             className="btn sa-btn-chico"
-                            disabled={ocupado || !a.dosfa_metodo}
-                            title={a.dosfa_metodo ? undefined : 'Todavía no la configuró'}
+                            disabled={ocupado || a.dosfa_desactivada || !a.dosfa_metodo}
+                            title={
+                              a.dosfa_desactivada
+                                ? 'Tiene la verificación en dos pasos desactivada'
+                                : a.dosfa_metodo
+                                  ? undefined
+                                  : 'Todavía no la configuró'
+                            }
                             onClick={() => setConfirmando({ id: a.id, accion: 'dosfa' })}
                           >
                             Restablecer 2 pasos
+                          </button>
+                          <button
+                            type="button"
+                            className="btn sa-btn-chico"
+                            disabled={ocupado}
+                            onClick={() => setConfirmando({ id: a.id, accion: a.dosfa_desactivada ? 'activar' : 'desactivar' })}
+                          >
+                            {a.dosfa_desactivada ? 'Activar 2 pasos' : 'Desactivar 2 pasos'}
                           </button>
                           <button
                             type="button"

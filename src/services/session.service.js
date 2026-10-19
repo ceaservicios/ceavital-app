@@ -64,7 +64,7 @@ export function obtenerSesionActivaValida(token) {
   // página) y para saber si la cuenta tiene algo pendiente (contraseña provisoria, 2FA sin configurar).
   return db
     .prepare(
-      `SELECT sa.*, u.nombre, u.usuario, u.debe_cambiar_password, u.dosfa_metodo
+      `SELECT sa.*, u.nombre, u.usuario, u.debe_cambiar_password, u.dosfa_metodo, u.dosfa_desactivada
        FROM sesiones_activas sa
        JOIN usuarios u ON u.id = sa.usuario_id
        WHERE sa.token = ? AND sa.estado = 'activa' AND ${SQL_SESION_VIGENTE}`
@@ -73,10 +73,11 @@ export function obtenerSesionActivaValida(token) {
 }
 
 // Lo que la cuenta tiene que resolver antes de usar el sistema: 'password' (contraseña provisoria,
-// EST-01 §5) o 'dosfa' (Admin sin verificación en dos pasos, EST-01 §4). null = nada.
-export function pendienteDeCuenta({ rol, debe_cambiar_password: debeCambiar, dosfa_metodo: metodo }) {
+// EST-01 §5) o 'dosfa' (Admin sin verificación en dos pasos, EST-01 §4; no si el superadmin se la
+// desactivó, decisión del usuario del 2026-10-19). null = nada.
+export function pendienteDeCuenta({ rol, debe_cambiar_password: debeCambiar, dosfa_metodo: metodo, dosfa_desactivada: desactivada }) {
   if (debeCambiar) return 'password';
-  if (rol === 'admin' && !metodo) return 'dosfa';
+  if (rol === 'admin' && !metodo && !desactivada) return 'dosfa';
   return null;
 }
 

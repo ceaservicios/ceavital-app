@@ -30,11 +30,25 @@ import {
 
 const MAX_CODIGOS_CONFIGURAR = 5; // códigos por mail pedidos desde "Mi cuenta" en media hora
 
+// Admin al que el superadmin le desactivó la verificación en dos pasos (decisión del usuario,
+// 2026-10-19): no la puede configurar, ni desde "Mi cuenta" (cuenta.routes) ni por otro camino.
+export const MENSAJE_DOSFA_DESACTIVADA = 'La verificación en dos pasos está desactivada para tu cuenta';
+
 async function cuenta(tipo, id) {
   const c = await obtenerCuenta(tipo, id);
   if (!c) throw new ApiError(404, 'La cuenta no existe');
   return c;
 }
+
+async function cuentaConDosfa(tipo, id) {
+  const c = await cuenta(tipo, id);
+  if (c.dosfa_desactivada) throw new ApiError(409, MENSAJE_DOSFA_DESACTIVADA);
+  return c;
+}
+
+// Condición de las escrituras que dejan un método: si se la desactivaron entre la lectura y la
+// escritura, no se escribe. El superadmin no tiene la columna.
+const sinDesactivar = (tipo) => (tipo === 'usuario' ? ' AND NOT dosfa_desactivada' : '');
 
 export async function comprobarPassword(tipo, id, password) {
   if (typeof password !== 'string' || !password) throw new ApiError(400, 'Escribí tu contraseña para confirmar');
@@ -62,7 +76,7 @@ export async function estadoDosfa(tipo, id) {
 
 // App, paso 1: secreto nuevo (pendiente hasta confirmarlo) y su código QR.
 export async function iniciarApp(tipo, id) {
-  const c = await cuenta(tipo, id);
+  const c = await cuentaConDosfa(tipo, id);
   if (!claveDosfaDisponible()) throw new ApiError(503, 'Falta configurar DOSFA_CLAVE en el servidor: por ahora usá el código por mail.');
   const secreto = nuevoSecretoTotp();
   await db.prepare(`UPDATE ${CUENTAS[tipo].tabla} SET dosfa_secreto_nuevo = ? WHERE id = ?`).run(cifrarSecreto(secreto), id);
@@ -74,7 +88,7 @@ export async function iniciarApp(tipo, id) {
 // App, paso 2: confirma con un código de la app y deja ese método, con 10 códigos de recuperación
 // (se devuelven una sola vez).
 export async function confirmarApp(tipo, id, { codigo, password } = {}) {
-  const c = await cuenta(tipo, id);
+  const c = await cuentaConDosfa(tipo, id);
   const { tabla } = CUENTAS[tipo];
   const pendiente = await db.prepare(`SELECT dosfa_secreto_nuevo FROM ${tabla} WHERE id = ?`).get(id);
   if (!pendiente?.dosfa_secreto_nuevo) throw new ApiError(409, 'Primero generá el código QR.');
@@ -88,10 +102,11 @@ export async function confirmarApp(tipo, id, { codigo, password } = {}) {
     .prepare(
       `UPDATE ${tabla} SET dosfa_metodo = 'app', dosfa_secreto = dosfa_secreto_nuevo, dosfa_secreto_nuevo = NULL,
               dosfa_ultimo_paso = ?, dosfa_codigos = ?
-       WHERE id = ? AND dosfa_secreto_nuevo = ? RETURNING id`
+       WHERE id = ? AND dosfa_secreto_nuevo = ?${sinDesactivar(tipo)} RETURNING id`
     )
     .get(paso, await hashearCodigosRecuperacion(codigos), id, pendiente.dosfa_secreto_nuevo);
-  // Otro pedido generó un QR nuevo mientras tanto: el que se escaneó ya no es el pendiente.
+  // Otro pedido generó un QR nuevo mientras tanto: el que se escaneó ya no es el pendiente. (Si se
+  // la desactivaron en el medio, el pendiente ya se borró y tampoco escribe.)
   if (!actualizado) throw new ApiError(409, 'El código QR cambió. Generalo de nuevo y escanealo otra vez.');
   await olvidarDispositivos(tipo, id);
   return { metodo: 'app', anterior: c.dosfa_metodo ?? null, codigos };
@@ -99,7 +114,7 @@ export async function confirmarApp(tipo, id, { codigo, password } = {}) {
 
 // Mail, paso 1: manda un código para comprobar que le llega.
 export async function iniciarMail(tipo, id) {
-  const c = await cuenta(tipo, id);
+  const c = await cuentaConDosfa(tipo, id);
   if (!emailDeCuenta(tipo, c)) throw new ApiError(409, 'La cuenta no tiene un email cargado: usá la app autenticadora.');
   if (!correoDelCanalDisponible(CUENTAS[tipo].canal)) {
     throw new ApiError(503, 'El correo todavía no está configurado en el servidor. Por ahora usá la app autenticadora.');
@@ -114,23 +129,24 @@ export async function iniciarMail(tipo, id) {
 // Mail, paso 2: confirma el código y deja el mail como método.
 export async function confirmarMail(tipo, id, { desafio, codigo, password } = {}) {
   if (typeof desafio !== 'string' || !/^[0-9a-f]{64}$/.test(desafio)) throw new ApiError(400, 'Pedí un código primero.');
-  const c = await cuenta(tipo, id);
+  const c = await cuentaConDosfa(tipo, id);
   if (c.dosfa_metodo) await comprobarPassword(tipo, id, password);
   const r = await confirmarCodigo(desafio, codigo, 'configurar');
   if (r.tipo !== tipo || r.cuenta.id !== id) throw new ApiError(400, 'El código no corresponde a tu cuenta. Pedí uno nuevo.');
-  await db
+  const actualizado = await db
     .prepare(
       `UPDATE ${CUENTAS[tipo].tabla} SET dosfa_metodo = 'mail', dosfa_secreto = NULL, dosfa_secreto_nuevo = NULL,
-              dosfa_ultimo_paso = NULL, dosfa_codigos = '{}' WHERE id = ?`
+              dosfa_ultimo_paso = NULL, dosfa_codigos = '{}' WHERE id = ?${sinDesactivar(tipo)} RETURNING id`
     )
-    .run(id);
+    .get(id);
+  if (!actualizado) throw new ApiError(409, MENSAJE_DOSFA_DESACTIVADA);
   await olvidarDispositivos(tipo, id);
   return { metodo: 'mail', anterior: c.dosfa_metodo ?? null };
 }
 
 // Códigos de recuperación nuevos (los anteriores dejan de servir). Siempre pide la contraseña.
 export async function regenerarCodigos(tipo, id, password) {
-  const c = await cuenta(tipo, id);
+  const c = await cuentaConDosfa(tipo, id);
   if (c.dosfa_metodo !== 'app') throw new ApiError(409, 'Los códigos de recuperación son para la verificación con app.');
   await comprobarPassword(tipo, id, password);
   const codigos = generarCodigosRecuperacion();

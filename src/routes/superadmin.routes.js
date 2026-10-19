@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  activarDosfaAdministradorController,
   anularPagoSuperadminController,
   bajaAdministradorController,
   bloquearSuperadminController,
@@ -13,6 +14,7 @@ import {
   correoPruebaCanalSuperadminController,
   crearAdministradorController,
   defensaSuperadminController,
+  desactivarDosfaAdministradorController,
   desafioRestauracionSuperadminController,
   desbloquearSuperadminController,
   desbloquearTodasSuperadminController,
@@ -90,6 +92,9 @@ router.post('/defensa/bloquear', bloquearSuperadminController);
 router.post('/administradores', crearAdministradorController);
 router.post('/administradores/:id/password', passwordAdministradorController);
 router.post('/administradores/:id/2fa', dosfaAdministradorController);
+// Apagar o volver a prender la verificación en dos pasos de un Admin (decisión del usuario, 2026-10-19).
+router.post('/administradores/:id/2fa/desactivar', desactivarDosfaAdministradorController);
+router.post('/administradores/:id/2fa/activar', activarDosfaAdministradorController);
 router.post('/administradores/:id/email', emailAdministradorController);
 router.post('/administradores/:id/baja', bajaAdministradorController);
 router.post('/administradores/:id/reactivar', reactivarAdministradorController);

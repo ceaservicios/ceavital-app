@@ -40,7 +40,8 @@ let hashDeRelleno = null; // ver login: usuario inexistente
 // devuelve { requiereCodigo, desafio, metodo, email } y la sesión se abre en confirmarIngreso.
 //  - Admin: verificación en dos pasos obligatoria (EST-01 §4) con el método que eligió (app o
 //    mail), una vez por semana en cada navegador. Si todavía no la configuró, entra y la sesión
-//    queda pendiente hasta configurarla (ver auth.middleware).
+//    queda pendiente hasta configurarla (ver auth.middleware). Si el superadmin se la desactivó
+//    (dosfa_desactivada), entra solo con la contraseña.
 //  - Encargado y Cajero: código por mail para verificar el email la primera vez y, si el Admin
 //    les activó el 2FA, una vez por semana en cada navegador.
 // `dispositivo`: identificador del navegador (cookie).
@@ -132,10 +133,9 @@ export async function login(usuarioLogin, passwordPlano, { dispositivo } = {}) {
     );
   }
 
-  const metodo =
-    usuario.rol === 'admin'
-      ? await segundoPasoObligatorio('usuario', usuario, dispositivo)
-      : await segundoPasoDeEmpleado(usuario, dispositivo);
+  let metodo;
+  if (usuario.rol !== 'admin') metodo = await segundoPasoDeEmpleado(usuario, dispositivo);
+  else metodo = usuario.dosfa_desactivada ? null : await segundoPasoObligatorio('usuario', usuario, dispositivo);
   if (metodo) {
     return { requiereCodigo: true, ...(await iniciarDesafio('usuario', usuario, metodo)) };
   }
@@ -159,7 +159,8 @@ export async function confirmarIngreso(desafio, codigo, { dispositivo } = {}) {
 
   await asegurarInstanciaActiva();
   const sesion = await abrirSesion(cuenta);
-  const conDosfa = cuenta.rol === 'admin' ? Boolean(cuenta.dosfa_metodo) : cuenta.dos_fa;
+  // Un Admin al que le desactivaron la verificación no deja navegadores de confianza.
+  const conDosfa = cuenta.rol === 'admin' ? Boolean(cuenta.dosfa_metodo) && !cuenta.dosfa_desactivada : cuenta.dos_fa;
   const dispositivoConfiable = conDosfa ? await recordarDispositivo('usuario', cuenta.id, dispositivo) : null;
   return { tipo, segundoPaso, ...sesion, dispositivo: dispositivoConfiable };
 }

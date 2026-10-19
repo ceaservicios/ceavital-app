@@ -7,8 +7,8 @@ import ConfigurarDosfa from '../components/ConfigurarDosfa.jsx';
 import './CuentaPage.css';
 
 // "Mi cuenta": contraseña propia y, para el Admin, la verificación en dos pasos (obligatoria, EST-01
-// §4). Con algo pendiente (contraseña provisoria o Admin sin 2FA) es la única pantalla a la que se
-// puede entrar hasta resolverlo (RequireAuth).
+// §4, salvo que CEA se la desactive). Con algo pendiente (contraseña provisoria o Admin sin 2FA) es
+// la única pantalla a la que se puede entrar hasta resolverlo (RequireAuth).
 
 export default function CuentaPage() {
   const { actualizarPendiente } = useAuth();
@@ -134,16 +134,26 @@ export default function CuentaPage() {
     </section>
   );
 
-  const tarjetaDosfa = cuenta.dosfa && (
+  // Si CEA se la desactivó (desde /sa), entra solo con la contraseña y no la puede activar desde acá.
+  const tarjetaDosfa = cuenta.dosfa_desactivada ? (
     <section className="card cuenta-card">
       <h2 className="cuenta-h2">Verificación en dos pasos</h2>
-      {faltaDosfa && (
-        <p className="cuenta-ayuda">
-          Como Administrador tenés que activarla para seguir: además de la contraseña, se pide una vez por semana en cada navegador.
-        </p>
-      )}
-      <ConfigurarDosfa key={cuenta.dosfa.metodo ?? 'sin-metodo'} base="/cuenta/2fa" estado={cuenta.dosfa} onCambio={alCambiarDosfa} />
+      <p className="cuenta-ayuda">
+        La verificación en dos pasos está desactivada para tu cuenta. Si querés activarla, pedíselo a CEA Servicios.
+      </p>
     </section>
+  ) : (
+    cuenta.dosfa && (
+      <section className="card cuenta-card">
+        <h2 className="cuenta-h2">Verificación en dos pasos</h2>
+        {faltaDosfa && (
+          <p className="cuenta-ayuda">
+            Como Administrador tenés que activarla para seguir: además de la contraseña, se pide una vez por semana en cada navegador.
+          </p>
+        )}
+        <ConfigurarDosfa key={cuenta.dosfa.metodo ?? 'sin-metodo'} base="/cuenta/2fa" estado={cuenta.dosfa} onCambio={alCambiarDosfa} />
+      </section>
+    )
   );
 
   return (

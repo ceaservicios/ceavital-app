@@ -310,19 +310,27 @@
   white-space: nowrap;
   overflow-wrap: normal;
 }
-/* Si los tres botones no entran, bajan a otra fila (antes apretaban el email y la fecha). */
+/* Los botones bajan a otra fila en vez de apretar el email y la fecha. El ancho es el justo para que
+   "Restablecer 2 pasos" y "Desactivar 2 pasos" queden juntos en la segunda fila (y "Dar de baja", sola
+   en la tercera), igual en todos los Administradores. */
 .sa-admin-acciones {
   width: 1%;
+}
+/* Sin el relleno derecho de las demás celdas: es la última columna y así la tabla sigue entrando
+   entera a 1024 px con mails comunes. */
+.sa-tabla-admins th:last-child,
+.sa-tabla-admins td.sa-admin-acciones {
+  padding-right: 0;
 }
 .sa-admin-botones {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  width: 290px;
+  width: 304px;
 }
 .sa-admin-acciones .sa-confirmar {
   flex-wrap: wrap;
-  width: 290px;
+  width: 304px;
   white-space: normal;
 }
 /* Cambiar email: el campo ocupa la fila y los botones van debajo. */

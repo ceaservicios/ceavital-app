@@ -36,9 +36,11 @@ import {
   regenerarCodigos,
 } from '../services/dosfa.service.js';
 import {
+  activarDosfaAdministrador,
   cambiarEmailAdministrador,
   crearAdministrador,
   darDeBajaAdministrador,
+  desactivarDosfaAdministrador,
   listarAdministradores,
   reactivarAdministrador,
   restablecerDosfaAdministrador,
@@ -199,6 +201,18 @@ export async function passwordAdministradorController(req, res) {
 export async function dosfaAdministradorController(req, res) {
   const { email } = await restablecerDosfaAdministrador(parsearId(req.params.id));
   await registrar(req, 'administrador-dosfa', { email });
+  res.json({ ok: true });
+}
+
+export async function desactivarDosfaAdministradorController(req, res) {
+  const { email } = await desactivarDosfaAdministrador(parsearId(req.params.id));
+  await registrar(req, 'administrador-dosfa-desactivada', { email });
+  res.json({ ok: true });
+}
+
+export async function activarDosfaAdministradorController(req, res) {
+  const { email } = await activarDosfaAdministrador(parsearId(req.params.id));
+  await registrar(req, 'administrador-dosfa-activada', { email });
   res.json({ ok: true });
 }
 

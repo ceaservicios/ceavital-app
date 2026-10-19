@@ -50,6 +50,16 @@ const CATALOGO = {
   'administrador-creado': { categoria: 'cuenta', titulo: 'Creó un Administrador', detalle: (d) => d.email },
   'administrador-contrasena': { categoria: 'cuenta', titulo: 'Contraseña provisoria nueva para un Administrador', detalle: (d) => d.email },
   'administrador-dosfa': { categoria: 'cuenta', titulo: 'Restableció la verificación de un Administrador', detalle: (d) => d.email },
+  'administrador-dosfa-desactivada': {
+    categoria: 'cuenta',
+    titulo: 'Desactivó la verificación en dos pasos de un Administrador',
+    detalle: (d) => d.email,
+  },
+  'administrador-dosfa-activada': {
+    categoria: 'cuenta',
+    titulo: 'Volvió a activar la verificación en dos pasos de un Administrador',
+    detalle: (d) => d.email,
+  },
   'administrador-email': { categoria: 'cuenta', titulo: 'Cambió el email de un Administrador', detalle: (d) => `${d.anterior} → ${d.email}` },
   'administrador-baja': { categoria: 'cuenta', titulo: 'Dio de baja a un Administrador', detalle: (d) => d.email },
   'administrador-reactivado': { categoria: 'cuenta', titulo: 'Reactivó a un Administrador', detalle: (d) => d.email },

@@ -66,7 +66,7 @@ export function obtenerCuenta(tipo, id) {
   return db
     .prepare(
       `SELECT id, nombre, usuario, rol, email, dos_fa, debe_cambiar_password,
-              dosfa_metodo, dosfa_secreto, dosfa_ultimo_paso, dosfa_codigos
+              dosfa_metodo, dosfa_secreto, dosfa_ultimo_paso, dosfa_codigos, dosfa_desactivada
        FROM usuarios WHERE id = ? AND eliminado_en IS NULL`
     )
     .get(id);

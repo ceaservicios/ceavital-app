@@ -11,12 +11,15 @@ const registrar = (req, accion, detalle = null) => registrarAccion(accion, { act
 export async function verCuentaController(req, res) {
   const cuenta = await datosDeCuenta(req.sesion.usuario_id);
   if (!cuenta) throw new ApiError(404, 'Usuario no encontrado');
+  // Admin al que el superadmin le desactivó la verificación (decisión del usuario, 2026-10-19).
+  const desactivada = cuenta.rol === 'admin' && Boolean(req.sesion.dosfa_desactivada);
   res.json({
     ...cuenta,
     pendiente: req.sesion.pendiente,
-    // La verificación en dos pasos propia la configura el Admin (obligatoria, EST-01 §4); la de
-    // Encargados y Cajeros es por mail y la activa el Admin desde Usuarios.
-    dosfa: cuenta.rol === 'admin' ? await estadoDosfa('usuario', cuenta.id) : null,
+    // La verificación en dos pasos propia la configura el Admin (obligatoria, EST-01 §4, salvo que
+    // se la hayan desactivado); la de Encargados y Cajeros es por mail y la activa el Admin desde Usuarios.
+    dosfa: cuenta.rol === 'admin' && !desactivada ? await estadoDosfa('usuario', cuenta.id) : null,
+    dosfa_desactivada: desactivada,
   });
 }
 
