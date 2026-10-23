@@ -464,7 +464,7 @@ export function armarCorreoCuota({ tipo, vence, diasRestantes, suspendeEl, monto
         ? ['', `Ingresá en: ${base}/login`]
         : []),
     '',
-    'CEAVital es un producto de CEA Servicios - Tu aliado digital',
+    'CEAVital es un producto de CEA Servicios - Soluciones Digitales',
   ].join('\n');
 
   const fuente = "'Segoe UI',Arial,Helvetica,sans-serif";
@@ -535,7 +535,7 @@ export function armarCorreoCuota({ tipo, vence, diasRestantes, suspendeEl, monto
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0E4B38;border-radius:10px;">
         <tr><td align="center" style="padding:14px 18px;text-align:center;color:#ffffff;">
           <div style="font-size:14px;line-height:1.4;">CEAVital es un producto de <strong>CEA Servicios</strong></div>
-          <div style="font-size:12px;line-height:1.4;color:#cfe3da;margin-top:2px;">Tu aliado digital</div>
+          <div style="font-size:12px;line-height:1.4;color:#cfe3da;margin-top:2px;">Soluciones Digitales</div>
         </td></tr>
       </table>
     </td></tr>
