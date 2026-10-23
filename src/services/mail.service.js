@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import config from '../config/env.js';
 import { ApiError } from '../utils/api-error.js';
+import { pesosDelTotal } from './dolar-blue.service.js';
 
 // Envío de mails por SMTP (EST-01 §10). Dos canales: 'empresa' (SMTP_*: el correo de la empresa,
 // para sus usuarios y los clientes de su portal) y 'cea' (SA_SMTP_*: avisos de cuota, alertas de
@@ -366,76 +367,138 @@ export function armarCorreoRestauracion({ instalacion, ok, copia, resguardo, det
 }
 
 const fechaLegible = (iso) => iso.split('-').reverse().join('/');
-// $ 45.000 (pesos enteros, como todos los montos).
-const pesos = (n) => `$ ${Number(n).toLocaleString('es-AR')}`;
 const plural = (n) => `${n} día${n === 1 ? '' : 's'}`;
 
-// A dónde se paga la cuota: el Mercado Pago de CEA Servicios (el mismo para todas las instalaciones).
+// A dónde se paga: el Mercado Pago de CEA Servicios (el mismo para todas las instalaciones).
 export const ALIAS_MERCADO_PAGO = 'ceaservicios.mp';
 
-// Colores de la marca para el estado del aviso: dorado = atención, coral = urgente, verde = todo bien.
-const TONOS = {
-  atencion: { fondo: '#FDF3DD', borde: '#F3C043', texto: '#6B4E00' },
-  urgente: { fondo: '#FBEAEC', borde: '#E05A65', texto: '#9E2F39' },
-  ok: { fondo: '#E3F1EB', borde: '#0E4B38', texto: '#0E4B38' },
-};
+// Importes en dólares, que llegan en centavos: "USD 1.725,00"; el corto, sin decimales si es
+// redondo ("USD 1.725"), va en la línea que explica el total de la implementación.
+const numeroAr = (n, decimales) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: decimales, maximumFractionDigits: 2 });
+export const usd = (centavos) => `USD ${numeroAr(centavos / 100, 2)}`;
+const usdCorto = (centavos) => `USD ${numeroAr(centavos / 100, centavos % 100 ? 2 : 0)}`;
+const porcentaje = (n) => `${numeroAr(n, 0)} %`;
+// Pesos enteros: "$ 397.119". La cotización del dólar blue llega en centavos: "$ 1.565" o "$ 1.565,50".
+export const pesos = (n) => `$ ${numeroAr(n, 0)}`;
+const pesosCotizacion = (centavos) => `$ ${numeroAr(centavos / 100, centavos % 100 ? 2 : 0)}`;
 
-// Aviso de cuota de CEA a la empresa contratante (sale por el correo de CEA). Diseño del
-// 2026-10-14, pedido por el usuario: logo, estado en color, fechas y cómo pagar por Mercado Pago.
-// tipo: por_vencer | vence_hoy | vencida | suspension_proxima (necesita suspendeEl) | suspendida |
-// reactivada. monto: importe por mes que cargó el superadmin (null = no se muestra). prueba: el
-// "Enviar mail de prueba" del panel (mismo diseño, marcado como prueba).
-export function armarCorreoCuota({ tipo, vence, diasRestantes, suspendeEl, monto = null, prueba = false }) {
-  const fecha = vence ? fechaLegible(vence) : '';
-  const importe = monto ? pesos(monto) : null;
+// Identidad de CEA Servicios para los avisos de pago (diseño aprobado por el usuario el 2026-10-21).
+// La paleta de CEA no tiene color de alerta: la etiqueta de estado es la misma para todos los avisos.
+const CEA = {
+  franja: '#2C3E50', // franja superior, banda del total, títulos y montos
+  fondo: '#F0F4F8', // alrededor de la hoja, Cómo pagar y la nota de costo adicional
+  borde: '#E7EEF4', // borde de la hoja, filetes y etiquetas
+  texto: '#495F73', // detalle, fechas y líneas chicas
+  acento: '#496B88', // títulos de bloque, texto de la etiqueta y "Sin cargo"
+  filete: '#6D8DA7', // filete de la nota y borde del alias
+  sobreFranja: '#CACFD3', // blanco al 75 % sobre la franja, en sólido (Outlook no entiende rgba): el equivalente en pesos
+};
+const FUENTE_CEA = "'Montserrat','Segoe UI',Roboto,'Helvetica Neue',Helvetica,Arial,sans-serif";
+// Eslogan y contacto de CEA Servicios en el pie (usuario, 2026-10-21). El aviso sigue saliendo por SA_SMTP_*.
+const ESLOGAN_CEA = 'Soluciones Digitales';
+const SITIO_CEA = 'ceaservicios.com.ar';
+const CORREO_CEA = 'ventas@ceaservicios.com.ar';
+const WHATSAPP_CEA = '298 439-7094';
+const WHATSAPP_CEA_URL = 'https://wa.me/5492984397094';
+const CUIT_CEA = '27-31968097-2';
+
+function textosDelAviso(tipo, { fecha, diasRestantes, suspendeEl }) {
   const casos = {
     por_vencer: () => ({
-      tono: 'atencion',
       etiqueta: 'Por vencer',
-      asunto: `CEAVital: tu cuota vence el ${fecha}`,
-      titulo: `Tu cuota vence el ${fecha}`,
-      detalle: `Faltan ${plural(diasRestantes)}. Pagala antes de esa fecha y seguí usando CEAVital sin cortes.`,
+      asunto: `tu pago vence el ${fecha}`,
+      titulo: `Tu pago vence el ${fecha}`,
+      detalle: `Faltan ${plural(diasRestantes)}. Pagalo antes de esa fecha y seguí usando el sistema sin cortes.`,
     }),
     vence_hoy: () => ({
-      tono: 'atencion',
       etiqueta: 'Vence hoy',
-      asunto: 'CEAVital: tu cuota vence hoy',
-      titulo: 'Tu cuota vence hoy',
-      detalle: `Hoy, ${fecha}, es el último día para pagarla.`,
+      asunto: 'tu pago vence hoy',
+      titulo: 'Tu pago vence hoy',
+      detalle: `Hoy, ${fecha}, es el último día para pagarlo.`,
     }),
     vencida: () => ({
-      tono: 'urgente',
-      etiqueta: 'Cuota vencida',
-      asunto: `CEAVital: tu cuota está vencida desde el ${fecha}`,
-      titulo: 'Tu cuota está vencida',
-      detalle: `Venció el ${fecha}, hace ${plural(-diasRestantes)}. Regularizala para evitar la suspensión del servicio.`,
+      etiqueta: 'Pago vencido',
+      asunto: `tu pago está vencido desde el ${fecha}`,
+      titulo: 'Tu pago está vencido',
+      detalle: `Venció el ${fecha}, hace ${plural(-diasRestantes)}. Regularizalo para evitar la suspensión del servicio.`,
     }),
     suspension_proxima: () => ({
-      tono: 'urgente',
       etiqueta: 'Aviso de suspensión',
-      asunto: `CEAVital: tu servicio se suspende el ${fechaLegible(suspendeEl)}`,
+      asunto: `tu servicio se suspende el ${fechaLegible(suspendeEl)}`,
       titulo: `Tu servicio se suspende el ${fechaLegible(suspendeEl)}`,
-      detalle: `La cuota venció el ${fecha}. Si no registramos el pago antes de esa fecha, el servicio se suspende. Tus datos no se pierden.`,
+      detalle: `Tu pago venció el ${fecha}. Si no lo registramos antes de esa fecha, el servicio se suspende. Tus datos no se pierden.`,
     }),
     suspendida: () => ({
-      tono: 'urgente',
       etiqueta: 'Servicio suspendido',
-      asunto: 'CEAVital: tu servicio fue suspendido',
+      asunto: 'tu servicio fue suspendido',
       titulo: 'Tu servicio está suspendido',
-      detalle: `Por falta de pago de la cuota vencida el ${fecha}. Tus datos están guardados: apenas registremos el pago, el servicio se reactiva.`,
+      detalle: `Por falta del pago vencido el ${fecha}. Tus datos están guardados: apenas registremos el pago, el servicio se reactiva.`,
     }),
     reactivada: () => ({
-      tono: 'ok',
       etiqueta: 'Servicio activo',
-      asunto: 'CEAVital: tu servicio está activo de nuevo',
+      asunto: 'tu servicio está activo de nuevo',
       titulo: 'Tu servicio está activo de nuevo',
       detalle: 'Ya podés ingresar a CEAVital como siempre. ¡Gracias!',
     }),
   };
-  const aviso = casos[tipo]();
-  const tono = TONOS[aviso.tono];
-  const asunto = `${prueba ? '[Prueba] ' : ''}${aviso.asunto}`;
+  return casos[tipo]();
+}
+
+// Bloques del desglose (los mismos para el HTML y el texto plano). aviso: cobro-cea.armarAviso.
+function bloquesDelAviso(aviso) {
+  const bloques = [];
+  const impl = aviso.implementacion;
+  if (impl) {
+    bloques.push({
+      titulo: 'Implementación del sistema',
+      nota: `${usdCorto(impl.valor)} + ${porcentaje(impl.recargo)} por pagarla en ${impl.de} cuotas = ${usdCorto(impl.total)}`,
+      lineas: [{ concepto: `Cuota ${impl.numero} de ${impl.de}`, importe: usd(impl.importe) }],
+    });
+  }
+  if (aviso.abono) bloques.push({ titulo: 'Abono mensual', lineas: [{ concepto: aviso.abono.detalle, importe: usd(aviso.abono.importe) }] });
+
+  // Mientras queden sin cargo: cuántas se usaron y cuáles. Sin quedar: las con costo de este aviso
+  // (y la sin cargo que tenga su aviso justo en este mes, esa única vez). La nota sale siempre.
+  const m = aviso.modificaciones;
+  const lineas = [
+    ...m.sin_cargo_listadas.map((x) => ({ ...x, importe: 'Sin cargo', sinCargo: true })),
+    ...m.con_costo.map((x) => ({ ...x, importe: usd(x.importe) })),
+  ]
+    .sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0))
+    .map((x) => ({ fecha: fechaLegible(x.fecha), concepto: x.detalle, importe: x.importe, sinCargo: Boolean(x.sinCargo) }));
+  bloques.push({
+    titulo: 'Modificaciones solicitadas',
+    chip: m.quedan > 0 ? `Sin cargo: ${m.usadas} de ${m.sin_cargo} usadas` : null,
+    lineas,
+    aclaracion:
+      m.quedan > 0
+        ? 'Una vez usadas las modificaciones sin cargo, cada modificación que se implemente tiene un costo adicional.'
+        : 'Las modificaciones que se implementen tienen un costo adicional.',
+  });
+  return bloques;
+}
+
+// Aviso de pago de CEA a la empresa contratante (sale por el correo de CEA, SA_SMTP_*), con la
+// identidad de CEA Servicios (2026-10-21). tipo: por_vencer | vence_hoy | vencida |
+// suspension_proxima (necesita suspendeEl) | suspendida | reactivada. aviso: el desglose del
+// vencimiento en dólares (cobro-cea.armarAviso): implementación, abono, modificaciones y total; sin
+// nada configurado, el aviso sale sin desglose ni total. reactivada no lleva desglose ni Cómo pagar.
+// cotizacion: el dólar blue venta (dolar-blue.obtenerCotizacion, ya resuelta por quien llama) o null;
+// con ella y un total, el mail suma el equivalente en pesos (2026-10-21); sin ella, sale solo en dólares.
+// prueba: el "Enviar mail de prueba" del panel (mismo diseño, marcado como prueba).
+export function armarCorreoCuota({ tipo, vence, diasRestantes, suspendeEl, aviso = null, cotizacion = null, prueba = false }) {
+  const fecha = vence ? fechaLegible(vence) : '';
+  const textos = textosDelAviso(tipo, { fecha, diasRestantes, suspendeEl });
+  const asunto = `${prueba ? '[Prueba] ' : ''}CEA Servicios: ${textos.asunto}`;
   const pagar = tipo !== 'reactivada';
+  const desglose = pagar && aviso?.configurado ? aviso : null;
+  const bloques = desglose ? bloquesDelAviso(desglose) : [];
+  const total = desglose ? usd(desglose.total) : null;
+  const montoPesos = desglose?.total > 0 && typeof cotizacion?.dia === 'string' ? pesosDelTotal(desglose.total, cotizacion.venta_cent) : null;
+  const enPesos = montoPesos === null ? null : pesos(montoPesos);
+  const diaBlue = enPesos ? fechaLegible(cotizacion.dia) : '';
+  const venta = enPesos ? pesosCotizacion(cotizacion.venta_cent) : '';
+  const otroDia = 'Si pagás otro día, el importe en pesos se calcula con el dólar blue de ese día.';
   const base = config.publicUrl ? config.publicUrl.replace(/\/+$/, '') : '';
   let instalacion = '';
   try {
@@ -443,103 +506,161 @@ export function armarCorreoCuota({ tipo, vence, diasRestantes, suspendeEl, monto
   } catch {
     instalacion = '';
   }
-  const datos = [
-    importe && tipo !== 'reactivada' && ['Importe', importe],
-    fecha && tipo !== 'reactivada' && ['Vencimiento', fecha],
-    tipo === 'suspension_proxima' && ['Se suspende el', fechaLegible(suspendeEl)],
-    instalacion && ['Sistema', `CEAVital · ${instalacion}`],
-  ].filter(Boolean);
+  const servicio = `CEAVital${instalacion ? ` · ${instalacion}` : ''}`;
+  const avisoPrueba = 'Prueba: así se ven los avisos de pago que le llegan a la empresa.';
+  const comoPagar = enPesos
+    ? `Transferí ${total}, o su equivalente de ${enPesos}, por Mercado Pago al alias`
+    : `Transferí ${total ? `${total} ` : ''}por Mercado Pago al alias`;
+  const despues = 'Después respondé este mail con el comprobante. Si ya lo mandaste, ignorá este aviso.';
 
   const texto = [
-    ...(prueba ? ['(Prueba: así se ven los avisos de cuota que le llegan a la empresa.)', ''] : []),
+    ...(prueba ? [`(${avisoPrueba})`, ''] : []),
     'Hola,',
     '',
-    `${aviso.titulo}.`,
-    aviso.detalle,
+    `${textos.titulo}.`,
+    textos.detalle,
     '',
-    ...datos.map(([k, v]) => `${k}: ${v}`),
+    `Servicio: ${servicio}`,
+    ...bloques.flatMap((b) => [
+      '',
+      b.titulo.toUpperCase(),
+      ...(b.nota ? [b.nota] : []),
+      ...(b.chip ? [b.chip] : []),
+      ...b.lineas.map((l) => `${l.fecha ? `${l.fecha} · ` : ''}${l.concepto}: ${l.importe}`),
+      ...(b.aclaracion ? [b.aclaracion] : []),
+    ]),
+    ...(total ? ['', `TOTAL A PAGAR: ${total}`, ...(enPesos ? [`≈ ${enPesos} al dólar blue venta del ${diaBlue} (${venta})`] : [])] : []),
     ...(pagar
-      ? ['', `Cómo pagar: transferí ${importe ? `${importe} ` : ''}por Mercado Pago (o desde tu banco) al alias ${ALIAS_MERCADO_PAGO}.`, 'Después respondé este mail con el comprobante. Si ya lo mandaste, ignorá este aviso.']
+      ? ['', `Cómo pagar: ${comoPagar.charAt(0).toLowerCase()}${comoPagar.slice(1)} ${ALIAS_MERCADO_PAGO}.`, despues, ...(enPesos ? [otroDia] : [])]
       : base
         ? ['', `Ingresá en: ${base}/login`]
         : []),
     '',
-    'CEAVital es un producto de CEA Servicios - Soluciones Digitales',
+    `CEA Servicios – ${ESLOGAN_CEA}`,
+    `${SITIO_CEA} · ${CORREO_CEA}`,
+    `WhatsApp ${WHATSAPP_CEA} · CUIT ${CUIT_CEA}`,
   ].join('\n');
 
-  const fuente = "'Segoe UI',Arial,Helvetica,sans-serif";
-  const filaDato = ([k, v]) => `
+  const e = escaparHtml;
+  const separador = (arriba) =>
+    `<tr><td class="cea-pad" style="padding:${arriba}px 32px 0;"><div style="border-top:1px solid ${CEA.borde};font-size:0;line-height:0;">&nbsp;</div></td></tr>`;
+  const rotulo = (t) =>
+    `<div style="font-size:11px;line-height:1.5;letter-spacing:.18em;text-transform:uppercase;color:${CEA.acento};">+ ${e(t)}</div>`;
+  const fila = (l) => `
               <tr>
-                <td style="padding:6px 0;font-size:13px;color:#6b7672;">${escaparHtml(k)}</td>
-                <td style="padding:6px 0;font-size:14px;font-weight:bold;color:#1b2622;text-align:right;">${escaparHtml(v)}</td>
+                <td valign="top" style="padding:7px 12px 0 0;font-size:15px;line-height:1.45;color:${CEA.franja};">${l.fecha ? `<span style="color:${CEA.texto};">${e(l.fecha)}</span> &middot; ` : ''}${e(l.concepto)}</td>
+                <td align="right" valign="top" style="padding:7px 0 0;font-size:15px;line-height:1.45;white-space:nowrap;text-align:right;color:${l.sinCargo ? CEA.acento : CEA.franja};">${e(l.importe)}</td>
               </tr>`;
-  const html = `<!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:24px 12px;background:#ebecee;font-family:${fuente};color:#1b2622;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;">
-    <tr><td style="background:#0E4B38;height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>${
-      prueba
-        ? `
-    <tr><td style="background:#22428C;color:#ffffff;font-size:13px;padding:10px 28px;">Prueba: así se ven los avisos de cuota que le llegan a la empresa.</td></tr>`
-        : ''
-    }
-    <tr><td align="center" style="padding:24px 28px 0;text-align:center;">${
+  const bloqueHtml = (b) => `
+        <tr><td class="cea-pad-in" style="padding:0 24px;"><div style="border-top:1px solid ${CEA.borde};font-size:0;line-height:0;">&nbsp;</div></td></tr>
+        <tr><td class="cea-pad-in" style="padding:16px 24px 18px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+            <td class="cea-bloque" valign="middle">${rotulo(b.titulo)}</td>${
+              b.chip
+                ? `
+            <td class="cea-apila" align="right" valign="middle" style="text-align:right;white-space:nowrap;padding-left:8px;"><span style="display:inline-block;background:${CEA.borde};color:${CEA.franja};border-radius:999px;padding:3px 10px;font-size:12px;line-height:1.5;">${e(b.chip)}</span></td>`
+                : ''
+            }
+          </tr></table>${b.nota ? `
+          <div style="margin-top:6px;font-size:13px;line-height:1.45;color:${CEA.texto};">${e(b.nota)}</div>` : ''}${
+            b.lineas.length
+              ? `
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:2px;">${b.lineas.map(fila).join('')}
+          </table>`
+              : ''
+          }${
+            b.aclaracion
+              ? `
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;"><tr>
+            <td style="background:${CEA.fondo};border-left:3px solid ${CEA.filete};border-radius:0 8px 8px 0;padding:12px 16px;font-size:14px;line-height:1.5;color:${CEA.franja};">${e(b.aclaracion)}</td>
+          </tr></table>`
+              : ''
+          }
+        </td></tr>`;
+
+  let cuerpo = '';
+  if (pagar) {
+    cuerpo = `
+    <tr><td class="cea-pad" style="padding:26px 32px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${CEA.borde};border-radius:12px;border-collapse:separate;">
+        <tr><td class="cea-pad-in" style="padding:16px 24px;font-size:14px;line-height:1.45;color:${CEA.texto};">Servicio: <span style="color:${CEA.franja};">${e(servicio)}</span></td></tr>${bloques.map(bloqueHtml).join('')}${
+          total
+            ? `
+        <tr><td class="cea-pad-in" style="background:${CEA.franja};border-radius:0 0 11px 11px;padding:20px 24px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+            <td valign="middle" style="font-size:12px;line-height:1.4;letter-spacing:.18em;text-transform:uppercase;color:#ffffff;">Total a pagar</td>
+            <td class="cea-total" align="right" valign="middle" style="font-size:34px;line-height:1.1;font-weight:300;color:#ffffff;white-space:nowrap;text-align:right;">${e(total)}</td>
+          </tr>${
+            enPesos
+              ? `
+          <tr><td colspan="2" align="right" style="padding-top:6px;font-size:13px;line-height:1.45;color:${CEA.sobreFranja};text-align:right;"><span style="white-space:nowrap;">&asymp; ${e(enPesos)}</span> <span style="white-space:nowrap;">al dólar blue venta</span> <span style="white-space:nowrap;">del ${e(diaBlue)} (${e(venta)})</span></td></tr>`
+              : ''
+          }</table>
+        </td></tr>`
+            : ''
+        }
+      </table>
+    </td></tr>
+    <tr><td class="cea-pad" style="padding:20px 32px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CEA.fondo};border-radius:12px;">
+        <tr><td class="cea-pad-in" style="padding:20px 24px 22px;">
+          ${rotulo('Cómo pagar')}
+          <div style="margin:8px 0 14px;font-size:16px;line-height:1.5;color:${CEA.franja};">${
+            enPesos
+              ? `Transferí <span style="white-space:nowrap;">${e(total)}</span>, o su equivalente de <span style="white-space:nowrap;">${e(enPesos)}</span>, por Mercado Pago al alias`
+              : e(comoPagar)
+          }:</div>
+          <div style="background:#ffffff;border:1.5px solid ${CEA.filete};border-radius:10px;padding:14px 16px;text-align:center;font-size:30px;line-height:1.2;font-weight:300;color:${CEA.franja};">${e(ALIAS_MERCADO_PAGO)}</div>
+          <div style="margin-top:14px;font-size:14px;line-height:1.55;color:${CEA.texto};">${e(despues)}</div>${
+            enPesos
+              ? `
+          <div style="margin-top:8px;font-size:13px;line-height:1.5;color:${CEA.texto};">${e(otroDia)}</div>`
+              : ''
+          }
+        </td></tr>
+      </table>
+    </td></tr>`;
+  } else {
+    cuerpo = `
+    <tr><td class="cea-pad" align="center" style="padding:22px 32px 0;text-align:center;font-size:14px;line-height:1.45;color:${CEA.texto};">Servicio: <span style="color:${CEA.franja};">${e(servicio)}</span></td></tr>${
       base
         ? `
-      <img src="${escaparHtml(base)}/logo-correo.png" width="180" height="154" alt="CEAVital · Sistema de gestión para negocios" style="display:block;margin:0 auto;border:0;width:180px;height:auto;font-size:22px;font-weight:bold;color:#0E4B38;">`
-        : `
-      <div style="font-size:28px;font-weight:bold;line-height:1.1;"><span style="color:#0E4B38;">CEA</span><span style="color:#22428C;">Vital</span></div>
-      <div style="font-size:12px;color:#6b7672;margin-top:2px;">Sistema de gestión para negocios</div>`
-    }
-      <div style="margin-top:12px;font-size:12px;color:#6b7672;letter-spacing:.02em;">Un producto de <strong style="color:#0E4B38;">CEA Servicios</strong></div>
-    </td></tr>
-    <tr><td style="padding:22px 28px 0;"><div style="border-top:1px solid #ebecee;font-size:0;line-height:0;">&nbsp;</div></td></tr>
-    <tr><td style="padding:18px 28px 0;">
-      <span style="display:inline-block;background:${tono.fondo};color:${tono.texto};border:1px solid ${tono.borde};border-radius:999px;padding:4px 12px;font-size:12px;font-weight:bold;letter-spacing:.04em;text-transform:uppercase;">${escaparHtml(aviso.etiqueta)}</span>
-      <h1 style="margin:14px 0 8px;font-size:22px;line-height:1.3;color:#1b2622;">${escaparHtml(aviso.titulo)}</h1>
-      <p style="margin:0;font-size:15px;line-height:1.55;color:#3a4642;">${escaparHtml(aviso.detalle)}</p>
-    </td></tr>${
-      datos.length
-        ? `
-    <tr><td style="padding:18px 28px 0;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #ebecee;border-bottom:1px solid #ebecee;">${datos.map(filaDato).join('')}
-      </table>
+    <tr><td class="cea-pad" align="center" style="padding:18px 32px 0;text-align:center;">
+      <a href="${e(base)}/login" style="display:inline-block;background:${CEA.franja};color:#ffffff;text-decoration:none;padding:12px 26px;border-radius:10px;font-size:15px;">Ingresar al sistema</a>
     </td></tr>`
         : ''
-    }${
-      pagar
+    }`;
+  }
+
+  const html = `<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${e(asunto)}</title>
+<style>@media only screen and (max-width:520px){.cea-pad{padding-left:20px!important;padding-right:20px!important}.cea-pad-in{padding-left:18px!important;padding-right:18px!important}.cea-bloque,.cea-apila{display:block!important;width:auto!important;text-align:left!important}.cea-apila{padding:6px 0 0!important}.cea-total{font-size:28px!important}}</style></head>
+<body style="margin:0;padding:24px 12px;background:${CEA.fondo};font-family:${FUENTE_CEA};font-weight:400;color:${CEA.franja};">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid ${CEA.borde};border-radius:14px;border-collapse:separate;overflow:hidden;">
+    <tr><td style="background:${CEA.franja};height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>${
+      prueba
         ? `
-    <tr><td style="padding:20px 28px 0;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F2FAFE;border:1px solid #CDEBFA;border-radius:12px;">
-        <tr><td style="padding:16px 18px;">
-          <div style="font-size:12px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:#0077B5;">Cómo pagar</div>
-          <div style="font-size:15px;line-height:1.5;margin:6px 0 12px;color:#1b2622;">Transferí ${importe ? `<strong>${escaparHtml(importe)}</strong> ` : ''}por <strong>Mercado Pago</strong> (o desde tu banco) al alias:</div>
-          <div style="display:inline-block;background:#ffffff;border:2px dashed #9FD3EE;border-radius:10px;padding:10px 16px;font-family:Consolas,Menlo,monospace;font-size:24px;font-weight:bold;color:#0E4B38;letter-spacing:.02em;">${ALIAS_MERCADO_PAGO}</div>
-          <div style="font-size:13px;line-height:1.5;color:#3a4642;margin-top:12px;">Después <strong>respondé este mail con el comprobante</strong>. Si ya lo mandaste, ignorá este aviso.</div>
-        </td></tr>
-      </table>
-    </td></tr>`
-        : base
-          ? `
-    <tr><td style="padding:22px 28px 0;">
-      <a href="${escaparHtml(base)}/login" style="display:inline-block;background:#0E4B38;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:10px;font-weight:bold;font-size:15px;">Ingresar a CEAVital</a>
-    </td></tr>`
-          : ''
+    <tr><td style="background:${CEA.borde};color:${CEA.franja};font-size:13px;line-height:1.4;padding:10px 32px;">${e(avisoPrueba)}</td></tr>`
+        : ''
     }
-    <tr><td style="padding:24px 28px 0;">
-      <div style="border-top:1px solid #ebecee;padding-top:16px;font-size:12px;line-height:1.5;color:#6b7672;">
-        Aviso automático sobre tu cuota de CEAVital. ¿Dudas? Respondé este mail.
-      </div>
+    <tr><td class="cea-pad" style="padding:22px 32px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td valign="middle" style="font-size:24px;line-height:1.2;font-weight:300;color:${CEA.franja};">CEA Servicios</td>
+        <td align="right" valign="middle" style="font-size:11px;line-height:1.4;letter-spacing:.18em;text-transform:uppercase;color:${CEA.texto};white-space:nowrap;text-align:right;">+ Aviso de pago</td>
+      </tr></table>
     </td></tr>
-    <tr><td style="padding:18px 28px 0;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0E4B38;border-radius:10px;">
-        <tr><td align="center" style="padding:14px 18px;text-align:center;color:#ffffff;">
-          <div style="font-size:14px;line-height:1.4;">CEAVital es un producto de <strong>CEA Servicios</strong></div>
-          <div style="font-size:12px;line-height:1.4;color:#cfe3da;margin-top:2px;">Soluciones Digitales</div>
-        </td></tr>
-      </table>
+    ${separador(18)}
+    <tr><td class="cea-pad" align="center" style="padding:28px 32px 0;text-align:center;">
+      <span style="display:inline-block;background:${CEA.borde};color:${CEA.acento};border-radius:999px;padding:6px 16px;font-size:12px;line-height:1.4;letter-spacing:.16em;text-transform:uppercase;">&#9679;&nbsp;${e(textos.etiqueta)}</span>
+      <h1 style="margin:18px 0 10px;font-size:30px;line-height:1.25;font-weight:300;color:${CEA.franja};">${e(textos.titulo)}</h1>
+      <p style="margin:0 auto;max-width:440px;font-size:16px;line-height:1.55;color:${CEA.texto};">${e(textos.detalle)}</p>
+    </td></tr>${cuerpo}
+    ${separador(28)}
+    <tr><td class="cea-pad" align="center" style="padding:20px 32px 28px;text-align:center;">
+      <div style="font-size:18px;line-height:1.4;font-weight:300;color:${CEA.franja};">CEA Servicios &ndash; <span style="white-space:nowrap;">${ESLOGAN_CEA}</span></div>
+      <div style="margin-top:6px;font-size:13px;line-height:1.5;color:${CEA.texto};"><a href="https://${SITIO_CEA}" style="color:${CEA.texto};text-decoration:none;">${SITIO_CEA}</a> &middot; <a href="mailto:${CORREO_CEA}" style="color:${CEA.texto};text-decoration:none;">${CORREO_CEA}</a></div>
+      <div style="font-size:13px;line-height:1.5;color:${CEA.texto};"><a href="${WHATSAPP_CEA_URL}" style="color:${CEA.texto};text-decoration:none;white-space:nowrap;">WhatsApp ${WHATSAPP_CEA}</a> &middot; <span style="white-space:nowrap;">CUIT ${CUIT_CEA}</span></div>
     </td></tr>
-    <tr><td style="padding:0 0 26px;font-size:0;line-height:0;">&nbsp;</td></tr>
   </table>
 </body></html>`;
   return { asunto, texto, html };

@@ -14,6 +14,15 @@ import {
 } from '../services/instancia.service.js';
 import { listarAvisosEnviados } from '../services/avisos-cuota.service.js';
 import { anularPago, listarPagos, registrarPago } from '../services/pagos-cuota.service.js';
+import {
+  anotarModificacion,
+  anularModificacion,
+  estadoCobro,
+  fijarAbono,
+  fijarImplementacion,
+  fijarModificacionesSinCargo,
+} from '../services/cobro-cea.service.js';
+import { obtenerCotizacion, pesosDelTotal } from '../services/dolar-blue.service.js';
 import { armarCorreoPrueba, correoCeaDisponible, correoDisponible, enviarCorreo } from '../services/mail.service.js';
 import { estadoCorreos } from '../services/cola-correo.service.js';
 import { estadoCopias, instalacion, listarCopiasDrive, pedirCopia } from '../services/copias.service.js';
@@ -112,8 +121,17 @@ export function meSuperadminController(req, res) {
 
 const describirPlan = (id) => ({ id, nombre: PLANES[id].nombre, modulos: PLANES[id].modulos });
 
+// Dólar blue venta para el panel (con la caché de 30 minutos de dolar-blue.service) y el total del
+// aviso pendiente en pesos; null si no hay cotización.
+function cotizacionDelPanel(cotizacion, aviso) {
+  if (!cotizacion) return null;
+  const { venta_cent: ventaCent, fecha, dia, fuente } = cotizacion;
+  const totalPesos = aviso?.configurado && aviso.total > 0 ? pesosDelTotal(aviso.total, ventaCent) : null;
+  return { venta_cent: ventaCent, fecha, dia, fuente, total_pesos: totalPesos };
+}
+
 export async function panelSuperadminController(req, res) {
-  const [instancia, plan] = await Promise.all([obtenerInstancia(), planActual()]);
+  const [instancia, plan, cobro, cotizacion] = await Promise.all([obtenerInstancia(), planActual(), estadoCobro(), obtenerCotizacion()]);
   res.json({
     version: config.version,
     instancia,
@@ -122,6 +140,9 @@ export async function panelSuperadminController(req, res) {
     modulos: Object.entries(MODULOS).map(([id, m]) => ({ id, nombre: m.nombre, detalle: m.detalle })),
     correo: { disponible: correoCeaDisponible(), avisos: await listarAvisosEnviados() },
     pagos: await listarPagos(),
+    // Lo que CEA le cobra en dólares: implementación, abono, modificaciones y el aviso pendiente.
+    cobro,
+    cotizacion: cotizacionDelPanel(cotizacion, cobro.aviso),
     // Usuarios del negocio: topes por rol, tope de clientes con acceso al portal y si el correo de
     // la empresa (SMTP_*) está configurado (los códigos de ingreso de los empleados salen de ahí).
     usuarios: { cupos: await cuposPorRol(), portal: await cupoPortal(), correo_empresa: correoDisponible() },
@@ -262,7 +283,6 @@ export async function fijarCuotaSuperadminController(req, res) {
   const { cuota } = instancia;
   await registrar(req, 'cuota-guardada', {
     vence: cuota.vence,
-    monto: cuota.monto,
     aviso_dias: cuota.aviso_dias,
     suspender_dias: cuota.suspender_dias,
     aviso_suspension_dias: cuota.aviso_suspension_dias,
@@ -361,10 +381,56 @@ export async function restaurarSuperadminController(req, res) {
   res.status(202).json({ id });
 }
 
+// ---- Lo que CEA le cobra a la empresa, en dólares (2026-10-21) ----
+export async function implementacionSuperadminController(req, res) {
+  const impl = await fijarImplementacion(req.body || {});
+  await registrar(req, 'implementacion-guardada', impl ?? {});
+  res.json({ cobro: await estadoCobro() });
+}
+
+export async function abonoSuperadminController(req, res) {
+  const abono = await fijarAbono(req.body || {});
+  await registrar(req, 'abono-guardado', abono ? { importe: abono.importe, detalle: abono.detalle } : {});
+  res.json({ cobro: await estadoCobro() });
+}
+
+export async function modificacionesSinCargoSuperadminController(req, res) {
+  const r = await fijarModificacionesSinCargo(req.body?.sin_cargo);
+  await registrar(req, 'modificaciones-sin-cargo', { cantidad: r.sin_cargo });
+  res.json({ cobro: await estadoCobro() });
+}
+
+export async function anotarModificacionSuperadminController(req, res) {
+  const m = await anotarModificacion(req.body || {});
+  await registrar(req, 'modificacion-anotada', {
+    id: m.id,
+    fecha: m.fecha,
+    detalle: m.detalle.slice(0, 120),
+    sin_cargo: m.sin_cargo,
+    importe: m.importe,
+    aviso: m.aviso,
+  });
+  res.status(201).json(m);
+}
+
+export async function anularModificacionSuperadminController(req, res) {
+  const id = parsearId(req.params.id);
+  const r = await anularModificacion(id, req.body?.motivo);
+  await registrar(req, 'modificacion-anulada', { id, motivo: r.motivo.slice(0, 200) });
+  res.json(r);
+}
+
 // ---- Historial de pagos de la cuota ----
 export async function registrarPagoSuperadminController(req, res) {
   const r = await registrarPago(req.body || {});
-  await registrar(req, 'pago-anotado', { pago_id: r.id, monto: r.monto, meses: r.meses, cuota_vence: r.cuota_vence });
+  await registrar(req, 'pago-anotado', {
+    pago_id: r.id,
+    monto: r.monto,
+    moneda: r.moneda,
+    aviso: r.aviso,
+    cuota_vence: r.cuota_vence,
+    ...(r.pesos_pagados !== null ? { pesos: r.pesos_pagados, cotizacion_blue: r.cotizacion_blue_cent } : {}),
+  });
   // Anotar el pago puede reactivar sola una instalación suspendida por la cuota.
   if (r.reactivada) await registrarAccion('instalacion-reactivada', { actor: ACTOR_SISTEMA, detalle: { por: 'pago' } });
   res.status(201).json(r);

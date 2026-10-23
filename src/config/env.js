@@ -87,7 +87,7 @@ const config = {
     emisor: (process.env.DOSFA_EMISOR || '').replaceAll(':', '').trim().slice(0, 40) || 'CEAVital',
   },
 
-  // Correo de CEA (remitente admin@ceavital.net) para los avisos de cuota del superadmin.
+  // Correo de CEA (remitente admin@ceaservicios.com.ar desde el 2026-10-21) para los avisos de pago del superadmin.
   // Separado a propósito de `smtp`: en un clon, `smtp` pasa a ser el correo de la empresa
   // para escribirle a sus clientes, y los avisos de CEA no pueden salir con esa identidad.
   // AVISOS_CUOTA=off apaga la revisión automática de cuotas.

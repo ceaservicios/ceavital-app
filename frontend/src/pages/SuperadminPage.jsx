@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError, setCsrfSuperadmin } from '../api/client.js';
-import { formatearFecha, formatearFechaHora, formatearMonto } from '../utils/format.js';
+import { formatearFecha, formatearFechaHora, formatearUsd } from '../utils/format.js';
 import ConfigurarDosfa from '../components/ConfigurarDosfa.jsx';
 import SuperadminAdmins from './SuperadminAdmins.jsx';
+import { LineaCotizacion, SeccionAbono, SeccionImplementacion, SeccionModificaciones, TablaAviso } from './SuperadminCobro.jsx';
 import SuperadminCopias from './SuperadminCopias.jsx';
 import SuperadminCorreo from './SuperadminCorreo.jsx';
 import SuperadminPagos from './SuperadminPagos.jsx';
@@ -11,7 +12,8 @@ import SuperadminRegistro from './SuperadminRegistro.jsx';
 import SuperadminSeguridad from './SuperadminSeguridad.jsx';
 import './SuperadminPage.css';
 
-// Panel de CEA sobre esta instalación (/sa): estado, plan y módulos, cuota y sus pagos, topes de
+// Panel de CEA sobre esta instalación (/sa): estado, plan y módulos, cuota y pagos (en dólares desde el
+// 2026-10-21: aviso del mes, implementación, abono y modificaciones, ver SuperadminCobro.jsx), topes de
 // usuarios y Administradores del negocio, los dos correos, copias de seguridad, seguridad, registro de acciones y la
 // verificación en dos pasos propia. Arriba,
 // un resumen fijo (estado, plan, cuota) y abajo una pestaña por tema, con tarjetas del mismo ancho.
@@ -91,7 +93,6 @@ export default function SuperadminPage() {
   const [confirmando, setConfirmando] = useState(null); // 'suspender' | 'reactivar' | 'plan:<id>'
   const [motivo, setMotivo] = useState('');
   const [vence, setVence] = useState('');
-  const [montoCuota, setMontoCuota] = useState('');
   const [avisoDias, setAvisoDias] = useState('15');
   const [suspenderDias, setSuspenderDias] = useState('');
   const [avisoSuspension, setAvisoSuspension] = useState('0');
@@ -112,7 +113,6 @@ export default function SuperadminPage() {
     const data = await api.get('/sa/panel');
     setPanel(data);
     setVence(data.instancia.cuota.vence ?? '');
-    setMontoCuota(data.instancia.cuota.monto === null ? '' : String(data.instancia.cuota.monto));
     setAvisoDias(String(data.instancia.cuota.aviso_dias));
     setSuspenderDias(data.instancia.cuota.suspender_dias ? String(data.instancia.cuota.suspender_dias) : '');
     setAvisoSuspension(String(data.instancia.cuota.aviso_suspension_dias));
@@ -246,6 +246,7 @@ export default function SuperadminPage() {
   const { instancia } = panel;
   const suspendida = instancia.estado === 'suspendida';
   const estadoCuota = ESTADO_CUOTA[instancia.cuota.estado];
+  const avisoMes = panel.cobro?.aviso ?? null; // total del aviso pendiente, en dólares
   const moduloPorId = Object.fromEntries(panel.modulos.map((m) => [m.id, m]));
 
   // ---- Secciones (cada una es una tarjeta a todo el ancho) ----
@@ -404,21 +405,24 @@ export default function SuperadminPage() {
     </section>
   );
 
+  // Aviso del mes: el vencimiento pendiente, la suspensión automática y el desglose en dólares de lo
+  // que se cobra ese mes (2026-10-21; el importe fijo en pesos ya no se usa).
   const seccionCuota = (
     <section className="card sa-card" key="cuota">
       <div className="sa-card-cabecera">
-        <h2 className="sa-h2">Cuota</h2>
+        <h2 className="sa-h2">Aviso del mes</h2>
         <span className={`sa-chip ${estadoCuota.clase}`}>{estadoCuota.texto}</span>
       </div>
       <p className="sa-detalle">
         {instancia.cuota.vence ? `Vence el ${formatearFecha(instancia.cuota.vence)} · ${textoDias(instancia.cuota)}. ` : ''}
-        {instancia.cuota.monto ? `Importe: ${formatearMonto(instancia.cuota.monto)} por mes. ` : ''}
         {textoSuspension(instancia)}
       </p>
+      <TablaAviso aviso={panel.cobro.aviso} />
+      <LineaCotizacion cotizacion={panel.cotizacion} />
       <p className="sa-ayuda">
-        Con "Suspender a los … días" la instalación se suspende sola esos días después del vencimiento y se le avisa a la empresa por
-        mail (antes, con el aviso previo, y al suspenderse). Vacío = no se suspende sola. El importe por mes sale en esos avisos, junto al
-        alias de Mercado Pago para pagar; vacío = el aviso no dice el importe.
+        Todos los meses se le manda a la empresa un aviso con la cuota de la implementación que toca, el abono y las modificaciones con costo,
+        el total (con su equivalente en pesos al dólar blue venta del día, si hay cotización) y cómo pagar por Mercado Pago. Con &quot;Suspender a los … días&quot; la instalación se suspende sola esos días después del
+        vencimiento y se le avisa por mail (antes, con el aviso previo, y al suspenderse). Vacío = no se suspende sola.
       </p>
       <form
         className="sa-form-cuota"
@@ -428,7 +432,6 @@ export default function SuperadminPage() {
             () =>
               api.put('/sa/cuota', {
                 vence: vence || null,
-                monto: montoCuota.trim() === '' ? null : Number(montoCuota),
                 aviso_dias: Number(avisoDias),
                 suspender_dias: suspenderDias === '' ? null : Number(suspenderDias),
                 aviso_suspension_dias: avisoSuspension === '' ? 0 : Number(avisoSuspension),
@@ -438,22 +441,7 @@ export default function SuperadminPage() {
         }}
       >
         <div className="field">
-          <label htmlFor="sa-monto">Importe por mes ($)</label>
-          <input
-            id="sa-monto"
-            type="number"
-            min="1"
-            max="1000000000"
-            step="1"
-            inputMode="numeric"
-            value={montoCuota}
-            onChange={(e) => setMontoCuota(e.target.value)}
-            disabled={ocupado}
-            placeholder="Sin cargar"
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="sa-vence">Vence el</label>
+          <label htmlFor="sa-vence">Próximo vencimiento</label>
           <input id="sa-vence" type="date" value={vence} onChange={(e) => setVence(e.target.value)} disabled={ocupado} />
         </div>
         <div className="field">
@@ -504,7 +492,32 @@ export default function SuperadminPage() {
     </section>
   );
 
-  const seccionPagos = <SuperadminPagos key="pagos" pagos={panel.pagos} importeMes={instancia.cuota.monto} ocupado={ocupado} ejecutar={ejecutar} />;
+  const seccionImplementacion = (
+    <SeccionImplementacion key="implementacion" implementacion={panel.cobro.implementacion} ocupado={ocupado} ejecutar={ejecutar} />
+  );
+
+  const seccionAbono = <SeccionAbono key="abono" abono={panel.cobro.abono} ocupado={ocupado} ejecutar={ejecutar} />;
+
+  const seccionModificaciones = (
+    <SeccionModificaciones
+      key="modificaciones"
+      modificaciones={panel.cobro.modificaciones}
+      hayVencimiento={Boolean(instancia.cuota.vence)}
+      ocupado={ocupado}
+      ejecutar={ejecutar}
+    />
+  );
+
+  const seccionPagos = (
+    <SuperadminPagos
+      key="pagos"
+      pagos={panel.pagos}
+      aviso={panel.cobro.aviso}
+      cotizacion={panel.cotizacion ?? null}
+      ocupado={ocupado}
+      ejecutar={ejecutar}
+    />
+  );
 
   const seccionAvisos = (
     <section className="card sa-card" key="avisos">
@@ -672,7 +685,7 @@ export default function SuperadminPage() {
   const CONTENIDO = {
     estado: [seccionEstado],
     plan: [seccionPlan],
-    cuota: [seccionCuota, seccionPagos, seccionAvisos],
+    cuota: [seccionCuota, seccionImplementacion, seccionAbono, seccionModificaciones, seccionPagos, seccionAvisos],
     usuarios: [seccionTopes, seccionAdmins],
     correo: [seccionCorreo],
     copias: [seccionCopias],
@@ -693,6 +706,14 @@ export default function SuperadminPage() {
           {estadoCuota.texto}
           {instancia.cuota.vence ? ` · vence el ${formatearFecha(instancia.cuota.vence)}` : ''}
         </span>
+        {avisoMes?.configurado && (
+          <span className="sa-chip sa-chip-neutro">
+            {formatearUsd(avisoMes.total)}
+            {avisoMes.implementacion
+              ? ` · implementación cuota ${avisoMes.implementacion.numero} de ${avisoMes.implementacion.de}`
+              : ` · aviso del ${formatearFecha(avisoMes.vence)}`}
+          </span>
+        )}
       </div>
 
       {error && <div className="alert alert-danger">{error}</div>}

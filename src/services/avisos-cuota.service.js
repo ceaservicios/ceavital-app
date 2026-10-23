@@ -2,6 +2,8 @@ import db from '../db/connection.js';
 import { correoCeaDisponible, armarCorreoCuota } from './mail.service.js';
 import { encolarCorreo } from './cola-correo.service.js';
 import { obtenerInstancia, suspenderPorCuotaSiCorresponde } from './instancia.service.js';
+import { avisoDelVencimiento } from './cobro-cea.service.js';
+import { obtenerCotizacion } from './dolar-blue.service.js';
 import { registrarAccion } from './registro.service.js';
 
 // Revisión de la cuota (a los 30 s de arrancar y cada hora, ver server.js): suspende sola la
@@ -37,6 +39,15 @@ export function avisosQueTocan(instancia) {
   return tipos.filter(Boolean);
 }
 
+// Los que todavía no se mandaron para ese vencimiento. Solo decide si hay algo por armar (y si vale
+// la pena buscar la cotización del dólar blue): el doble envío lo sigue evitando la restricción única.
+async function sinAvisar(tipos, vence) {
+  if (!tipos.length) return [];
+  const enviados = await db.prepare('SELECT tipo FROM cuota_avisos WHERE cuota_vence = ?').all(vence);
+  const ya = new Set(enviados.map((f) => f.tipo));
+  return tipos.filter((tipo) => !ya.has(tipo));
+}
+
 // Cada aviso se anota y se encola en una sola transacción (la restricción única evita el doble
 // envío si dos procesos corren a la vez); los reintentos del envío los hace la cola. La
 // suspensión no depende del correo: se hace aunque no haya SMTP configurado.
@@ -51,8 +62,14 @@ export async function revisarCuota() {
   const instancia = await obtenerInstancia();
   if (!instancia.empresa_email) return { suspendida, avisos };
 
-  const { vence, dias_restantes: diasRestantes, suspende_el: suspendeEl, monto } = instancia.cuota;
-  for (const tipo of avisosQueTocan(instancia)) {
+  const { vence, dias_restantes: diasRestantes, suspende_el: suspendeEl } = instancia.cuota;
+  const tipos = await sinAvisar(avisosQueTocan(instancia), vence);
+  // Desglose del aviso pendiente en dólares (implementación, abono, modificaciones y total) y el dólar
+  // blue venta del día para el equivalente en pesos (fuera de la transacción: es un pedido a internet;
+  // si no hay cotización, null y el mail sale solo en dólares).
+  const aviso = tipos.length ? await avisoDelVencimiento(vence) : null;
+  const cotizacion = tipos.length ? await obtenerCotizacion() : null;
+  for (const tipo of tipos) {
     const encolado = await db.transaction(async () => {
       const reserva = await db
         .prepare(
@@ -62,7 +79,7 @@ export async function revisarCuota() {
         .get(tipo, vence, instancia.empresa_email);
       if (!reserva) return false; // ya se avisó
       await encolarCorreo(
-        { para: instancia.empresa_email, ...armarCorreoCuota({ tipo, vence, diasRestantes, suspendeEl, monto }) },
+        { para: instancia.empresa_email, ...armarCorreoCuota({ tipo, vence, diasRestantes, suspendeEl, aviso, cotizacion }) },
         { canal: 'cea', tipo: 'aviso-cuota' }
       );
       return true;

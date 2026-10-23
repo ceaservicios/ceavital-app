@@ -684,3 +684,138 @@
     grid-column: 1 / -1;
   }
 }
+
+/* Cuota y pagos en dólares (2026-10-21): aviso del mes, implementación, abono y modificaciones. */
+.sa-tabla.sa-total-mes {
+  min-width: 0;
+  max-width: 560px;
+}
+.sa-total-mes td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+/* El concepto puede ser largo (una modificación con su detalle): se corta, no empuja la tabla. */
+.sa-tabla.sa-total-mes td:first-child {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.sa-total-mes .sa-monto {
+  text-align: right;
+  padding-right: 0;
+}
+.sa-total-fila td {
+  font-weight: 800;
+  color: var(--text-primary);
+  border-top: 2px solid var(--border-default);
+}
+/* Dólar blue venta y total en pesos, debajo del aviso (2026-10-21): corta entre partes, nunca dentro
+   de un monto o de la fecha. */
+.sa-cotizacion {
+  overflow-wrap: normal;
+}
+.sa-cotizacion .sa-sin-corte {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sa-cuotas-resumen {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.sa-cuotas-resumen > div {
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.sa-cuotas-numero {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sa-cuotas-rotulo {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.sa-barra {
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-muted);
+  overflow: hidden;
+}
+.sa-barra-relleno {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+}
+.sa-tabla-cuotas td {
+  vertical-align: middle;
+}
+.sa-cuota-vencida td {
+  background: rgba(224, 90, 101, 0.06);
+}
+.sa-tabla-modif {
+  min-width: 700px;
+}
+.sa-tabla-modif td {
+  vertical-align: middle;
+}
+.sa-tabla-modif .sa-modif-texto {
+  min-width: 200px;
+  overflow-wrap: anywhere;
+}
+.sa-tabla-modif .sa-una-linea {
+  white-space: nowrap;
+}
+.sa-tabla-pagos .sa-pago-desglose {
+  white-space: normal;
+  max-width: 280px;
+}
+.sa-form-fila .sa-campo-sin-cargo {
+  flex: 0 1 280px;
+}
+.sa-form-abono,
+.sa-form-modif {
+  display: grid;
+  gap: 12px;
+  align-items: end;
+}
+.sa-form-abono {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) auto;
+}
+.sa-form-modif {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr) minmax(0, 1fr) auto;
+}
+@media (max-width: 900px) {
+  .sa-form-abono {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+  .sa-form-abono .field:first-child,
+  .sa-form-modif .sa-modif-detalle {
+    grid-column: 1 / -1;
+  }
+  .sa-form-modif {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sa-form-abono .btn,
+  .sa-form-modif .btn {
+    justify-self: start;
+  }
+}
+@media (max-width: 600px) {
+  .sa-cuotas-resumen {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sa-cuotas-numero {
+    font-size: 17px;
+  }
+  .sa-form-abono,
+  .sa-form-modif {
+    grid-template-columns: 1fr;
+  }
+}

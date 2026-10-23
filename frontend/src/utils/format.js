@@ -6,6 +6,30 @@ export function formatearMonto(valor) {
   return `${signo}$${Math.abs(n).toLocaleString('es-AR')}`;
 }
 
+// Lo que CEA le cobra a la empresa va en dólares, en centavos (panel /sa, 2026-10-21): "USD 1.725,00".
+export function formatearUsd(centavos) {
+  const n = (Number(centavos) || 0) / 100;
+  return `USD ${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// Centavos de dólar para un campo de texto: "253,75" o, si es redondo, "110" (sin puntos de miles).
+export function usdParaCampo(centavos) {
+  if (centavos === null || centavos === undefined) return '';
+  const c = Math.round(Number(centavos) || 0);
+  return c % 100 === 0 ? String(c / 100) : (c / 100).toFixed(2).replace('.', ',');
+}
+
+// Equivalente en pesos y dólar blue (2026-10-21): pesos enteros -> "$ 397.119" (con espacio, como en el
+// aviso por mail); la cotización llega en centavos de peso -> "$ 1.565" o "$ 1.565,50".
+export function formatearPesos(valor) {
+  return `$ ${Math.round(Number(valor) || 0).toLocaleString('es-AR')}`;
+}
+
+export function formatearCotizacion(centavos) {
+  const c = Math.round(Number(centavos) || 0);
+  return `$ ${(c / 100).toLocaleString('es-AR', { minimumFractionDigits: c % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
+}
+
 export function formatearFecha(iso) {
   if (!iso) return '';
   const [anio, mes, dia] = iso.split('-');

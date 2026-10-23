@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import {
+  abonoSuperadminController,
   activarDosfaAdministradorController,
+  anotarModificacionSuperadminController,
+  anularModificacionSuperadminController,
   anularPagoSuperadminController,
   bajaAdministradorController,
   bloquearSuperadminController,
@@ -24,10 +27,12 @@ import {
   estadoDosfaSuperadminController,
   fijarCuposSuperadminController,
   fijarCuotaSuperadminController,
+  implementacionSuperadminController,
   iniciarAppSuperadminController,
   iniciarMailSuperadminController,
   logoutSuperadminController,
   meSuperadminController,
+  modificacionesSinCargoSuperadminController,
   panelSuperadminController,
   passwordAdministradorController,
   reactivarAdministradorController,
@@ -80,6 +85,13 @@ router.get('/copias/drive', copiasDriveSuperadminController);
 router.get('/restauraciones', restauracionesSuperadminController);
 router.post('/restauraciones/desafio', desafioRestauracionSuperadminController);
 router.post('/restauraciones', restaurarSuperadminController);
+// Lo que CEA le cobra a la empresa, en dólares (2026-10-21): implementación en cuotas, abono mensual
+// y modificaciones solicitadas. Cada pago paga el aviso pendiente completo.
+router.put('/implementacion', implementacionSuperadminController);
+router.put('/abono', abonoSuperadminController);
+router.put('/modificaciones/sin-cargo', modificacionesSinCargoSuperadminController);
+router.post('/modificaciones', anotarModificacionSuperadminController);
+router.post('/modificaciones/:id/anular', anularModificacionSuperadminController);
 router.post('/pagos', registrarPagoSuperadminController);
 router.post('/pagos/:id/anular', anularPagoSuperadminController);
 router.post('/suspender', suspenderSuperadminController);

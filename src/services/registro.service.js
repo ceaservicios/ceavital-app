@@ -6,6 +6,13 @@ import db from '../db/connection.js';
 // se guardan contraseñas, tokens ni códigos. Un fallo al registrar no corta la operación.
 
 const fecha = (iso) => (iso ? String(iso).split('-').reverse().join('/') : 'sin fecha');
+// Centavos de dólar -> "USD 1.725,00".
+const usd = (centavos) =>
+  `USD ${(Number(centavos) / 100).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// Pesos enteros -> "$ 397.119"; cotización en centavos de peso -> "$ 1.565" o "$ 1.565,50".
+const pesos = (n) => `$ ${Number(n).toLocaleString('es-AR')}`;
+const cotizacion = (centavos) =>
+  `$ ${(Number(centavos) / 100).toLocaleString('es-AR', { minimumFractionDigits: Number(centavos) % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
 const METODO = { app: 'app autenticadora', mail: 'código por mail' };
 const ROL = { admin: 'Administrador', encargado: 'Encargado', cajero: 'Cajero' };
 const SEGUNDO_PASO = { app: 'con la app autenticadora', mail: 'con código por mail', recuperacion: 'con un código de recuperación' };
@@ -95,12 +102,45 @@ const CATALOGO = {
     detalle: (d) =>
       `vence ${fecha(d.vence)}${d.monto ? ` · ${Number(d.monto).toLocaleString('es-AR')} por mes` : ''} · aviso ${d.aviso_dias} días antes · ${d.suspender_dias ? `se suspende a los ${d.suspender_dias} días` : 'no se suspende sola'}`,
   },
+  // Los de antes del 2026-10-21 son en pesos (sin moneda); desde entonces, en dólares (centavos), con lo
+  // pagado en pesos y la cotización del dólar blue si se cargaron (migración 027).
   'pago-anotado': {
     categoria: 'instalacion',
     titulo: 'Anotó un pago de la cuota',
-    detalle: (d) => `$${Number(d.monto).toLocaleString('es-AR')} · ${d.meses} ${d.meses === 1 ? 'mes' : 'meses'} · nuevo vencimiento ${fecha(d.cuota_vence)}`,
+    detalle: (d) =>
+      d.moneda === 'USD'
+        ? `${usd(d.monto)}${d.pesos ? ` · en pesos ${pesos(d.pesos)} (blue ${cotizacion(d.cotizacion_blue)})` : ''} · aviso del ${fecha(d.aviso)} · nuevo vencimiento ${fecha(d.cuota_vence)}`
+        : `$${Number(d.monto).toLocaleString('es-AR')} · ${d.meses} ${d.meses === 1 ? 'mes' : 'meses'} · nuevo vencimiento ${fecha(d.cuota_vence)}`,
   },
   'pago-anulado': { categoria: 'instalacion', titulo: 'Anuló un pago de la cuota', detalle: (d) => `pago #${d.pago_id} · ${d.motivo}` },
+  // Lo que CEA le cobra a la empresa, en dólares (2026-10-21).
+  'implementacion-guardada': {
+    categoria: 'instalacion',
+    titulo: 'Guardó la implementación',
+    detalle: (d) =>
+      d.valor ? `${usd(d.valor)} + ${String(d.recargo).replace('.', ',')} % en ${d.cuotas} cuotas · la primera vence el ${fecha(d.primera_vence)}` : 'la quitó',
+  },
+  'abono-guardado': {
+    categoria: 'instalacion',
+    titulo: 'Guardó el abono mensual',
+    detalle: (d) => (d.importe ? `${usd(d.importe)} por mes · ${d.detalle}` : 'lo quitó'),
+  },
+  'modificaciones-sin-cargo': {
+    categoria: 'instalacion',
+    titulo: 'Cambió las modificaciones sin cargo',
+    detalle: (d) => `${d.cantidad} en todo el contrato`,
+  },
+  'modificacion-anotada': {
+    categoria: 'instalacion',
+    titulo: 'Anotó una modificación',
+    detalle: (d) =>
+      `${fecha(d.fecha)} · ${d.detalle} · ${d.sin_cargo ? 'sin cargo' : `${usd(d.importe)}, a cobrar con el aviso del ${fecha(d.aviso)}`}`,
+  },
+  'modificacion-anulada': {
+    categoria: 'instalacion',
+    titulo: 'Anuló una modificación',
+    detalle: (d) => `modificación #${d.id} · ${d.motivo}`,
+  },
   'topes-guardados': {
     categoria: 'instalacion',
     titulo: 'Guardó los topes de usuarios',
