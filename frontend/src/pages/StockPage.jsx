@@ -4,6 +4,7 @@ import { api, ApiError } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatearFecha, formatearMonto, fechaHoyISO } from '../utils/format.js';
 import {
+  cantidadEnPacks,
   cargadoConEnvase,
   describirPacks,
   describirStock,
@@ -14,6 +15,7 @@ import {
   factorMedida,
   formatearCantidad,
   parsearCantidad,
+  partesPacks,
   plural,
   simboloMedida,
   sufijoPrecio,
@@ -65,6 +67,7 @@ function cantidadIngreso(texto, enPacks, producto) {
 // Cuenta del ingreso a la vista (2026-10-11): "5 cajas = 60 unidades · el stock queda en
 // 64 unidades (5 cajas + 4)" / "8,5 kg · el stock queda en 12 kg".
 function CuentaIngreso({ cantidad, enPacks, producto, stockActual = 0, textoFinal = 'el stock queda en' }) {
+  const { stockEnPacks } = useAuth();
   const base = cantidadIngreso(cantidad, enPacks, producto);
   if (!base) return null;
   const porPack = enPacks && tienePack(producto);
@@ -73,8 +76,27 @@ function CuentaIngreso({ cantidad, enPacks, producto, stockActual = 0, textoFina
     <span className="stock-cuenta">
       {porPack && `${packs} ${plural(producto.pack_nombre, packs)} = `}
       <strong>{formatearCantidad(base, producto.medida)}</strong>
-      {textoFinal && ` · ${textoFinal} ${describirStockLargo(stockActual + base, producto)}`}
+      {textoFinal && ` · ${textoFinal} ${describirStockLargo(stockActual + base, producto, stockEnPacks)}`}
     </span>
+  );
+}
+
+// Columna Stock con el stock en packs (Configuración, 2026-10-28): "12 packs" y "+ 3" no se
+// cortan por dentro, y abajo va el total en su medida.
+function StockEnPacks({ producto }) {
+  const partes = partesPacks(producto.stock_total, producto);
+  if (!partes) return <span className="stock-nowrap">{cantidadEnPacks(producto.stock_total, producto)}</span>;
+  return (
+    <>
+      <span className="stock-nowrap">{partes.packs}</span>
+      {partes.resto && (
+        <>
+          {' '}
+          <span className="stock-nowrap">+ {partes.resto}</span>
+        </>
+      )}
+      <span className="stock-fila-packs">{formatearCantidad(producto.stock_total, producto.medida)}</span>
+    </>
   );
 }
 
@@ -118,10 +140,13 @@ function productoDelFormulario(formas) {
 }
 
 export default function StockPage() {
-  const { usuario } = useAuth();
+  const { usuario, stockEnPacks } = useAuth();
   const rol = usuario?.rol;
   const esAdmin = rol === 'admin';
   const puedeEditar = PUEDE_EDITAR.has(rol);
+  // Con el stock en packs ("12 packs + 3") la columna Stock necesita más lugar que un número.
+  const flexProducto = stockEnPacks ? 1.9 : 2.2;
+  const flexStock = stockEnPacks ? 1.3 : 1;
 
   const [productos, setProductos] = useState([]);
   const [proveedores, setProveedores] = useState([]);
@@ -492,9 +517,9 @@ export default function StockPage() {
 
           <div className="stock-tabla">
             <div className="stock-tabla-head">
-              <span style={{ flex: 2.2 }}>Producto</span>
+              <span style={{ flex: flexProducto }}>Producto</span>
               <span style={{ flex: 1.2 }}>Categoría</span>
-              <span style={{ flex: 1, textAlign: 'center' }}>Stock</span>
+              <span style={{ flex: flexStock, textAlign: 'center' }}>Stock</span>
               <span style={{ flex: 1, textAlign: 'right', paddingRight: 20 }}>Precio</span>
               <span style={{ flex: 1.4 }}>Proveedor</span>
             </div>
@@ -512,18 +537,24 @@ export default function StockPage() {
                   className={`stock-fila${detalle?.id === p.id ? ' stock-fila-activa' : ''}`}
                   onClick={() => abrirDetalle(p.id)}
                 >
-                  <span style={{ flex: 2.2 }} className="stock-fila-nombre">
+                  <span style={{ flex: flexProducto }} className="stock-fila-nombre">
                     {p.nombre}
                   </span>
                   <span style={{ flex: 1.2 }} className="stock-fila-muted">
                     {p.categoria || '—'}
                   </span>
                   <span
-                    style={{ flex: 1, textAlign: 'center', fontWeight: 700 }}
+                    style={{ flex: flexStock, textAlign: 'center', fontWeight: 700 }}
                     className={p.alerta_stock_bajo ? 'stock-valor-alerta' : ''}
                   >
-                    {formatearCantidad(p.stock_total, p.medida, { corta: true })}
-                    {describirPacks(p.stock_total, p) && <span className="stock-fila-packs">{describirPacks(p.stock_total, p)}</span>}
+                    {stockEnPacks && tienePack(p) ? (
+                      <StockEnPacks producto={p} />
+                    ) : (
+                      <>
+                        {formatearCantidad(p.stock_total, p.medida, { corta: true })}
+                        {describirPacks(p.stock_total, p) && <span className="stock-fila-packs">{describirPacks(p.stock_total, p)}</span>}
+                      </>
+                    )}
                   </span>
                   <span style={{ flex: 1, textAlign: 'right', paddingRight: 20 }}>
                     {vendeSuelto(p) ? (
@@ -774,7 +805,7 @@ export default function StockPage() {
                   onHecho={async (actualizado) => {
                     await abrirDetalle(actualizado.id);
                     cargarProductos();
-                    setPanelExito(`Listo: el stock quedó en ${describirStockLargo(actualizado.stock_total, actualizado)}.`);
+                    setPanelExito(`Listo: el stock quedó en ${describirStockLargo(actualizado.stock_total, actualizado, stockEnPacks)}.`);
                   }}
                 />
               )}
@@ -848,7 +879,7 @@ export default function StockPage() {
                 {detalle.lotes.length === 0 && <div className="stock-lotes-vacio">Sin lotes cargados.</div>}
                 {detalle.lotes.map((lote) => (
                   <div className="stock-lote-row" key={lote.id}>
-                    <span className="stock-lote-cantidad">{describirStock(lote.cantidad, detalle)}</span>
+                    <span className="stock-lote-cantidad">{describirStock(lote.cantidad, detalle, stockEnPacks)}</span>
                     <span className="stock-lote-fechas">
                       Ingresó {formatearFecha(lote.fecha_ingreso)}
                       {lote.fecha_vencimiento && ` · Vence ${formatearFecha(lote.fecha_vencimiento)}`}

@@ -418,6 +418,9 @@
   font-weight: 500;
   color: var(--text-tertiary);
 }
+.stock-nowrap {
+  white-space: nowrap;
+}
 
 /* "¿Cómo se mide?" / "¿Cómo se vende?" (2026-10-11): cada forma de venta en su recuadro;
    la marcada se destaca con el verde de marca. */

@@ -132,26 +132,45 @@ export function unidadesDeLinea(producto, cantidad, presentacion) {
   return presentacion === 'pack' ? cantidad * producto.pack_unidades : cantidad;
 }
 
-/** Cuántos packs son: "10 cajas" / "10 cajas + 4" / "2 bolsas + 3,5 kg", o null si no llega a uno. */
-export function describirPacks(base, producto) {
+/** Las partes de describirPacks: { packs: "10 cajas", resto: "4" | "3,5 kg" | null }, o null si no llega a uno. */
+export function partesPacks(base, producto) {
   if (!tienePack(producto) || base < producto.pack_unidades) return null;
   const packs = Math.floor(base / producto.pack_unidades);
   const resto = base % producto.pack_unidades;
-  const textoResto = resto ? ` + ${formatearCantidad(resto, producto.medida, { corta: true })}` : '';
-  return `${packs} ${plural(producto.pack_nombre, packs)}${textoResto}`;
+  return {
+    packs: `${packs} ${plural(producto.pack_nombre, packs)}`,
+    resto: resto ? formatearCantidad(resto, producto.medida, { corta: true }) : null,
+  };
 }
 
-/** Corto, para tablas: "240 (10 cajas)", "3,5 kg". */
-export function describirStock(base, producto) {
+/** Cuántos packs son: "10 cajas" / "10 cajas + 4" / "2 bolsas + 3,5 kg", o null si no llega a uno. */
+export function describirPacks(base, producto) {
+  const partes = partesPacks(base, producto);
+  return partes && `${partes.packs}${partes.resto ? ` + ${partes.resto}` : ''}`;
+}
+
+// Stock en packs (2026-10-28): el Admin elige en Configuración si el stock de los productos con
+// pack se ve en unidades (como siempre) o con el pack adelante; `enPacks` viene de useAuth().
+
+/** Con el pack adelante: "140 packs", "12 cajas + 3", "0 cajas"; sin llegar a uno, "4 unidades". */
+export function cantidadEnPacks(base, producto) {
+  if (!base) return `0 ${plural(producto.pack_nombre, 0)}`;
+  return describirPacks(base, producto) ?? formatearCantidad(base, producto.medida);
+}
+
+/** Corto, para tablas: "240 (10 cajas)", "3,5 kg". En packs: "10 cajas (240)". */
+export function describirStock(base, producto, enPacks = false) {
   const texto = formatearCantidad(base, producto?.medida, { corta: true });
   const packs = describirPacks(base, producto);
+  if (enPacks && tienePack(producto)) return packs ? `${packs} (${texto})` : cantidadEnPacks(base, producto);
   return packs ? `${texto} (${packs})` : texto;
 }
 
-/** Largo: "64 unidades (5 cajas + 4)", "12,35 kg". */
-export function describirStockLargo(base, producto) {
+/** Largo: "64 unidades (5 cajas + 4)", "12,35 kg". En packs: "5 cajas + 4 (64 unidades)". */
+export function describirStockLargo(base, producto, enPacks = false) {
   const texto = formatearCantidad(base, producto?.medida);
   const packs = describirPacks(base, producto);
+  if (enPacks && tienePack(producto)) return packs ? `${packs} (${texto})` : cantidadEnPacks(base, producto);
   return packs ? `${texto} (${packs})` : texto;
 }
 

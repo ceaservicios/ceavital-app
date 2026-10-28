@@ -47,6 +47,19 @@ export function AuthProvider({ children }) {
     };
   }, [cargarModulos]);
 
+  // Stock de los productos con pack en unidades o en packs (lo elige el Admin en Configuración,
+  // 2026-10-28). Se vuelve a pedir al cambiar de pantalla, así un cambio les llega a los demás
+  // usuarios sin recargar. Si el pedido falla, queda lo que había.
+  const [stockEnPacks, setStockEnPacks] = useState(false);
+  const sesionLista = Boolean(usuario && !usuario.pendiente);
+  useEffect(() => {
+    if (!sesionLista) return;
+    api
+      .get('/negocio/stock-en')
+      .then((data) => setStockEnPacks(data.stock_en === 'packs'))
+      .catch(() => {});
+  }, [sesionLista, pathname]);
+
   useEffect(() => {
     let cancelado = false;
     api
@@ -136,6 +149,8 @@ export function AuthProvider({ children }) {
         cargandoSesion: cargandoSesion || modulos === null,
         modulos: modulos ?? [],
         moduloActivo: (modulo) => Boolean(modulos?.includes(modulo)),
+        stockEnPacks,
+        setStockEnPacks,
         login,
         confirmarCodigo,
         logout,

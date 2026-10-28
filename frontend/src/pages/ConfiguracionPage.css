@@ -180,3 +180,88 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Pestaña Datos del negocio: dos tarjetas (datos y cómo se ve el stock); si no entran en la
+   ventana, scrollea la pestaña por dentro, no la página. */
+.config-negocio {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.config-negocio > .config-catalogo {
+  flex-shrink: 0;
+}
+
+/* Cómo se ve el stock (2026-10-28): dos opciones con un ejemplo de la columna Stock. */
+.config-stock-opciones {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  max-width: 760px;
+}
+.config-stock-opcion {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.config-stock-opcion:hover {
+  border-color: var(--color-primary);
+}
+.config-stock-opcion[aria-checked='true'] {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+  background: rgba(14, 75, 56, 0.04);
+}
+.config-stock-opcion:disabled {
+  cursor: default;
+}
+.config-stock-opcion-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.config-stock-radio {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--border-default);
+}
+.config-stock-opcion[aria-checked='true'] .config-stock-radio {
+  border-color: var(--color-primary);
+  background: radial-gradient(circle, var(--color-primary) 0 40%, transparent 45%);
+}
+.config-stock-ejemplo {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-app);
+}
+.config-stock-ejemplo strong {
+  font-size: 16px;
+  font-weight: 700;
+}
+.config-stock-ejemplo span {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+@media (max-width: 600px) {
+  .config-stock-opciones {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

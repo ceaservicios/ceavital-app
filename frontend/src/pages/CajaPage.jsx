@@ -126,7 +126,7 @@ const LECTOR_MS_ENTRE_TECLAS = 50;
 const LECTOR_LARGO_MINIMO = 6;
 
 export default function CajaPage() {
-  const { usuario, moduloActivo } = useAuth();
+  const { usuario, moduloActivo, stockEnPacks } = useAuth();
   const cuentaCorrienteActiva = moduloActivo('clientes_empresa');
   const mediosVisibles = MEDIOS_PAGO.filter((m) => m.valor !== 'cta_cte' || cuentaCorrienteActiva);
 
@@ -430,7 +430,7 @@ export default function CajaPage() {
       });
       // Cuánto stock queda de lo que se vendió (2026-10-11): así se ve el efecto de cada venta.
       const quedan = (venta.stock_despues ?? [])
-        .map((s) => `${s.nombre}: ${describirStockLargo(s.stock_disponible, s)}`)
+        .map((s) => `${s.nombre}: ${describirStockLargo(s.stock_disponible, s, stockEnPacks)}`)
         .join(' · ');
       setExito(`Venta #${venta.id} registrada por ${formatearMonto(venta.total)}.${quedan ? ` Stock que queda — ${quedan}.` : ''}`);
       setCarrito([]);
@@ -529,7 +529,7 @@ export default function CajaPage() {
                   const nombreYStock = (
                     <span className="caja-search-nombre">
                       {producto.nombre}
-                      <span className="caja-search-stock">Stock: {describirStockLargo(producto.stock_disponible, producto)}</span>
+                      <span className="caja-search-stock">Stock: {describirStockLargo(producto.stock_disponible, producto, stockEnPacks)}</span>
                     </span>
                   );
                   // Dos formas de venta: se elige cuál. Una sola: toda la fila la agrega.

@@ -270,8 +270,91 @@ function SeccionDatosNegocio() {
   );
 }
 
+// Cómo se ve el stock de los productos con pack (2026-10-28, clientes que lo piden por pack): lo
+// elige el Admin para todo el negocio y se guarda al tocar la opción. Es solo cómo se muestra.
+const OPCIONES_STOCK = [
+  { valor: 'unidades', titulo: 'En unidades', grande: '840', chico: '140 packs' },
+  { valor: 'packs', titulo: 'En packs', grande: '140 packs', chico: '840 unidades' },
+];
+
+function SeccionStockEn() {
+  const { setStockEnPacks } = useAuth();
+  const [stockEn, setStockEn] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState(null);
+  const [aviso, setAviso] = useState(null);
+  const guardandoRef = useRef(false); // contra el doble click
+
+  useEffect(() => {
+    api
+      .get('/negocio/stock-en')
+      .then((data) => setStockEn(data.stock_en))
+      .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar cómo se ve el stock.'));
+  }, []);
+
+  async function elegir(valor) {
+    if (valor === stockEn || guardandoRef.current) return;
+    guardandoRef.current = true;
+    setGuardando(true);
+    setError(null);
+    setAviso(null);
+    try {
+      const data = await api.put('/negocio/stock-en', { stock_en: valor });
+      setStockEn(data.stock_en);
+      setStockEnPacks(data.stock_en === 'packs');
+      setAviso(`Listo: el stock se ve en ${data.stock_en} en Stock, Caja y Vencimientos, para todos los usuarios.`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo guardar.');
+    } finally {
+      guardandoRef.current = false;
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="card config-catalogo">
+      <div className="config-seccion-cabecera">
+        <span className="config-seccion-titulo">Cómo se ve el stock</span>
+        <p className="config-seccion-desc">
+          Para los productos con pack o caja, en Stock, Caja y Vencimientos. Rige para todos los usuarios. Es solo cómo se ve: el
+          stock y las ventas no cambian. Los productos sin pack se ven siempre en unidades o kg.
+        </p>
+      </div>
+      {error && <div className="alert alert-danger">{error}</div>}
+      {aviso && <div className="alert config-alert-ok">{aviso}</div>}
+      {stockEn === null ? (
+        !error && <div className="config-catalogo-vacio">Cargando…</div>
+      ) : (
+        <div className="config-stock-opciones" role="radiogroup" aria-label="Cómo se ve el stock">
+          {OPCIONES_STOCK.map((o) => (
+            <button
+              key={o.valor}
+              type="button"
+              role="radio"
+              aria-checked={stockEn === o.valor}
+              className="config-stock-opcion"
+              disabled={guardando}
+              onClick={() => elegir(o.valor)}
+            >
+              <span className="config-stock-opcion-titulo">
+                <span className="config-stock-radio" />
+                {o.titulo}
+              </span>
+              <span className="config-stock-ejemplo">
+                <strong>{o.grande}</strong>
+                <span>{o.chico}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const SECCIONES = [
-  // Datos del negocio: no es un catálogo, tiene su propio formulario (SeccionDatosNegocio).
+  // Datos del negocio: no es un catálogo, tiene su propio formulario (SeccionDatosNegocio) y, debajo,
+  // cómo se ve el stock (SeccionStockEn).
   { clave: 'negocio', texto: 'Datos del negocio' },
   {
     clave: 'categorias',
@@ -319,7 +402,10 @@ export default function ConfiguracionPage() {
       </div>
 
       {seccion.clave === 'negocio' ? (
-        <SeccionDatosNegocio />
+        <div className="config-negocio">
+          <SeccionDatosNegocio />
+          <SeccionStockEn />
+        </div>
       ) : (
         <SeccionCatalogo
           key={seccion.clave}

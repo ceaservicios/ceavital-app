@@ -80,6 +80,7 @@ const CATALOGO = {
 
   // Instalación
   'datos-negocio': { categoria: 'instalacion', titulo: 'Cambió los datos del negocio', detalle: (d) => (d.cambios ?? []).join(', ') },
+  'stock-en': { categoria: 'instalacion', titulo: 'Cambió cómo se muestra el stock', detalle: (d) => `en ${d.de} → en ${d.a}` },
   'venta-medio-pago': {
     categoria: 'instalacion',
     titulo: 'Cambió el medio de pago de una venta',

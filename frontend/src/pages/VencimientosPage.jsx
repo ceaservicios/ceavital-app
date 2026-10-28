@@ -14,7 +14,7 @@ function etiquetaDias(n, sufijoSingular, sufijoPlural) {
 }
 
 export default function VencimientosPage() {
-  const { usuario } = useAuth();
+  const { usuario, stockEnPacks } = useAuth();
   const navigate = useNavigate();
   const puedeRetirar = PUEDE_RETIRAR.has(usuario?.rol);
 
@@ -136,7 +136,7 @@ export default function VencimientosPage() {
                 <span style={{ flex: 1 }} className="vencimientos-fila-muted">
                   Lote #{lote.lote_id}
                 </span>
-                <span style={{ flex: 1, textAlign: 'center', fontWeight: 700 }}>{describirStock(lote.cantidad, lote)}</span>
+                <span style={{ flex: 1, textAlign: 'center', fontWeight: 700 }}>{describirStock(lote.cantidad, lote, stockEnPacks)}</span>
                 <span style={{ flex: 1.2 }}>{formatearFecha(lote.fecha_vencimiento)}</span>
                 <span style={{ flex: 1 }}>
                   <span className="vencimientos-badge vencimientos-badge-vencido">
@@ -171,7 +171,7 @@ export default function VencimientosPage() {
                 <span style={{ flex: 1 }} className="vencimientos-fila-muted">
                   Lote #{lote.lote_id}
                 </span>
-                <span style={{ flex: 1, textAlign: 'center', fontWeight: 700 }}>{describirStock(lote.cantidad, lote)}</span>
+                <span style={{ flex: 1, textAlign: 'center', fontWeight: 700 }}>{describirStock(lote.cantidad, lote, stockEnPacks)}</span>
                 <span style={{ flex: 1.2 }}>{formatearFecha(lote.fecha_vencimiento)}</span>
                 <span style={{ flex: 1 }}>
                   <span className="vencimientos-badge vencimientos-badge-aviso">

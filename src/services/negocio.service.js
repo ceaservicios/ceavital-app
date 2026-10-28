@@ -79,3 +79,30 @@ export async function guardarDatosNegocio(datos = {}) {
   });
   return { anteriores, datos: nuevos };
 }
+
+// Cómo se muestra el stock de los productos con pack (pedido del usuario, 2026-10-28: clientes
+// que lo quieren ver por pack): 'unidades' ("840", con "140 packs" abajo, como siempre) o 'packs'
+// (al revés). Lo elige el Administrador en Configuración y rige para todos en Stock, Caja y
+// Vencimientos. Es solo cómo se ve: el stock se sigue guardando en unidades. Vive en
+// `configuracion` (clave 'stock_en'), como el plan; sin la fila, 'unidades'.
+const STOCK_EN = ['unidades', 'packs'];
+
+export async function obtenerStockEn() {
+  const fila = await db.prepare(`SELECT valor FROM configuracion WHERE clave = 'stock_en'`).get();
+  return STOCK_EN.includes(fila?.valor) ? fila.valor : 'unidades';
+}
+
+export async function guardarStockEn(valor) {
+  if (!STOCK_EN.includes(valor)) throw new ApiError(400, 'El stock se muestra en "unidades" o en "packs"');
+  const anterior = await db.transaction(async () => {
+    const actual = await obtenerStockEn();
+    await db
+      .prepare(
+        `INSERT INTO configuracion (clave, valor) VALUES ('stock_en', ?)
+         ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor, actualizado_en = CURRENT_TIMESTAMP`
+      )
+      .run(valor);
+    return actual;
+  });
+  return { anterior, stock_en: valor };
+}
