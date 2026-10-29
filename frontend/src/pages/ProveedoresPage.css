@@ -1,346 +1,284 @@
-.proveedores-page {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  height: 100%;
-  min-height: 0;
-}
-.proveedores-kpis {
-  display: flex;
-  gap: 16px;
+/* Proveedores (2026-10-28): lista a todo el ancho, alta y perfil en páginas propias y carga de
+   la mercadería que trajo. Usan las clases cliente-* (tarjetas, KPIs, tablas, pestañas,
+   formularios) y pedido-* (detalle desplegable); acá va solo lo propio. */
+
+.proveedores-toolbar {
   flex-wrap: wrap;
 }
-.proveedores-kpi {
-  flex: 1;
-  min-width: 180px;
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.proveedores-kpi-label {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-tertiary);
-}
-.proveedores-kpi-value {
-  font-size: 26px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.proveedores-body {
-  flex: 1;
-  display: flex;
-  gap: 16px;
-  min-height: 0;
-}
-/* Con el menú lateral (240px) los dos paneles ya no entran lado a lado por
-   debajo de ~1200px de ventana: se apilan y la página crece con su contenido
-   (sin altura fija, que era lo que hacía que los bloques se pisaran). */
-@media (max-width: 1200px) {
-  .proveedores-page {
-    height: auto;
-  }
-  .proveedores-body {
-    flex-direction: column;
-  }
-  .proveedores-body > * {
-    flex: none;
-    min-width: 0;
-    max-width: 100%;
-  }
-}
-
-.proveedores-listas {
-  flex: 1.7;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-height: 0;
-  overflow: auto;
-}
-.proveedores-card {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.proveedores-card-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.proveedores-card-titulo {
-  font-size: 14px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-.proveedores-search {
-  flex: 1;
-}
-/* Celular: título y botón en una fila, buscador debajo a todo el ancho. */
 @media (max-width: 600px) {
-  .proveedores-card-header {
-    flex-wrap: wrap;
-    justify-content: space-between;
-  }
-  .proveedores-search {
-    order: 3;
+  .proveedores-toolbar .cliente-buscar {
     flex: 1 1 100%;
-    min-width: 0;
   }
-}
-.proveedores-search input {
-  width: 100%;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  background: var(--bg-muted);
-  font: inherit;
-  font-size: 13.5px;
+  .proveedores-toolbar .btn {
+    flex: 1 1 0;
+  }
+  /* En el celular entra lo importante: el proveedor y lo que se le debe. */
+  .cliente-tabla .prov-opcional {
+    display: none;
+  }
 }
 
-.proveedores-vacio {
-  padding: 24px;
-  text-align: center;
-  color: var(--text-tertiary);
-  font-size: 13.5px;
+/* Perfil y carga: varias tarjetas y filas que se despliegan, así que la página crece con su
+   contenido y scrollea entera (como Pedidos de Clientes), no una tarjeta de altura fija. */
+.cliente-page.proveedor-perfil,
+.cliente-page.carga-pagina {
+  height: auto;
 }
-.proveedores-tabla-head {
-  display: flex;
-  padding: 8px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--bg-app);
+.proveedor-perfil > .cliente-card:last-child,
+.carga-pagina > .cliente-card:last-child {
+  flex: none;
+  overflow: visible;
 }
-.proveedores-fila {
+.proveedor-perfil .cliente-card .cliente-tabla-wrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.proveedor-perfil .cliente-tabla th {
+  position: static;
+}
+.proveedor-titulo {
   display: flex;
   align-items: center;
-  width: 100%;
-  padding: 11px 10px;
-  border: none;
-  border-bottom: 1px solid var(--bg-app);
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
-.proveedores-fila:hover {
-  background: #f6f7f8;
-}
-.proveedores-fila-nombre {
-  font-size: 14px;
-  font-weight: 600;
-}
-.proveedores-fila-muted {
-  font-size: 13.5px;
-  color: var(--text-secondary);
+.proveedor-titulo-acciones {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.proveedores-badge {
+/* Estado de pago de una compra. Sin Rosa Coral ni Dorado (marca.md los reserva para alertas
+   urgentes): lo que se le debe a un proveedor es información normal del negocio. */
+.compra-estado {
   display: inline-flex;
-  padding: 4px 10px;
+  align-items: center;
+  padding: 4px 12px;
   border-radius: var(--radius-pill);
   font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
 }
-.proveedores-badge-recibido {
+.compra-estado-pagada {
   background: #dceee5;
   color: #0e4b38;
 }
-.proveedores-badge-pendiente {
-  background: #f1f3f4;
-  color: #5b6664;
-}
-.proveedores-badge-realizado {
+.compra-estado-parcial {
   background: #dde4f1;
   color: #22428c;
 }
-.proveedores-badge-cancelado {
-  background: #f1f3f4;
-  color: #8a9490;
+.compra-estado-impaga {
+  background: #22428c;
+  color: #ffffff;
+}
+.compra-estado-anulada {
+  background: #e3e6e8;
+  color: #5b6664;
+}
+.compra-fila-anulada > td {
+  color: var(--text-muted);
 }
 
-.proveedores-panel {
-  flex: 1;
-  min-width: 340px;
-  padding: 20px;
+/* Pagos dentro del detalle de una compra */
+.compra-pagos {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  overflow: auto;
+  gap: 6px;
 }
-.proveedores-panel-vacio {
-  margin: auto;
-  text-align: center;
-  color: var(--text-tertiary);
-  font-size: 14px;
-  padding: 24px;
+.compra-pago {
+  display: grid;
+  grid-template-columns: 96px 120px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  font-size: 13.5px;
 }
-.proveedores-panel-titulo {
+.compra-pago-anulado {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+@media (max-width: 600px) {
+  .compra-pago {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+/* Formulario de pago: medio en botones, "Sale de la caja" y anular en la tabla. */
+.pago-check {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.pago-check input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  flex-shrink: 0;
+  accent-color: var(--color-primary);
+}
+.pago-confirmar {
+  display: inline-flex;
+  gap: 6px;
+}
+.pago-confirmar .btn {
+  padding: 6px 12px;
+}
+
+/* Cargar mercadería: buscador con resultados y las líneas de lo que trajo. */
+.carga-buscador {
+  position: relative;
+}
+.carga-buscador .cliente-buscar {
+  width: 100%;
+}
+.carga-resultados {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(27, 38, 34, 0.12);
+}
+.carga-resultado {
+  display: flex;
   justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-bottom: 1px solid var(--bg-app);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.carga-resultado:hover {
+  background: #f6f7f8;
+}
+.carga-resultado-vacio {
+  padding: 12px 14px;
+  font-size: 13.5px;
+  color: var(--text-tertiary);
+}
+.carga-de-proveedor {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(14, 75, 56, 0.08);
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.carga-lineas {
+  display: flex;
+  flex-direction: column;
+}
+.carga-linea {
+  display: grid;
+  grid-template-columns: minmax(170px, 2fr) minmax(170px, 1.5fr) minmax(140px, 1fr) minmax(120px, 1fr) minmax(90px, auto) 34px;
+  gap: 14px;
+  align-items: start;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--bg-app);
+}
+.carga-linea-cabecera {
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--border-default);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.carga-linea-cabecera .num {
+  text-align: right;
+}
+.carga-producto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 10px;
+  font-size: 14px;
+}
+.carga-campo {
+  min-width: 0;
+}
+.carga-etiqueta {
+  display: none;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.carga-subtotal {
+  padding-top: 11px;
+  font-weight: 800;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.carga-quitar {
+  margin-top: 4px;
+}
+.carga-total {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 16px;
+  padding-top: 14px;
   font-size: 15px;
   font-weight: 700;
 }
-.proveedores-panel-cerrar {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 16px;
-  color: var(--text-tertiary);
+.carga-total strong {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
-.proveedores-form,
-.proveedores-detalle {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+/* Sin lugar para la grilla: cada línea pasa a ser una tarjetita con sus etiquetas. */
+@media (max-width: 1100px) {
+  .carga-linea-cabecera {
+    display: none;
+  }
+  .carga-linea {
+    position: relative;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .carga-producto {
+    grid-column: 1 / -1;
+    padding: 0 44px 0 0;
+  }
+  .carga-etiqueta {
+    display: block;
+  }
+  .carga-subtotal {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 0;
+    text-align: left;
+  }
+  .carga-quitar {
+    position: absolute;
+    top: 12px;
+    right: 0;
+    margin: 0;
+  }
 }
-.proveedores-form-grid2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.proveedores-seccion {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-default);
-}
-.proveedores-section-label {
-  font-size: 13.5px;
-  font-weight: 700;
-}
-.proveedores-hint {
-  font-size: 13px;
-  color: var(--text-tertiary);
-}
-.proveedores-producto-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 8px 10px;
-  background: var(--bg-muted);
-  border-radius: var(--radius-sm);
-  font-size: 13.5px;
-}
-
-.proveedores-pedido-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  background: var(--bg-muted);
-  border-radius: var(--radius-sm);
-}
-.proveedores-pedido-fecha {
-  flex: 1;
-  font-size: 13.5px;
-  font-weight: 600;
-}
-.proveedores-pedido-row select {
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--border-default);
-  font: inherit;
-  font-size: 12.5px;
-  background: var(--bg-surface);
-}
-.proveedores-pedido-eliminar {
-  border: none;
-  background: transparent;
-  color: #b0453b;
-  cursor: pointer;
-  display: flex;
-}
-.proveedores-pedido-confirm {
-  display: flex;
-  gap: 6px;
-}
-.proveedores-pedido-confirm .btn {
-  padding: 5px 10px;
-  font-size: 12px;
-}
-
-.proveedores-nuevo-pedido {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-default);
-}
-.proveedores-item-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.proveedores-item-row select {
-  flex: 2;
-  padding: 9px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  background: var(--bg-muted);
-  font: inherit;
-  font-size: 13.5px;
-}
-.proveedores-item-row input {
-  flex: 1;
-  padding: 9px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  font: inherit;
-  font-size: 13.5px;
-  min-width: 0;
-}
-.proveedores-item-quitar {
-  border: none;
-  background: transparent;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  font-size: 14px;
-  flex-shrink: 0;
-}
-.proveedores-item-agregar {
-  align-self: flex-start;
-  border: none;
-  background: transparent;
-  color: var(--color-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  padding: 0;
-}
-
-.proveedores-eliminar {
-  padding-top: 10px;
-  border-top: 1px solid var(--border-default);
-  text-align: center;
-}
-.proveedores-eliminar-link {
-  border: none;
-  background: transparent;
-  color: var(--color-danger);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-}
-.proveedores-eliminar-confirm {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-.proveedores-eliminar-confirm > div {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
+@media (max-width: 600px) {
+  .carga-linea {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

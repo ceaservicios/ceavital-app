@@ -1,11 +1,18 @@
 import db from '../db/connection.js';
-import { hoyNegocio } from '../utils/fecha-negocio.js';
+import { esDiaValido, hoyNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
 import { ApiError } from '../utils/api-error.js';
+import { factorMedida } from './presentacion.js';
+import { listarProductosDeProveedor } from './stock.service.js';
 
 // Tope de longitud de los textos libres (nombre, teléfono, email, condición de pago).
 const MAX_TEXTO = 200;
+// Tope de un monto en pesos, el mismo de precios y gastos (Number.isInteger(1e21) es true).
+const MAX_MONTO = 1_000_000_000;
+const MAX_LINEAS = 200;
+const MAX_CANTIDAD = 10_000_000;
 
-const ESTADOS_PEDIDO = ['realizado', 'pendiente', 'recibido', 'cancelado'];
+const COMPROBANTES = { remito: 'Remito', factura: 'Factura' };
+const MEDIOS_PAGO = ['efectivo', 'mercado_pago', 'cheque'];
 
 function validarString(valor, campo, { requerido = true, maxLength = MAX_TEXTO } = {}) {
   if (valor === undefined || valor === null || valor === '') {
@@ -18,25 +25,22 @@ function validarString(valor, campo, { requerido = true, maxLength = MAX_TEXTO }
   return limpio;
 }
 
-function validarEntero(valor, campo, { minimo = null } = {}) {
-  const n = Number(valor);
-  if (!Number.isInteger(n)) throw new ApiError(400, `${campo} tiene que ser un número entero`);
-  if (minimo !== null && n < minimo) throw new ApiError(400, `${campo} no puede ser menor a ${minimo}`);
-  return n;
+function validarEntero(valor, campo, { minimo = null, maximo = null } = {}) {
+  // Solo número: Number(true) vale 1 y Number('') vale 0, y se aceptaban.
+  if (typeof valor !== 'number' || !Number.isInteger(valor)) throw new ApiError(400, `${campo} tiene que ser un número entero`);
+  if (minimo !== null && valor < minimo) throw new ApiError(400, `${campo} no puede ser menor a ${minimo}`);
+  if (maximo !== null && valor > maximo) throw new ApiError(400, `${campo} no puede superar ${maximo.toLocaleString('es-AR')}`);
+  return valor;
 }
 
 function validarFecha(valor, campo) {
-  if (typeof valor !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
-    throw new ApiError(400, `${campo} tiene que tener formato YYYY-MM-DD`);
-  }
+  if (!esDiaValido(valor)) throw new ApiError(400, `${campo} no es una fecha válida (AAAA-MM-DD)`);
   return valor;
 }
 
-function validarEstado(valor) {
-  if (!ESTADOS_PEDIDO.includes(valor)) {
-    throw new ApiError(400, `estado tiene que ser uno de: ${ESTADOS_PEDIDO.join(', ')}`);
-  }
-  return valor;
+function textoComprobante(c) {
+  const tipo = COMPROBANTES[c.comprobante_tipo];
+  return c.comprobante_numero ? `${tipo} ${c.comprobante_numero}` : `${tipo} sin número`;
 }
 
 async function obtenerProveedorActivo(id) {
@@ -45,34 +49,101 @@ async function obtenerProveedorActivo(id) {
   return proveedor;
 }
 
-// "Productos que provee" (Docs/Instructivo-Funcional.md > Proveedores): el
-// vinculo real es productos.proveedor_id, definido desde Stock. No se incluye
-// precio_costo -- este endpoint es Admin+Encargado, y Encargado nunca ve
-// costos (misma regla que stock.service.js.ocultarCosto).
-function productosDelProveedor(proveedorId) {
-  return db
-    .prepare(
-      `SELECT id, nombre, codigo_barras, precio_venta
-       FROM productos WHERE proveedor_id = ? AND eliminado_en IS NULL ORDER BY LOWER(nombre)`
-    )
-    .all(proveedorId);
-}
+// Lo que se le debe a cada proveedor, su última compra y lo comprado en el mes (lista de
+// Proveedores, 2026-10-28). Los pagos son siempre de compras activas (una compra con pagos no se
+// anula), así que saldo = compras activas − pagos activos.
+const SELECT_PROVEEDORES = `
+  SELECT pr.*,
+    COALESCE((SELECT SUM(c.total) FROM compras_proveedor c WHERE c.proveedor_id = pr.id AND c.anulada_en IS NULL), 0)
+      - COALESCE((SELECT SUM(pg.monto) FROM pagos_proveedor pg WHERE pg.proveedor_id = pr.id AND pg.anulado_en IS NULL), 0) AS saldo,
+    (SELECT MAX(c.fecha) FROM compras_proveedor c WHERE c.proveedor_id = pr.id AND c.anulada_en IS NULL) AS ultima_compra,
+    COALESCE((
+      SELECT SUM(c.total) FROM compras_proveedor c
+      WHERE c.proveedor_id = pr.id AND c.anulada_en IS NULL
+        AND date_trunc('month', c.fecha) = date_trunc('month', ${SQL_HOY_NEGOCIO})
+    ), 0) AS comprado_mes
+  FROM proveedores pr
+`;
 
 export function listarProveedores({ buscar } = {}) {
   if (buscar) {
     return db
-      .prepare('SELECT * FROM proveedores WHERE eliminado_en IS NULL AND nombre ILIKE ? ORDER BY LOWER(nombre)')
+      .prepare(`${SELECT_PROVEEDORES} WHERE pr.eliminado_en IS NULL AND pr.nombre ILIKE ? ORDER BY LOWER(pr.nombre)`)
       .all(`%${buscar}%`);
   }
-  return db.prepare('SELECT * FROM proveedores WHERE eliminado_en IS NULL ORDER BY LOWER(nombre)').all();
+  return db.prepare(`${SELECT_PROVEEDORES} WHERE pr.eliminado_en IS NULL ORDER BY LOWER(pr.nombre)`).all();
 }
 
-export async function obtenerProveedor(id) {
-  const proveedor = await obtenerProveedorActivo(id);
-  return { ...proveedor, productos: await productosDelProveedor(id) };
+// Perfil del proveedor: sus datos, lo que trajo (cada compra con sus líneas y lo pagado), los
+// pagos, sus productos y los pedidos de antes (ya no se cargan, quedan como historial).
+export async function obtenerProveedor(id, { rol } = {}) {
+  const proveedor = await db.prepare(`${SELECT_PROVEEDORES} WHERE pr.id = ? AND pr.eliminado_en IS NULL`).get(id);
+  if (!proveedor) throw new ApiError(404, 'Proveedor no encontrado');
+
+  const compras = await db
+    .prepare(
+      `SELECT c.id, c.fecha, c.comprobante_tipo, c.comprobante_numero, c.total, c.creado_en, c.anulada_en,
+         u.nombre AS usuario_nombre, ua.nombre AS anulada_por_nombre,
+         COALESCE((SELECT SUM(pg.monto) FROM pagos_proveedor pg WHERE pg.compra_id = c.id AND pg.anulado_en IS NULL), 0) AS pagado
+       FROM compras_proveedor c
+       JOIN usuarios u ON u.id = c.usuario_id
+       LEFT JOIN usuarios ua ON ua.id = c.anulada_por
+       WHERE c.proveedor_id = ?
+       ORDER BY c.fecha DESC, c.id DESC`
+    )
+    .all(id);
+  const items = await db
+    .prepare(
+      `SELECT ci.id, ci.compra_id, ci.producto_id, p.nombre AS producto_nombre, p.medida, ci.cantidad, ci.pack_nombre,
+         ci.pack_unidades, ci.cantidad_presentacion, ci.costo_unitario, ci.subtotal, ci.fecha_vencimiento
+       FROM compra_items ci
+       JOIN compras_proveedor c ON c.id = ci.compra_id
+       JOIN productos p ON p.id = ci.producto_id
+       WHERE c.proveedor_id = ?
+       ORDER BY ci.id`
+    )
+    .all(id);
+  const pagos = await db
+    .prepare(
+      `SELECT pg.id, pg.compra_id, pg.fecha, pg.monto, pg.medio, pg.sale_de_caja, pg.cheque_numero, pg.cheque_banco,
+         pg.cheque_fecha_cobro, pg.detalle, pg.creado_en, pg.anulado_en,
+         u.nombre AS usuario_nombre, ua.nombre AS anulado_por_nombre,
+         c.comprobante_tipo AS compra_comprobante_tipo, c.comprobante_numero AS compra_comprobante_numero
+       FROM pagos_proveedor pg
+       JOIN usuarios u ON u.id = pg.usuario_id
+       LEFT JOIN usuarios ua ON ua.id = pg.anulado_por
+       JOIN compras_proveedor c ON c.id = pg.compra_id
+       WHERE pg.proveedor_id = ?
+       ORDER BY pg.fecha DESC, pg.id DESC`
+    )
+    .all(id);
+  const pedidos = await db
+    .prepare(
+      `SELECT id, fecha, estado FROM pedidos_proveedor
+       WHERE proveedor_id = ? AND eliminado_en IS NULL ORDER BY fecha DESC, id DESC`
+    )
+    .all(id);
+  const itemsPedidos = await db
+    .prepare(
+      `SELECT pi.pedido_id, p.nombre AS producto_nombre, pi.cantidad
+       FROM pedido_items pi JOIN pedidos_proveedor pp ON pp.id = pi.pedido_id JOIN productos p ON p.id = pi.producto_id
+       WHERE pp.proveedor_id = ? ORDER BY pi.id`
+    )
+    .all(id);
+
+  const activas = compras.filter((c) => !c.anulada_en);
+  return {
+    ...proveedor,
+    total_comprado: activas.reduce((a, c) => a + c.total, 0),
+    total_pagado: pagos.filter((p) => !p.anulado_en).reduce((a, p) => a + p.monto, 0),
+    productos: await listarProductosDeProveedor(id, { rol }),
+    compras: compras.map((c) => ({ ...c, anulada: Boolean(c.anulada_en), items: items.filter((i) => i.compra_id === c.id) })),
+    pagos: pagos.map((p) => ({ ...p, anulado: Boolean(p.anulado_en) })),
+    pedidos_anteriores: pedidos.map((p) => ({ ...p, items: itemsPedidos.filter((i) => i.pedido_id === p.id) })),
+  };
 }
 
-export async function crearProveedor(datos) {
+export async function crearProveedor(datos, { rol } = {}) {
   const nombre = validarString(datos.nombre, 'nombre');
   const telefono = validarString(datos.telefono, 'telefono', { requerido: false });
   const email = validarString(datos.email, 'email', { requerido: false });
@@ -82,12 +153,12 @@ export async function crearProveedor(datos) {
     .prepare('INSERT INTO proveedores (nombre, telefono, email, condicion_pago) VALUES (?, ?, ?, ?) RETURNING id')
     .run(nombre, telefono, email, condicionPago);
 
-  return obtenerProveedor(resultado.lastInsertRowid);
+  return obtenerProveedor(resultado.lastInsertRowid, { rol });
 }
 
 // Leer-decidir-escribir en una transacción: si otro da de baja al proveedor en el medio, no se
 // edita uno ya eliminado.
-export async function editarProveedor(id, datos) {
+export async function editarProveedor(id, datos, { rol } = {}) {
   await db.transaction(async () => {
     await obtenerProveedorActivo(id);
 
@@ -114,7 +185,7 @@ export async function editarProveedor(id, datos) {
       .run(...valores, id);
   });
 
-  return obtenerProveedor(id);
+  return obtenerProveedor(id, { rol });
 }
 
 export async function eliminarProveedor(id) {
@@ -124,125 +195,194 @@ export async function eliminarProveedor(id) {
   });
 }
 
-// -- Pedidos a proveedor --
+// -- Pagos a proveedores --
 
-async function obtenerPedidoActivo(proveedorId, pedidoId) {
-  const pedido = await db
-    .prepare('SELECT * FROM pedidos_proveedor WHERE id = ? AND proveedor_id = ? AND eliminado_en IS NULL')
-    .get(pedidoId, proveedorId);
-  if (!pedido) throw new ApiError(404, 'Pedido no encontrado');
-  return pedido;
-}
-
-async function obtenerPedidoConItems(pedidoId) {
-  const pedido = await db.prepare('SELECT * FROM pedidos_proveedor WHERE id = ?').get(pedidoId);
-  const items = await db
-    .prepare(
-      `SELECT pi.*, p.nombre AS producto_nombre
-       FROM pedido_items pi JOIN productos p ON p.id = pi.producto_id
-       WHERE pi.pedido_id = ?`
-    )
-    .all(pedidoId);
-  return { ...pedido, items };
-}
-
-function validarItemsPedido(items) {
-  if (!Array.isArray(items) || items.length === 0) {
-    throw new ApiError(400, 'items es requerido y tiene que tener al menos un producto');
+// Un pago: monto, fecha, medio y, si es cheque, sus datos. En efectivo se elige si sale de la
+// caja (decisión del usuario, 2026-10-28).
+function validarPago(datos) {
+  if (!datos || typeof datos !== 'object' || Array.isArray(datos)) throw new ApiError(400, 'Faltan los datos del pago');
+  const medio = datos.medio;
+  if (!MEDIOS_PAGO.includes(medio)) throw new ApiError(400, 'medio tiene que ser efectivo, mercado_pago o cheque');
+  if (datos.sale_de_caja !== undefined && typeof datos.sale_de_caja !== 'boolean') {
+    throw new ApiError(400, 'sale_de_caja tiene que ser true o false');
   }
-  return items.map((item, i) => ({
-    producto_id: validarEntero(item?.producto_id, `items[${i}].producto_id`, { minimo: 1 }),
-    cantidad: validarEntero(item?.cantidad, `items[${i}].cantidad`, { minimo: 1 }),
-  }));
+  const esCheque = medio === 'cheque';
+  return {
+    monto: validarEntero(datos.monto, 'El monto del pago', { minimo: 1, maximo: MAX_MONTO }),
+    fecha: validarFecha(datos.fecha ?? hoyNegocio(), 'La fecha del pago'),
+    medio,
+    sale_de_caja: medio === 'efectivo' && datos.sale_de_caja === true,
+    cheque_numero: esCheque ? validarString(datos.cheque_numero, 'El número de cheque', { requerido: false, maxLength: 50 }) : null,
+    cheque_banco: esCheque ? validarString(datos.cheque_banco, 'El banco', { requerido: false, maxLength: 100 }) : null,
+    cheque_fecha_cobro: esCheque && datos.cheque_fecha_cobro != null ? validarFecha(datos.cheque_fecha_cobro, 'La fecha de cobro') : null,
+    detalle: validarString(datos.detalle, 'El detalle', { requerido: false }),
+  };
 }
 
-// cantidad_items: cuántas líneas (productos) lleva el pedido (columna "Ítems" de Proveedores >
-// Pedidos recientes). Columnas explícitas, no "SELECT *".
-export async function listarPedidos(proveedorId) {
-  await obtenerProveedorActivo(proveedorId);
-  return db
+// Dentro de la transacción de quien llama. Si sale de la caja, se anota también como gasto de
+// caja (cuenta en el arqueo del turno y aparece en Ventas diarias).
+async function insertarPago(proveedor, compra, pago, usuarioId) {
+  const pendiente = compra.total - compra.pagado;
+  if (pago.monto > pendiente) {
+    throw new ApiError(400, `El pago supera lo que falta pagar de ${textoComprobante(compra)} (${pendiente.toLocaleString('es-AR')}).`);
+  }
+  let gastoId = null;
+  if (pago.sale_de_caja) {
+    const gasto = await db
+      .prepare('INSERT INTO gastos_caja (usuario_id, concepto, monto, proveedor_id) VALUES (?, ?, ?, ?) RETURNING id')
+      .get(usuarioId, `Pago a ${proveedor.nombre} · ${textoComprobante(compra)}`.slice(0, MAX_TEXTO), pago.monto, proveedor.id);
+    gastoId = gasto.id;
+  }
+  await db
     .prepare(
-      `SELECT pp.id, pp.proveedor_id, pp.usuario_id, pp.estado, pp.fecha, pp.eliminado_en, pp.creado_en, pp.actualizado_en,
-         (SELECT COUNT(*) FROM pedido_items pi WHERE pi.pedido_id = pp.id) AS cantidad_items
-       FROM pedidos_proveedor pp
-       WHERE pp.proveedor_id = ? AND pp.eliminado_en IS NULL
-       ORDER BY pp.fecha DESC, pp.id DESC`
+      `INSERT INTO pagos_proveedor (proveedor_id, compra_id, usuario_id, fecha, monto, medio, sale_de_caja, gasto_caja_id,
+         cheque_numero, cheque_banco, cheque_fecha_cobro, detalle)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .all(proveedorId);
+    .run(
+      proveedor.id, compra.id, usuarioId, pago.fecha, pago.monto, pago.medio, pago.sale_de_caja, gastoId,
+      pago.cheque_numero, pago.cheque_banco, pago.cheque_fecha_cobro, pago.detalle
+    );
 }
 
-export async function obtenerPedido(proveedorId, pedidoId) {
-  await obtenerPedidoActivo(proveedorId, pedidoId);
-  return obtenerPedidoConItems(pedidoId);
+async function obtenerCompraActiva(proveedorId, compraId) {
+  const compra = await db
+    .prepare(
+      `SELECT c.*, COALESCE((SELECT SUM(pg.monto) FROM pagos_proveedor pg WHERE pg.compra_id = c.id AND pg.anulado_en IS NULL), 0) AS pagado
+       FROM compras_proveedor c WHERE c.id = ? AND c.proveedor_id = ? AND c.anulada_en IS NULL`
+    )
+    .get(compraId, proveedorId);
+  if (!compra) throw new ApiError(404, 'Compra no encontrada');
+  return compra;
 }
 
-// "Recepción: marcar un pedido como recibido es un registro administrativo --
-// NO genera automáticamente un lote nuevo en Stock" (Docs/Instructivo-Funcional.md).
-// Por eso crear/editar un pedido acá nunca toca productos/lotes.
-export async function crearPedido(proveedorId, datos, { usuarioId }) {
-  const items = validarItemsPedido(datos.items);
-  const fecha = datos.fecha != null ? validarFecha(datos.fecha, 'fecha') : hoyNegocio();
-  const estado = datos.estado != null ? validarEstado(datos.estado) : 'realizado';
+// Admin + Encargado (decisión del usuario, 2026-10-28). Leer lo pagado, decidir y escribir en una
+// transacción: dos pagos a la vez no pueden pasarse del total.
+export async function registrarPago(proveedorId, datos, { usuarioId, rol }) {
+  const compraId = validarEntero(datos?.compra_id, 'compra_id', { minimo: 1 });
+  const pago = validarPago(datos);
+  await db.transaction(async () => {
+    const proveedor = await obtenerProveedorActivo(proveedorId);
+    const compra = await obtenerCompraActiva(proveedorId, compraId);
+    await insertarPago(proveedor, compra, pago, usuarioId);
+  });
+  return obtenerProveedor(proveedorId, { rol });
+}
 
-  const pedidoId = await db.transaction(async () => {
+// Anular un pago (cargado mal): queda en el historial y, si salió de la caja, se da de baja su
+// gasto, así el efectivo del turno vuelve a lo que era.
+export async function anularPago(proveedorId, pagoId, { usuarioId, rol }) {
+  await db.transaction(async () => {
     await obtenerProveedorActivo(proveedorId);
-
-    for (const { producto_id } of items) {
-      const producto = await db
-        .prepare('SELECT id FROM productos WHERE id = ? AND eliminado_en IS NULL')
-        .get(producto_id);
-      if (!producto) throw new ApiError(400, `El producto ${producto_id} no existe o está eliminado`);
+    const pago = await db
+      .prepare('SELECT id, gasto_caja_id FROM pagos_proveedor WHERE id = ? AND proveedor_id = ? AND anulado_en IS NULL')
+      .get(pagoId, proveedorId);
+    if (!pago) throw new ApiError(404, 'Pago no encontrado');
+    await db.prepare('UPDATE pagos_proveedor SET anulado_en = CURRENT_TIMESTAMP, anulado_por = ? WHERE id = ?').run(usuarioId, pagoId);
+    if (pago.gasto_caja_id) {
+      await db.prepare('UPDATE gastos_caja SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ? AND eliminado_en IS NULL').run(pago.gasto_caja_id);
     }
+  });
+  return obtenerProveedor(proveedorId, { rol });
+}
 
-    const resultado = await db
+// -- Mercadería que trae un proveedor (compras) --
+
+// Una línea: el producto, cuánto (en packs con `en_packs`, si no en la medida chica: unidades,
+// gramos o ml), el costo de esa presentación (por pack, por unidad o por kg/litro) y el
+// vencimiento. Devuelve lo que se guarda.
+async function validarLinea(item, i) {
+  if (!item || typeof item !== 'object') throw new ApiError(400, `La línea ${i + 1} no es válida`);
+  const productoId = validarEntero(item.producto_id, `items[${i}].producto_id`, { minimo: 1 });
+  const producto = await db
+    .prepare('SELECT id, nombre, medida, pack_nombre, pack_unidades FROM productos WHERE id = ? AND eliminado_en IS NULL')
+    .get(productoId);
+  if (!producto) throw new ApiError(400, `El producto ${productoId} no existe o está eliminado`);
+  if (item.en_packs !== undefined && typeof item.en_packs !== 'boolean') throw new ApiError(400, 'en_packs tiene que ser true o false');
+  const enPacks = item.en_packs === true;
+  if (enPacks && !producto.pack_unidades) throw new ApiError(400, `«${producto.nombre}» no tiene pack: cargalo en su medida`);
+  const cargada = validarEntero(item.cantidad, `La cantidad de «${producto.nombre}»`, { minimo: 1, maximo: MAX_CANTIDAD });
+  const costo = validarEntero(item.costo, `El costo de «${producto.nombre}»`, { minimo: 0, maximo: MAX_MONTO });
+  const cantidad = enPacks ? cargada * producto.pack_unidades : cargada;
+  if (cantidad > MAX_CANTIDAD) throw new ApiError(400, `La cantidad de «${producto.nombre}» es demasiado grande`);
+  return {
+    producto,
+    cantidad,
+    pack_nombre: enPacks ? producto.pack_nombre : null,
+    pack_unidades: enPacks ? producto.pack_unidades : null,
+    cantidad_presentacion: enPacks ? cargada : null,
+    costo_unitario: costo,
+    subtotal: enPacks ? cargada * costo : Math.round((cantidad * costo) / factorMedida(producto.medida)),
+    fecha_vencimiento: item.fecha_vencimiento != null ? validarFecha(item.fecha_vencimiento, `El vencimiento de «${producto.nombre}»`) : null,
+  };
+}
+
+// Cargar lo que trajo un proveedor (pedido del usuario, 2026-10-28): en una sola transacción, la
+// compra, un lote por línea (así entra al stock) y, si se le pagó algo en el momento, el pago.
+export async function crearCompra(proveedorId, datos, { usuarioId, rol }) {
+  const fecha = validarFecha(datos.fecha ?? hoyNegocio(), 'La fecha');
+  if (!COMPROBANTES[datos.comprobante_tipo]) throw new ApiError(400, 'comprobante_tipo tiene que ser remito o factura');
+  const numero = validarString(datos.comprobante_numero, 'El número de comprobante', { requerido: false, maxLength: 50 });
+  if (!Array.isArray(datos.items) || datos.items.length === 0) throw new ApiError(400, 'Agregá al menos un producto');
+  if (datos.items.length > MAX_LINEAS) throw new ApiError(400, `Una compra no puede tener más de ${MAX_LINEAS} líneas`);
+  const pago = datos.pago != null ? validarPago(datos.pago) : null;
+
+  await db.transaction(async () => {
+    const proveedor = await obtenerProveedorActivo(proveedorId);
+    const lineas = [];
+    for (const [i, item] of datos.items.entries()) lineas.push(await validarLinea(item, i));
+    const total = lineas.reduce((a, l) => a + l.subtotal, 0);
+    if (total > 1_000_000_000_000) throw new ApiError(400, 'El total de la compra es demasiado grande');
+
+    const compra = await db
       .prepare(
-        'INSERT INTO pedidos_proveedor (proveedor_id, usuario_id, estado, fecha) VALUES (?, ?, ?, ?) RETURNING id'
+        `INSERT INTO compras_proveedor (proveedor_id, usuario_id, fecha, comprobante_tipo, comprobante_numero, total)
+         VALUES (?, ?, ?, ?, ?, ?) RETURNING *`
       )
-      .run(proveedorId, usuarioId, estado, fecha);
-
-    for (const { producto_id, cantidad } of items) {
+      .get(proveedorId, usuarioId, fecha, datos.comprobante_tipo, numero, total);
+    for (const l of lineas) {
+      const lote = await db
+        .prepare('INSERT INTO lotes (producto_id, cantidad, fecha_ingreso, fecha_vencimiento) VALUES (?, ?, ?, ?) RETURNING id')
+        .get(l.producto.id, l.cantidad, fecha, l.fecha_vencimiento);
       await db
-        .prepare('INSERT INTO pedido_items (pedido_id, producto_id, cantidad) VALUES (?, ?, ?)')
-        .run(resultado.lastInsertRowid, producto_id, cantidad);
+        .prepare(
+          `INSERT INTO compra_items (compra_id, producto_id, lote_id, cantidad, pack_nombre, pack_unidades, cantidad_presentacion,
+             costo_unitario, subtotal, fecha_vencimiento)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          compra.id, l.producto.id, lote.id, l.cantidad, l.pack_nombre, l.pack_unidades, l.cantidad_presentacion,
+          l.costo_unitario, l.subtotal, l.fecha_vencimiento
+        );
     }
-
-    return resultado.lastInsertRowid;
+    if (pago) await insertarPago(proveedor, { ...compra, pagado: 0 }, pago, usuarioId);
   });
-
-  return obtenerPedidoConItems(pedidoId);
+  return obtenerProveedor(proveedorId, { rol });
 }
 
-// Alcance acotado a estado/fecha (lo único que el instructivo describe como
-// editable de un pedido ya creado) -- no reabre productos/cantidades, eso
-// requiere cancelar y crear un pedido nuevo.
-export async function editarPedido(proveedorId, pedidoId, datos) {
+// Anular una compra cargada mal: retira del stock sus lotes y la deja en el historial. Solo si no
+// tiene pagos (se anulan primero) y si de ningún lote se vendió ni retiró nada: si no, el stock
+// quedaría mal; eso se corrige desde Stock.
+export async function anularCompra(proveedorId, compraId, { usuarioId, rol }) {
   await db.transaction(async () => {
-    await obtenerPedidoActivo(proveedorId, pedidoId);
-
-    const actualizaciones = {};
-    if (datos.estado !== undefined) actualizaciones.estado = validarEstado(datos.estado);
-    if (datos.fecha !== undefined) actualizaciones.fecha = validarFecha(datos.fecha, 'fecha');
-
-    const claves = Object.keys(actualizaciones);
-    if (claves.length === 0) throw new ApiError(400, 'No se envió ningún campo para actualizar');
-
-    const set = claves.map((c) => `${c} = ?`).join(', ');
-    const valores = claves.map((c) => actualizaciones[c]);
-
-    await db
-      .prepare(`UPDATE pedidos_proveedor SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`)
-      .run(...valores, pedidoId);
+    await obtenerProveedorActivo(proveedorId);
+    const compra = await obtenerCompraActiva(proveedorId, compraId);
+    if (compra.pagado > 0) throw new ApiError(409, 'Esta compra tiene pagos: anulalos primero, en la pestaña Pagos.');
+    const lineas = await db
+      .prepare(
+        `SELECT ci.cantidad, ci.lote_id, p.nombre, l.cantidad AS en_lote, l.eliminado_en
+         FROM compra_items ci JOIN lotes l ON l.id = ci.lote_id JOIN productos p ON p.id = ci.producto_id
+         WHERE ci.compra_id = ?`
+      )
+      .all(compraId);
+    const tocada = lineas.find((l) => l.eliminado_en || l.en_lote !== l.cantidad);
+    if (tocada) {
+      throw new ApiError(409, `Ya se vendió o se retiró parte de «${tocada.nombre}» de esta compra: no se puede anular. Corregilo desde Stock.`);
+    }
+    for (const l of lineas) {
+      await db.prepare('UPDATE lotes SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(l.lote_id);
+    }
+    await db.prepare('UPDATE compras_proveedor SET anulada_en = CURRENT_TIMESTAMP, anulada_por = ? WHERE id = ?').run(usuarioId, compraId);
   });
-
-  return obtenerPedidoConItems(pedidoId);
-}
-
-// Soft delete = corrección de un pedido mal cargado (dato erróneo), distinto
-// de estado='cancelado' (acción de negocio real: el pedido no se concretó).
-// Mismo criterio que lotes.eliminado_en (Docs/Modelo-de-Datos.md > lotes).
-export async function eliminarPedido(proveedorId, pedidoId) {
-  await db.transaction(async () => {
-    await obtenerPedidoActivo(proveedorId, pedidoId);
-    await db.prepare('UPDATE pedidos_proveedor SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(pedidoId);
-  });
+  return obtenerProveedor(proveedorId, { rol });
 }

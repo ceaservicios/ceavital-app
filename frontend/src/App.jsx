@@ -7,8 +7,13 @@ import LoginPage from './pages/LoginPage.jsx';
 import CajaPage from './pages/CajaPage.jsx';
 import VentasDiariasPage from './pages/VentasDiariasPage.jsx';
 import StockPage from './pages/StockPage.jsx';
+import ProductoNuevoPage from './pages/ProductoNuevoPage.jsx';
+import ProductoDetallePage from './pages/ProductoDetallePage.jsx';
 import VencimientosPage from './pages/VencimientosPage.jsx';
 import ProveedoresPage from './pages/ProveedoresPage.jsx';
+import ProveedorNuevoPage from './pages/ProveedorNuevoPage.jsx';
+import ProveedorDetallePage from './pages/ProveedorDetallePage.jsx';
+import CargarMercaderiaPage from './pages/CargarMercaderiaPage.jsx';
 import ClientesEmpresaPage from './pages/ClientesEmpresaPage.jsx';
 import ClienteEmpresaNuevoPage from './pages/ClienteEmpresaNuevoPage.jsx';
 import ClienteEmpresaDetallePage from './pages/ClienteEmpresaDetallePage.jsx';
@@ -49,16 +54,19 @@ export default function App() {
           <Route path="cuenta" element={<CuentaPage />} />
           <Route path="caja" element={<CajaPage />} />
           <Route path="ventas-diarias" element={<VentasDiariasPage />} />
-          <Route path="stock" element={<StockPage />} />
+          {/* Lista a todo el ancho; alta y ficha en páginas propias (2026-10-28). */}
+          <Route path="stock">
+            <Route index element={<StockPage />} />
+            <Route path="nuevo" element={<ProductoNuevoPage />} />
+            <Route path=":id" element={<ProductoDetallePage />} />
+          </Route>
           <Route path="vencimientos" element={<VencimientosPage />} />
-          <Route
-            path="proveedores"
-            element={
-              <RequireRole modulo="proveedores">
-                <ProveedoresPage />
-              </RequireRole>
-            }
-          />
+          <Route path="proveedores" element={<RequireRole modulo="proveedores" />}>
+            <Route index element={<ProveedoresPage />} />
+            <Route path="nuevo" element={<ProveedorNuevoPage />} />
+            <Route path="cargar" element={<CargarMercaderiaPage />} />
+            <Route path=":id" element={<ProveedorDetallePage />} />
+          </Route>
           <Route path="clientes-empresa" element={<RequireRole modulo="clientes-empresa" />}>
             <Route index element={<ClientesEmpresaPage />} />
             <Route path="nuevo" element={<ClienteEmpresaNuevoPage />} />

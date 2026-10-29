@@ -182,7 +182,7 @@ export default function VencimientosPage() {
                   <button
                     type="button"
                     className="btn vencimientos-btn-ver"
-                    onClick={() => navigate(`/stock?producto=${lote.producto_id}`)}
+                    onClick={() => navigate(`/stock/${lote.producto_id}`)}
                   >
                     Ver lote
                   </button>

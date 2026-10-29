@@ -568,7 +568,8 @@ export default function VentasDiariasPage() {
                       <td className="num vd-gasto-monto">{formatearMonto(g.monto)}</td>
                       {puedeEliminarGasto && (
                         <td className="vd-gasto-acciones">
-                          {confirmandoBaja === g.id ? (
+                          {/* Un pago a un proveedor se anula desde su perfil (2026-10-28), no acá. */}
+                          {g.pago_proveedor_id ? null : confirmandoBaja === g.id ? (
                             <span className="vd-confirmar">
                               ¿Eliminar?
                               <button type="button" className="vd-link vd-link-peligro" onClick={() => eliminarGasto(g.id)}>

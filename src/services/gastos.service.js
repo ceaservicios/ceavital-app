@@ -50,12 +50,15 @@ export function listarGastos({ fecha, desde, hasta } = {}) {
     condiciones.push(`${sqlDiaNegocio('g.creado_en')} = ?`);
     params.push(fecha);
   }
+  // pago_proveedor_id: el gasto es un pago a un proveedor que salió de la caja (2026-10-28); ese
+  // se anula desde el perfil del proveedor, no se elimina acá.
   return db
     .prepare(
-      `SELECT g.*, u.nombre AS usuario_nombre, p.nombre AS proveedor_nombre
+      `SELECT g.*, u.nombre AS usuario_nombre, p.nombre AS proveedor_nombre, pp.id AS pago_proveedor_id
        FROM gastos_caja g
        JOIN usuarios u ON u.id = g.usuario_id
        LEFT JOIN proveedores p ON p.id = g.proveedor_id
+       LEFT JOIN pagos_proveedor pp ON pp.gasto_caja_id = g.id AND pp.anulado_en IS NULL
        WHERE ${condiciones.join(' AND ')}
        ORDER BY g.creado_en DESC, g.id DESC`
     )
@@ -86,6 +89,15 @@ export async function eliminarGasto(id) {
   await db.transaction(async () => {
     const gasto = await db.prepare('SELECT id FROM gastos_caja WHERE id = ? AND eliminado_en IS NULL').get(id);
     if (!gasto) throw new ApiError(404, 'Gasto no encontrado');
+    // Un pago a un proveedor que salió de la caja se anula desde su perfil: si se borrara acá,
+    // el pago seguiría descontando lo que se le debe.
+    const pago = await db
+      .prepare(
+        `SELECT pr.nombre FROM pagos_proveedor pp JOIN proveedores pr ON pr.id = pp.proveedor_id
+         WHERE pp.gasto_caja_id = ? AND pp.anulado_en IS NULL`
+      )
+      .get(id);
+    if (pago) throw new ApiError(409, `Es un pago a ${pago.nombre}: se anula desde Proveedores, en su perfil (pestaña Pagos).`);
     await db.prepare('UPDATE gastos_caja SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
   });
 }

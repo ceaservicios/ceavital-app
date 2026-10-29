@@ -307,19 +307,51 @@ export async function obtenerProducto(id, { rol }) {
   // antes, primero); los que no tienen fecha (no perecederos) van al final,
   // ordenados entre si por fecha_ingreso (FIFO). "(fecha_vencimiento IS NULL)"
   // es false/true -- ordenar ASC deja primero a los que SI tienen fecha.
+  // Cada lote con la compra de la que vino (proveedor y remito o factura, migración 028). El
+  // Cajero no tiene acceso a Proveedores: a él no le llega.
   const lotes = await db
     .prepare(
-      `SELECT *, (fecha_vencimiento IS NOT NULL AND fecha_vencimiento < ${SQL_HOY_NEGOCIO}) AS vencido
-       FROM lotes
-       WHERE producto_id = ? AND eliminado_en IS NULL
-       ORDER BY (fecha_vencimiento IS NULL), fecha_vencimiento ASC, fecha_ingreso ASC`
+      `SELECT l.*, (l.fecha_vencimiento IS NOT NULL AND l.fecha_vencimiento < ${SQL_HOY_NEGOCIO}) AS vencido,
+         c.id AS compra_id, c.proveedor_id AS compra_proveedor_id, pr.nombre AS compra_proveedor_nombre,
+         c.comprobante_tipo AS compra_comprobante_tipo, c.comprobante_numero AS compra_comprobante_numero
+       FROM lotes l
+       LEFT JOIN compra_items ci ON ci.lote_id = l.id
+       LEFT JOIN compras_proveedor c ON c.id = ci.compra_id
+       LEFT JOIN proveedores pr ON pr.id = c.proveedor_id
+       WHERE l.producto_id = ? AND l.eliminado_en IS NULL
+       ORDER BY (l.fecha_vencimiento IS NULL), l.fecha_vencimiento ASC, l.fecha_ingreso ASC`
     )
     .all(id);
 
   return {
     ...ocultarCosto(conAlerta(producto), rol),
-    lotes: lotes.map((l) => ({ ...l, vencido: Boolean(l.vencido) })),
+    lotes: lotes.map(
+      ({ compra_id, compra_proveedor_id, compra_proveedor_nombre, compra_comprobante_tipo, compra_comprobante_numero, ...l }) => ({
+        ...l,
+        vencido: Boolean(l.vencido),
+        compra:
+          compra_id && rol !== 'cajero'
+            ? {
+                id: compra_id,
+                proveedor_id: compra_proveedor_id,
+                proveedor_nombre: compra_proveedor_nombre,
+                comprobante_tipo: compra_comprobante_tipo,
+                comprobante_numero: compra_comprobante_numero,
+              }
+            : null,
+      })
+    ),
   };
+}
+
+// Los productos de un proveedor, con su stock (perfil del proveedor, 2026-10-28).
+export async function listarProductosDeProveedor(proveedorId, { rol }) {
+  const productos = await db
+    .prepare(
+      `${SELECT_PRODUCTOS_CON_STOCK} WHERE p.proveedor_id = ? AND p.eliminado_en IS NULL GROUP BY p.id, c.id, u.id ORDER BY LOWER(p.nombre)`
+    )
+    .all(proveedorId);
+  return productos.map((p) => ocultarCosto(conAlerta(p), rol));
 }
 
 export async function crearProducto(datos, { rol }) {
@@ -579,7 +611,7 @@ export async function pasarAPack(id, datos, { rol }) {
     const maxLote = await db.prepare('SELECT COALESCE(MAX(cantidad), 0) AS m FROM lotes WHERE producto_id = ?').get(id);
     if (maxLote.m * n > 1_000_000) throw new ApiError(400, 'Con esa cantidad por pack algún lote superaría 1.000.000 de unidades');
     // Las líneas viejas también se multiplican: que ninguna se pase del entero de la columna.
-    for (const tabla of ['venta_items', 'pedido_cliente_items']) {
+    for (const tabla of ['venta_items', 'pedido_cliente_items', 'compra_items']) {
       const maxLinea = await db.prepare(`SELECT COALESCE(MAX(cantidad), 0) AS m FROM ${tabla} WHERE producto_id = ?`).get(id);
       if (maxLinea.m * n > 2_000_000_000) throw new ApiError(400, 'Con esa cantidad por pack una venta o pedido viejo quedaría fuera de rango');
     }
@@ -608,6 +640,17 @@ export async function pasarAPack(id, datos, { rol }) {
         )
         .run(n, packNombre, n, id);
     }
+    // Lo que trajo un proveedor (migración 028): cada línea sigue igual a su lote. Las sueltas eran
+    // cajas, así que pasan a "N cajas" con el costo por caja que ya tenían.
+    await db
+      .prepare('UPDATE compra_items SET cantidad = cantidad * ?, pack_unidades = pack_unidades * ? WHERE producto_id = ? AND pack_nombre IS NOT NULL')
+      .run(n, n, id);
+    await db
+      .prepare(
+        `UPDATE compra_items SET cantidad = cantidad * ?, cantidad_presentacion = cantidad, pack_nombre = ?, pack_unidades = ?
+         WHERE producto_id = ? AND pack_nombre IS NULL`
+      )
+      .run(n, packNombre, n, id);
     await db
       .prepare(
         `UPDATE productos SET unidad_medida_id = ?, codigo_barras = ?, precio_venta = ?, precio_costo = ?,

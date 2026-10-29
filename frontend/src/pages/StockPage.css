@@ -1,212 +1,100 @@
-.stock-page {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  height: 100%;
-  min-height: 0;
-}
+/* Stock y Lotes (2026-10-28, "queda todo muy amontonado"): la lista va a todo el ancho y el
+   alta y la ficha del producto en páginas propias. Usan las clases cliente-* (tarjetas, KPIs,
+   tablas, formularios); acá va solo lo propio. */
 
-.stock-kpis {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.stock-kpi {
-  flex: 1;
-  min-width: 200px;
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.stock-kpi-label {
-  font-size: 12.5px;
-  color: var(--text-tertiary);
-  font-weight: 600;
-}
-.stock-kpi-value {
-  font-size: 26px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.stock-body {
-  flex: 1;
-  display: flex;
-  gap: 16px;
-  min-height: 0;
-}
-/* Con el menú lateral (240px) los dos paneles ya no entran lado a lado por
-   debajo de ~1200px de ventana: se apilan y la página crece con su contenido
-   (sin altura fija, que era lo que hacía que los bloques se pisaran). */
-@media (max-width: 1200px) {
-  .stock-page {
-    height: auto;
-  }
-  .stock-body {
-    flex-direction: column;
-  }
-  .stock-body > * {
-    flex: none;
-    min-width: 0;
-    max-width: 100%;
-  }
-}
-
-.stock-lista {
-  flex: 1.7;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-height: 0;
-}
-.stock-lista-header {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-.stock-search {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--bg-muted);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  padding: 11px 14px;
-}
-.stock-search input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  font: inherit;
-  font-size: 14px;
-  outline: none;
-}
-.stock-nuevo-btn {
-  white-space: nowrap;
-  padding: 10px 18px;
-}
-@media (max-width: 600px) {
-  .stock-lista-header {
-    flex-wrap: wrap;
-  }
-  .stock-search {
-    flex: 1 1 100%;
-    min-width: 0;
-  }
-  .stock-nuevo-btn {
-    flex: 1 1 100%;
-  }
-}
-
-.stock-tabla {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: auto;
-}
-.stock-tabla-head {
-  display: flex;
-  padding: 8px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--bg-app);
-}
-.stock-tabla-body {
-  display: flex;
-  flex-direction: column;
-}
-.stock-tabla-vacio {
-  padding: 32px 12px;
+/* Tablas: columnas centradas y la de acciones (lápiz) pegada a la derecha. */
+.cliente-tabla .centro {
   text-align: center;
-  color: var(--text-tertiary);
-  font-size: 14px;
 }
-.stock-fila {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 11px 10px;
-  border: none;
-  border-bottom: 1px solid var(--bg-app);
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+.cliente-tabla .accion {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
 }
-.stock-fila:hover {
-  background: #f6f7f8;
-}
-.stock-fila-activa {
-  background: rgba(14, 75, 56, 0.06);
-}
-.stock-fila-nombre {
-  font-size: 14px;
-  font-weight: 600;
-}
-.stock-fila-muted {
-  font-size: 13px;
-  color: var(--text-tertiary);
+.stock-td-stock {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .stock-valor-alerta {
   color: var(--color-danger);
 }
 
-.stock-panel {
-  flex: 1;
-  min-width: 340px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  overflow: auto;
-}
-.stock-panel-vacio {
-  margin: auto;
-  text-align: center;
-  color: var(--text-tertiary);
-  font-size: 14px;
-  padding: 24px;
-}
-.stock-panel-titulo {
-  display: flex;
+/* Botón de ícono al final de cada fila (editar, ver, eliminar, quitar). */
+.boton-icono {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  font-size: 15px;
-  font-weight: 700;
-}
-.stock-panel-cerrar {
-  border: none;
-  background: transparent;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font: inherit;
   cursor: pointer;
-  font-size: 16px;
-  color: var(--text-tertiary);
-  line-height: 1;
+}
+.boton-icono:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.boton-icono-peligro:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+.boton-icono:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
-.stock-form,
-.stock-detalle {
+/* Alta y ficha del producto: la página crece con su contenido y scrollea entera (son varias
+   tarjetas, no una lista). Dos columnas (datos | cómo se mide y se vende) que se apilan antes
+   de apretarse. */
+.cliente-page.producto-pagina {
+  height: auto;
+}
+.producto-pagina > .cliente-card:last-child {
+  flex: none;
+  overflow: visible;
+}
+.producto-pagina .cliente-tabla th {
+  position: static;
+}
+.producto-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
 }
-.stock-form-grid2 {
+.producto-columnas {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
 }
-.stock-form-acciones {
+.producto-columna {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: auto;
+  gap: 20px;
+  min-width: 0;
 }
+@media (max-width: 1200px) {
+  .producto-columnas {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Stock bajo el mínimo: alerta (Rosa Coral, como el KPI de la lista). */
+.producto-badge-bajo {
+  background: rgba(224, 90, 101, 0.15);
+  color: #a13640;
+}
+.producto-badge-vencido {
+  margin-left: 8px;
+}
+.producto-eliminar {
+  padding-top: 0;
+  border-top: none;
+}
+
 .stock-campo-oculto {
   font-size: 14px;
   color: var(--text-tertiary);
@@ -219,40 +107,15 @@
   color: var(--text-tertiary);
   font-weight: 500;
 }
-
 .stock-section-label {
   font-size: 13.5px;
   font-weight: 700;
   display: block;
 }
-
-.stock-lotes {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border-default);
-}
-.stock-lotes-vacio {
-  font-size: 13px;
-  color: var(--text-tertiary);
-}
-.stock-lote-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  background: var(--bg-muted);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-}
-.stock-lote-cantidad {
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.stock-lote-fechas {
-  flex: 1;
-  color: var(--text-secondary);
+.stock-form-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
 }
 .stock-badge-vencido {
   background: rgba(224, 90, 101, 0.15);
@@ -261,56 +124,6 @@
   font-weight: 700;
   padding: 3px 8px;
   border-radius: var(--radius-pill);
-}
-.stock-lote-eliminar {
-  border: none;
-  background: transparent;
-  color: #b0453b;
-  cursor: pointer;
-  display: flex;
-}
-
-.stock-nuevo-lote {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-default);
-}
-
-.stock-lote-inicial {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border-default);
-}
-
-.stock-eliminar {
-  padding-top: 10px;
-  border-top: 1px solid var(--border-default);
-  text-align: center;
-}
-.stock-eliminar-link {
-  border: none;
-  background: transparent;
-  color: var(--color-danger);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-}
-.stock-eliminar-confirm {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-.stock-eliminar-confirm > div {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
 }
 
 /* Venta por pack y precio por cantidad (2026-10-11): casillas del producto y selector
