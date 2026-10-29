@@ -234,22 +234,64 @@
 /* "¿Cómo se mide?" / "¿Cómo se vende?" (2026-10-11): cada forma de venta en su recuadro;
    la marcada se destaca con el verde de marca. */
 .formas-venta {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+/* "¿Cómo se vende?" (2026-10-29, pedido del usuario): opciones para tildar con forma de botón,
+   como "¿Cómo se mide?"; abajo, a todo el ancho, solo los campos de lo elegido. Selectores con
+   .formas-venta: .field label y .field input (global.css, que se carga después) los pisarían. */
+.formas-opciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.formas-venta .formas-opcion {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  overflow: visible;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 8px 16px 8px 12px;
+  cursor: pointer;
+}
+.formas-venta .formas-opcion input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--color-primary);
+  cursor: inherit;
+}
+.formas-venta .formas-opcion.activo {
+  border-color: var(--color-primary);
+  background: rgba(14, 75, 56, 0.08);
+  color: var(--color-primary);
+}
+.formas-venta .formas-opcion:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.formas-seccion-titulo {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+/* Mismas columnas en las dos formas: los campos quedan del mismo ancho y alineados. Por abajo,
+   porque unos títulos tienen aclaración ("por caja") y otros no. */
+.formas-campos {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  align-items: end;
 }
-.formas-venta > .field + .field {
-  margin-bottom: -4px;
-}
-/* A todo el ancho, Suelto y Por caja o pack lado a lado. */
-@media (min-width: 1000px) {
-  .formas-venta {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .formas-venta > :not(.stock-presentacion) {
-    grid-column: 1 / -1;
-  }
+.formas-venta .stock-cuenta {
+  align-self: flex-start;
 }
 /* Precio por cantidad dentro de cada forma de venta (2026-10-11). */
 .stock-precio-cantidad {

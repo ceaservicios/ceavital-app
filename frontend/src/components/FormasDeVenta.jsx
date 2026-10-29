@@ -144,7 +144,7 @@ function PrecioPorCantidad({ valor, onFijar, editable, unidadCantidad, porQue, d
         </span>
       </label>
       {valor.activo && (
-        <div className="stock-form-grid2">
+        <div className="formas-campos">
           <Campo label="Cantidad mínima" ayuda={unidadCantidad}>
             <input
               type="text"
@@ -213,120 +213,121 @@ export default function FormasDeVenta({ valor, onChange, editablePrecios, verCos
         <span className="stock-hint">{medidaBloqueada ?? MEDIDAS.find((m) => m.valor === medida)?.ayuda}</span>
       </div>
 
+      {/* Primero se elige cómo se vende y abajo salen solo los campos de lo elegido, a todo el
+          ancho (pedido del usuario, 2026-10-29: los dos recuadros lado a lado quedaban desparejos). */}
       <div className="field">
         <label>¿Cómo se vende? (una o las dos)</label>
+        <div className="formas-opciones" role="group" aria-label="Cómo se vende">
+          <label className={`formas-opcion${suelto.activo ? ' activo' : ''}`}>
+            <input
+              type="checkbox"
+              disabled={!editablePrecios}
+              checked={suelto.activo}
+              onChange={(e) => fijar('suelto', { activo: e.target.checked })}
+            />
+            Suelto, {porMedida(medida)}
+          </label>
+          <label className={`formas-opcion${pack.activo ? ' activo' : ''}`}>
+            <input
+              type="checkbox"
+              disabled={!editablePrecios}
+              checked={pack.activo}
+              onChange={(e) => fijar('pack', { activo: e.target.checked })}
+            />
+            Por {fraccion ? 'bolsa, caja o envase cerrado' : 'caja o pack'}
+          </label>
+        </div>
+        {!suelto.activo && !pack.activo && <span className="stock-hint">Elegí al menos una.</span>}
       </div>
 
-      <div className={`stock-presentacion${suelto.activo ? ' stock-presentacion-activa' : ''}`}>
-        <label className="stock-presentacion-check">
-          <input
-            type="checkbox"
-            disabled={!editablePrecios}
-            checked={suelto.activo}
-            onChange={(e) => fijar('suelto', { activo: e.target.checked })}
-          />
-          Suelto, {porMedida(medida)}
-        </label>
-        {suelto.activo && (
-          <>
-            <div className="stock-form-grid2">
-              <Campo label="Precio de venta" ayuda={porMedida(medida)}>
+      {suelto.activo && (
+        <div className="stock-presentacion stock-presentacion-activa">
+          <span className="formas-seccion-titulo">Suelto, {porMedida(medida)}</span>
+          <div className="formas-campos">
+            <Campo label="Precio de venta" ayuda={porMedida(medida)}>
+              <input
+                type="number"
+                min="0"
+                disabled={!editablePrecios}
+                value={suelto.precio}
+                onChange={(e) => fijar('suelto', { precio: e.target.value })}
+              />
+            </Campo>
+            {verCosto ? (
+              <Campo label="Costo" ayuda={porMedida(medida)}>
                 <input
                   type="number"
                   min="0"
                   disabled={!editablePrecios}
-                  value={suelto.precio}
-                  onChange={(e) => fijar('suelto', { precio: e.target.value })}
+                  value={suelto.costo}
+                  onChange={(e) => fijar('suelto', { costo: e.target.value })}
                 />
               </Campo>
-              {verCosto ? (
-                <Campo label="Costo" ayuda={porMedida(medida)}>
+            ) : (
+              <Campo label="Costo">
+                <div className="stock-campo-oculto">No disponible para tu rol</div>
+              </Campo>
+            )}
+          </div>
+          <PrecioPorCantidad
+            valor={precioCantidad}
+            onFijar={(c) => fijar('precioCantidad', c)}
+            editable={editablePrecios}
+            unidadCantidad={fraccion ? simboloMedida(medida) : 'unidades'}
+            porQue={porMedida(medida)}
+            decimal={fraccion}
+          />
+        </div>
+      )}
+
+      {pack.activo && (
+        <div className="stock-presentacion stock-presentacion-activa">
+          <span className="formas-seccion-titulo">Por {fraccion ? 'bolsa, caja o envase cerrado' : 'caja o pack'}</span>
+          <div className="formas-campos">
+            <Campo label="Nombre">
+              <input
+                maxLength={20}
+                disabled={!editablePrecios}
+                placeholder={fraccion ? 'Bolsa, Horma…' : 'Caja, Pack, Bulto…'}
+                value={pack.nombre}
+                onChange={(e) => fijar('pack', { nombre: e.target.value })}
+              />
+            </Campo>
+            <Campo label="Trae" ayuda={fraccion ? simboloMedida(medida) : 'unidades'}>
+              <input
+                type="text"
+                inputMode={fraccion ? 'decimal' : 'numeric'}
+                disabled={!editablePrecios}
+                placeholder={fraccion ? 'ej: 15' : 'ej: 12'}
+                value={pack.cantidad}
+                onChange={(e) => fijar('pack', { cantidad: e.target.value })}
+              />
+            </Campo>
+            <Campo label="Precio de venta" ayuda={`por ${nombrePack}`}>
+              <input
+                type="number"
+                min="0"
+                disabled={!editablePrecios}
+                value={pack.precio}
+                onChange={(e) => fijar('pack', { precio: e.target.value })}
+              />
+            </Campo>
+            {!suelto.activo &&
+              (verCosto ? (
+                <Campo label="Costo" ayuda={`por ${nombrePack}`}>
                   <input
                     type="number"
                     min="0"
                     disabled={!editablePrecios}
-                    value={suelto.costo}
-                    onChange={(e) => fijar('suelto', { costo: e.target.value })}
+                    value={pack.costo}
+                    onChange={(e) => fijar('pack', { costo: e.target.value })}
                   />
                 </Campo>
               ) : (
                 <Campo label="Costo">
                   <div className="stock-campo-oculto">No disponible para tu rol</div>
                 </Campo>
-              )}
-            </div>
-            <PrecioPorCantidad
-              valor={precioCantidad}
-              onFijar={(c) => fijar('precioCantidad', c)}
-              editable={editablePrecios}
-              unidadCantidad={fraccion ? simboloMedida(medida) : 'unidades'}
-              porQue={porMedida(medida)}
-              decimal={fraccion}
-            />
-          </>
-        )}
-      </div>
-
-      <div className={`stock-presentacion${pack.activo ? ' stock-presentacion-activa' : ''}`}>
-        <label className="stock-presentacion-check">
-          <input
-            type="checkbox"
-            disabled={!editablePrecios}
-            checked={pack.activo}
-            onChange={(e) => fijar('pack', { activo: e.target.checked })}
-          />
-          Por {fraccion ? 'bolsa, caja o envase cerrado' : 'caja o pack'}
-        </label>
-        {pack.activo && (
-          <>
-            <div className="stock-form-grid2">
-              <Campo label="Nombre">
-                <input
-                  maxLength={20}
-                  disabled={!editablePrecios}
-                  placeholder={fraccion ? 'Bolsa, Horma…' : 'Caja, Pack, Bulto…'}
-                  value={pack.nombre}
-                  onChange={(e) => fijar('pack', { nombre: e.target.value })}
-                />
-              </Campo>
-              <Campo label="Trae" ayuda={fraccion ? simboloMedida(medida) : 'unidades'}>
-                <input
-                  type="text"
-                  inputMode={fraccion ? 'decimal' : 'numeric'}
-                  disabled={!editablePrecios}
-                  placeholder={fraccion ? 'ej: 15' : 'ej: 12'}
-                  value={pack.cantidad}
-                  onChange={(e) => fijar('pack', { cantidad: e.target.value })}
-                />
-              </Campo>
-            </div>
-            <div className="stock-form-grid2">
-              <Campo label="Precio de venta" ayuda={`por ${nombrePack}`}>
-                <input
-                  type="number"
-                  min="0"
-                  disabled={!editablePrecios}
-                  value={pack.precio}
-                  onChange={(e) => fijar('pack', { precio: e.target.value })}
-                />
-              </Campo>
-              {!suelto.activo &&
-                (verCosto ? (
-                  <Campo label="Costo" ayuda={`por ${nombrePack}`}>
-                    <input
-                      type="number"
-                      min="0"
-                      disabled={!editablePrecios}
-                      value={pack.costo}
-                      onChange={(e) => fijar('pack', { costo: e.target.value })}
-                    />
-                  </Campo>
-                ) : (
-                  <Campo label="Costo">
-                    <div className="stock-campo-oculto">No disponible para tu rol</div>
-                  </Campo>
-                ))}
-            </div>
+              ))}
             <Campo label="Código de barras" ayuda={`de cada ${nombrePack} (opcional)`}>
               <input
                 disabled={!editablePrecios}
@@ -335,23 +336,23 @@ export default function FormasDeVenta({ valor, onChange, editablePrecios, verCos
                 onChange={(e) => fijar('pack', { codigo_barras: e.target.value })}
               />
             </Campo>
-            {cantidadPack && (
-              <span className="stock-cuenta">
-                1 {nombrePack} = <strong>{formatearCantidad(cantidadPack, medida)}</strong>. Cada venta por {nombrePack} descuenta eso
-                del stock.
-              </span>
-            )}
-            <PrecioPorCantidad
-              valor={packCantidad}
-              onFijar={(c) => fijar('packCantidad', c)}
-              editable={editablePrecios}
-              unidadCantidad={plural(nombrePack, 2)}
-              porQue={`por ${nombrePack}`}
-              decimal={false}
-            />
-          </>
-        )}
-      </div>
+          </div>
+          {cantidadPack && (
+            <span className="stock-cuenta">
+              1 {nombrePack} = <strong>{formatearCantidad(cantidadPack, medida)}</strong>. Cada venta por {nombrePack} descuenta eso del
+              stock.
+            </span>
+          )}
+          <PrecioPorCantidad
+            valor={packCantidad}
+            onFijar={(c) => fijar('packCantidad', c)}
+            editable={editablePrecios}
+            unidadCantidad={plural(nombrePack, 2)}
+            porQue={`por ${nombrePack}`}
+            decimal={false}
+          />
+        </div>
+      )}
       {!editablePrecios && <span className="stock-hint">Solo el Admin puede cambiar los precios y las formas de venta.</span>}
     </div>
   );
