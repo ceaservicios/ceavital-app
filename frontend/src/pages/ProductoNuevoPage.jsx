@@ -103,102 +103,57 @@ function FormularioProductoNuevo() {
 
       <form className="producto-form" onSubmit={crear}>
         {error && <div className="alert alert-danger">{error}</div>}
+        {/* Uno debajo del otro: datos, cómo se vende y el stock inicial (que depende del pack). */}
         <div className="producto-columnas">
-          <div className="producto-columna">
-            <div className="card cliente-card">
-              <span className="cliente-seccion-titulo">Datos del producto</span>
-              <div className="cliente-campos">
-                <div className="field cliente-campo-full">
-                  <label>Nombre *</label>
-                  <input required value={producto.nombre} onChange={set('nombre')} />
-                </div>
-                <div className="field">
-                  <label>Categoría</label>
-                  <select value={producto.categoria_id} onChange={set('categoria_id')}>
-                    <option value="">Sin categoría</option>
-                    {categorias.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nombre}
-                      </option>
-                    ))}
-                  </select>
-                  {categorias.length === 0 && <span className="stock-hint">Las categorías se crean en Configuración.</span>}
-                </div>
-                <div className="field">
-                  <label>Código de barras</label>
-                  <input value={producto.codigo_barras} onChange={set('codigo_barras')} />
-                </div>
-                <div className="field">
-                  <label>Proveedor</label>
-                  <select value={producto.proveedor_id} onChange={set('proveedor_id')}>
-                    <option value="">Sin proveedor</option>
-                    {proveedores.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field">
-                  <label>
-                    Stock mínimo <span className="stock-label-unidad">en {simboloMedida(formas.medida)}</span>
-                  </label>
-                  <input
-                    type="text"
-                    inputMode={esFraccionable(formas.medida) ? 'decimal' : 'numeric'}
-                    placeholder="0"
-                    value={producto.stock_minimo}
-                    onChange={set('stock_minimo')}
-                  />
-                </div>
-                <div className="field">
-                  <label>Días de aviso de vencimiento</label>
-                  <input type="number" min="0" value={producto.dias_aviso_vencimiento} onChange={set('dias_aviso_vencimiento')} />
-                </div>
+          <div className="card cliente-card">
+            <span className="cliente-seccion-titulo">Datos del producto</span>
+            <div className="cliente-campos">
+              <div className="field cliente-campo-full">
+                <label>Nombre *</label>
+                <input required value={producto.nombre} onChange={set('nombre')} />
               </div>
-            </div>
-
-            <div className="card cliente-card">
-              <span className="cliente-seccion-titulo">Stock inicial (opcional)</span>
-              <span className="cliente-hint">
-                Si ya tenés mercadería de este producto. La que trae un proveedor se carga desde Proveedores → Cargar mercadería.
-              </span>
-              {conPack && (
-                <SelectorEnPacks
-                  enPacks={lote.en_packs}
-                  packNombre={formas.pack.nombre.trim()}
-                  medida={formas.medida}
-                  onChange={(v) => setLote({ ...lote, en_packs: v })}
+              <div className="field">
+                <label>Categoría</label>
+                <select value={producto.categoria_id} onChange={set('categoria_id')}>
+                  <option value="">Sin categoría</option>
+                  {categorias.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre}
+                    </option>
+                  ))}
+                </select>
+                {categorias.length === 0 && <span className="stock-hint">Las categorías se crean en Configuración.</span>}
+              </div>
+              <div className="field">
+                <label>Código de barras</label>
+                <input value={producto.codigo_barras} onChange={set('codigo_barras')} />
+              </div>
+              <div className="field">
+                <label>Proveedor</label>
+                <select value={producto.proveedor_id} onChange={set('proveedor_id')}>
+                  <option value="">Sin proveedor</option>
+                  {proveedores.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>
+                  Stock mínimo <span className="stock-label-unidad">en {simboloMedida(formas.medida)}</span>
+                </label>
+                <input
+                  type="text"
+                  inputMode={esFraccionable(formas.medida) ? 'decimal' : 'numeric'}
+                  placeholder="0"
+                  value={producto.stock_minimo}
+                  onChange={set('stock_minimo')}
                 />
-              )}
-              <div className="cliente-campos">
-                <div className="field">
-                  <label>
-                    {enPacks
-                      ? `Cantidad (en ${etiquetaPack(formas.pack.nombre.trim() || 'Pack', productoForm.pack_unidades, formas.medida)})`
-                      : `Cantidad (en ${simboloMedida(formas.medida)})`}
-                  </label>
-                  <input
-                    type="text"
-                    inputMode={esFraccionable(formas.medida) && !enPacks ? 'decimal' : 'numeric'}
-                    placeholder="Vacío si todavía no hay stock"
-                    value={lote.cantidad}
-                    onChange={(e) => setLote({ ...lote, cantidad: e.target.value })}
-                  />
-                  <CuentaIngreso cantidad={lote.cantidad} enPacks={lote.en_packs} producto={productoForm} textoFinal={null} />
-                </div>
-                <div className="field">
-                  <label>Fecha de ingreso</label>
-                  <input type="date" value={lote.fecha_ingreso} onChange={(e) => setLote({ ...lote, fecha_ingreso: e.target.value })} />
-                </div>
-                <div className="field">
-                  <label>Vencimiento (opcional)</label>
-                  <input
-                    type="date"
-                    value={lote.fecha_vencimiento}
-                    onChange={(e) => setLote({ ...lote, fecha_vencimiento: e.target.value })}
-                  />
-                </div>
+              </div>
+              <div className="field">
+                <label>Días de aviso de vencimiento</label>
+                <input type="number" min="0" value={producto.dias_aviso_vencimiento} onChange={set('dias_aviso_vencimiento')} />
               </div>
             </div>
           </div>
@@ -206,6 +161,50 @@ function FormularioProductoNuevo() {
           <div className="card cliente-card producto-columna">
             <span className="cliente-seccion-titulo">Cómo se mide y cómo se vende</span>
             <FormasDeVenta valor={formas} onChange={setFormas} editablePrecios verCosto />
+          </div>
+
+          <div className="card cliente-card">
+            <span className="cliente-seccion-titulo">Stock inicial (opcional)</span>
+            <span className="cliente-hint">
+              Si ya tenés mercadería de este producto. La que trae un proveedor se carga desde Proveedores → Cargar mercadería.
+            </span>
+            {conPack && (
+              <SelectorEnPacks
+                enPacks={lote.en_packs}
+                packNombre={formas.pack.nombre.trim()}
+                medida={formas.medida}
+                onChange={(v) => setLote({ ...lote, en_packs: v })}
+              />
+            )}
+            <div className="cliente-campos">
+              <div className="field">
+                <label>
+                  {enPacks
+                    ? `Cantidad (en ${etiquetaPack(formas.pack.nombre.trim() || 'Pack', productoForm.pack_unidades, formas.medida)})`
+                    : `Cantidad (en ${simboloMedida(formas.medida)})`}
+                </label>
+                <input
+                  type="text"
+                  inputMode={esFraccionable(formas.medida) && !enPacks ? 'decimal' : 'numeric'}
+                  placeholder="Vacío si todavía no hay stock"
+                  value={lote.cantidad}
+                  onChange={(e) => setLote({ ...lote, cantidad: e.target.value })}
+                />
+                <CuentaIngreso cantidad={lote.cantidad} enPacks={lote.en_packs} producto={productoForm} textoFinal={null} />
+              </div>
+              <div className="field">
+                <label>Fecha de ingreso</label>
+                <input type="date" value={lote.fecha_ingreso} onChange={(e) => setLote({ ...lote, fecha_ingreso: e.target.value })} />
+              </div>
+              <div className="field">
+                <label>Vencimiento (opcional)</label>
+                <input
+                  type="date"
+                  value={lote.fecha_vencimiento}
+                  onChange={(e) => setLote({ ...lote, fecha_vencimiento: e.target.value })}
+                />
+              </div>
+            </div>
           </div>
         </div>
 

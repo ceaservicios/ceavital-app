@@ -65,22 +65,18 @@
   flex-direction: column;
   gap: 20px;
 }
+/* Los paneles uno debajo del otro, a todo el ancho (pedido del usuario, 2026-10-29: el de "Cómo se
+   mide y cómo se vende" a la derecha dejaba todo angosto). */
 .producto-columnas {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
-  align-items: start;
 }
 .producto-columna {
   display: flex;
   flex-direction: column;
   gap: 20px;
   min-width: 0;
-}
-@media (max-width: 1200px) {
-  .producto-columnas {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 /* Stock bajo el mínimo: alerta (Rosa Coral, como el KPI de la lista). */
 .producto-badge-bajo {
@@ -238,12 +234,22 @@
 /* "¿Cómo se mide?" / "¿Cómo se vende?" (2026-10-11): cada forma de venta en su recuadro;
    la marcada se destaca con el verde de marca. */
 .formas-venta {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
+  align-items: start;
 }
 .formas-venta > .field + .field {
   margin-bottom: -4px;
+}
+/* A todo el ancho, Suelto y Por caja o pack lado a lado. */
+@media (min-width: 1000px) {
+  .formas-venta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .formas-venta > :not(.stock-presentacion) {
+    grid-column: 1 / -1;
+  }
 }
 /* Precio por cantidad dentro de cada forma de venta (2026-10-11). */
 .stock-precio-cantidad {
