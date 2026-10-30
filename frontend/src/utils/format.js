@@ -36,14 +36,13 @@ export function formatearFecha(iso) {
   return `${dia}/${mes}/${anio}`;
 }
 
-// La base guarda los timestamps en UTC como 'YYYY-MM-DD HH:MM:SS' (sin zona)
-// -- se marca explícitamente como UTC para que el navegador lo muestre en la
-// hora local real del usuario, no como si ya fuera hora local.
+// La base guarda los timestamps en UTC como 'YYYY-MM-DD HH:MM:SS' (sin zona): se muestran en hora
+// argentina, la del negocio, como "29/10/2026 09:35" (antes "29/10/26, 9:35 a. m."; rediseño 2026-10-29).
 export function formatearFechaHora(datetimeUtc) {
   if (!datetimeUtc) return '';
   const fecha = new Date(`${datetimeUtc.replace(' ', 'T')}Z`);
   if (Number.isNaN(fecha.getTime())) return datetimeUtc;
-  return fecha.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+  return `${formatearFecha(diaDeUtc(datetimeUtc))} ${formatearHora(datetimeUtc)}`;
 }
 
 // Hoy en hora argentina (el negocio funciona siempre en esa zona, esté donde esté
@@ -71,4 +70,12 @@ export function formatearHora(datetimeUtc) {
 export function cuandoFueElCierre(datetimeUtc) {
   const dia = diaDeUtc(datetimeUtc);
   return dia === fechaHoyISO() ? `de hoy a las ${formatearHora(datetimeUtc)}` : `del ${formatearFecha(dia)} a las ${formatearHora(datetimeUtc)}`;
+}
+
+// Lo mismo, corto, para el panel verde: "hoy, 14:05" o "15/10, 21:15" (2026-10-29: los textos del
+// panel no bajan de renglón).
+export function cuandoFueElCierreCorto(datetimeUtc) {
+  const dia = diaDeUtc(datetimeUtc);
+  const hora = formatearHora(datetimeUtc);
+  return dia === fechaHoyISO() ? `hoy, ${hora}` : `${formatearFecha(dia).slice(0, 5)}, ${hora}`;
 }

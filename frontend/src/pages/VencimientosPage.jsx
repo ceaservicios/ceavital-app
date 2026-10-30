@@ -1,9 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client.js';
+import Hero from '../components/Hero.jsx';
+import Icono from '../components/Icono.jsx';
+import { ConIcono } from '../components/ConAvatar.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { colorDe } from '../utils/colores.js';
 import { formatearFecha } from '../utils/format.js';
-import { describirStock, formatearCantidad } from '../utils/presentacion.js';
+import { describirStock, describirStockLargo, formatearCantidad } from '../utils/presentacion.js';
+import './ClientesEmpresaPage.css';
 import './VencimientosPage.css';
 
 const PUEDE_RETIRAR = new Set(['admin', 'encargado']);
@@ -13,6 +18,9 @@ function etiquetaDias(n, sufijoSingular, sufijoPlural) {
   return `${n} ${sufijoPlural}`;
 }
 
+// Rediseño 2026-10-29: tabla real (producto con su lote abajo, vencimiento, estado, cantidad y
+// acción en una columna fija); la confirmación de "Retirar" va en un renglón propio debajo del
+// lote, con la pregunta y lo que pasa. Coral (vencido) y Dorado (por vencer) solo como alerta.
 export default function VencimientosPage() {
   const { usuario, stockEnPacks } = useAuth();
   const navigate = useNavigate();
@@ -62,7 +70,7 @@ export default function VencimientosPage() {
   }
 
   if (cargando) {
-    return <div className="card vencimientos-vacio">Cargando…</div>;
+    return <div className="cliente-vacio">Cargando…</div>;
   }
 
   if (error && !datos) {
@@ -81,114 +89,152 @@ export default function VencimientosPage() {
       ? 0
       : [...enRiesgoPorMedida].map(([medida, cantidad]) => formatearCantidad(cantidad, medida)).join(' · ');
 
+  // Un renglón de la tabla: producto (y su lote abajo), vencimiento, estado, cantidad y acción.
+  function fila(lote, vencido) {
+    const confirmando = vencido && confirmandoLoteId === lote.lote_id;
+    return (
+      <Fragment key={`${vencido ? 'v' : 'p'}-${lote.lote_id}`}>
+        <tr className={`sin-click vencimientos-fila${confirmando ? ' vencimientos-fila-confirmando' : ''}`}>
+          <td className="vencimientos-td-producto">
+            <ConIcono icono="paquete" color={colorDe(lote.producto_id)}>
+              <div className="cliente-td-nombre">{lote.producto_nombre}</div>
+              <div className="cliente-td-sub">
+                Lote #{lote.lote_id}
+                <span className="vencimientos-sub-fecha"> · Vence {formatearFecha(lote.fecha_vencimiento)}</span>
+              </div>
+            </ConIcono>
+          </td>
+          <td className="vencimientos-td-fecha">{formatearFecha(lote.fecha_vencimiento)}</td>
+          <td className="vencimientos-td-estado">
+            {vencido ? (
+              <span className="estado estado-rojo">
+                <Icono nombre="alerta" />
+                Vencido hace {etiquetaDias(lote.dias_vencido, 'día', 'días')}
+              </span>
+            ) : (
+              <span className="estado estado-amarillo">
+                <Icono nombre="reloj" />
+                {lote.dias_restantes === 0 ? 'Vence hoy' : `Vence en ${etiquetaDias(lote.dias_restantes, 'día', 'días')}`}
+              </span>
+            )}
+          </td>
+          <td className="num vencimientos-td-cantidad">{describirStock(lote.cantidad, lote, stockEnPacks)}</td>
+          <td className="accion vencimientos-td-accion">
+            {vencido
+              ? puedeRetirar &&
+                !confirmando && (
+                  <button type="button" className="btn vencimientos-btn" onClick={() => setConfirmandoLoteId(lote.lote_id)}>
+                    Retirar
+                  </button>
+                )
+              : (
+                <button type="button" className="btn vencimientos-btn" onClick={() => navigate(`/stock/${lote.producto_id}`)}>
+                  Ver producto
+                </button>
+              )}
+          </td>
+        </tr>
+        {confirmando && (
+          <tr className="sin-click vencimientos-confirm-fila">
+            <td colSpan={5}>
+              <div className="vencimientos-confirm">
+                <span>
+                  ¿Retirar el lote #{lote.lote_id} de {lote.producto_nombre}? Se descuentan{' '}
+                  <strong>{describirStockLargo(lote.cantidad, lote, stockEnPacks)}</strong> del stock.
+                </span>
+                <div className="vencimientos-confirm-acciones">
+                  <button type="button" className="btn" onClick={() => setConfirmandoLoteId(null)}>
+                    Cancelar
+                  </button>
+                  <button type="button" className="btn btn-peligro" disabled={retirando} onClick={() => retirarLote(lote)}>
+                    Retirar lote
+                  </button>
+                </div>
+              </div>
+            </td>
+          </tr>
+        )}
+      </Fragment>
+    );
+  }
+
   return (
-    <div className="vencimientos-page">
-      <div className="vencimientos-kpis">
-        <div className="card vencimientos-kpi vencimientos-kpi-vencido">
-          <span className="vencimientos-kpi-label">Lotes vencidos</span>
-          <span className="vencimientos-kpi-value">{vencidos.length}</span>
-        </div>
-        <div className="card vencimientos-kpi vencimientos-kpi-aviso">
-          <span className="vencimientos-kpi-label">Por vencer</span>
-          <span className="vencimientos-kpi-value">{porVencer.length}</span>
-        </div>
-        <div className="card vencimientos-kpi">
-          <span className="vencimientos-kpi-label">Cantidad en riesgo</span>
-          <span className="vencimientos-kpi-value">{unidadesEnRiesgo}</span>
-        </div>
-      </div>
+    <div className="cliente-page vencimientos-page">
+      <Hero
+        etiqueta="Cantidad en riesgo"
+        valor={unidadesEnRiesgo}
+        sub="Mercadería de lotes vencidos o por vencer."
+        minis={[
+          {
+            etiqueta: 'Lotes vencidos',
+            valor: vencidos.length,
+            sub: vencidos.length > 0 ? 'Retirarlos' : 'Ninguno',
+            icono: vencidos.length > 0 ? 'alerta' : 'check',
+            tono: vencidos.length > 0 ? 'rojo' : 'verde',
+          },
+          { etiqueta: 'Por vencer', valor: porVencer.length, icono: 'reloj', tono: porVencer.length > 0 ? 'amarillo' : 'verde' },
+        ]}
+      />
 
       {vencidos.length > 0 && (
-        <div className="vencimientos-banner">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B0333E" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <div className="alert alert-danger vencimientos-alerta" role="status">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M12 9v4" />
             <path d="M12 17h.01" />
             <path d="M10.3 3.9L2.5 17a1.5 1.5 0 0 0 1.3 2.2h16.4a1.5 1.5 0 0 0 1.3-2.2L13.7 3.9a1.5 1.5 0 0 0-2.6 0z" />
           </svg>
           <span>
-            Hay {etiquetaDias(vencidos.length, 'lote vencido', 'lotes vencidos')} todavía en el depósito — retiralos
-            del stock vendible cuanto antes.
+            {vencidos.length === 1 ? 'Hay 1 lote vencido en stock.' : `Hay ${vencidos.length} lotes vencidos en stock.`} Retiralos para que no se
+            vendan.
           </span>
         </div>
       )}
 
       {error && <div className="alert alert-danger">{error}</div>}
 
-      <div className="card vencimientos-tabla">
+      <div className="card cliente-card vencimientos-card">
+        <div className="cliente-seccion-cabecera">
+          <span className="cliente-seccion-titulo">Lotes vencidos y por vencer</span>
+        </div>
         {vencidos.length === 0 && porVencer.length === 0 ? (
-          <div className="vencimientos-vacio">No hay lotes vencidos ni por vencer.</div>
+          <div className="cliente-vacio">No hay lotes vencidos ni por vencer.</div>
         ) : (
-          <div className="vencimientos-tabla-scroll">
-            <div className="vencimientos-tabla-head">
-              <span style={{ flex: 2 }}>Producto</span>
-              <span style={{ flex: 1 }}>Lote</span>
-              <span style={{ flex: 1, textAlign: 'center' }}>Cantidad</span>
-              <span style={{ flex: 1.2 }}>Fecha de vencimiento</span>
-              <span style={{ flex: 1 }}>Estado</span>
-              <span style={{ width: 104, flexShrink: 0 }} />
-            </div>
-
-            {vencidos.map((lote) => (
-              <div className="vencimientos-fila" key={`v-${lote.lote_id}`}>
-                <span style={{ flex: 2 }} className="vencimientos-fila-nombre">
-                  {lote.producto_nombre}
-                </span>
-                <span style={{ flex: 1 }} className="vencimientos-fila-muted">
-                  Lote #{lote.lote_id}
-                </span>
-                <span style={{ flex: 1, textAlign: 'center', fontWeight: 700 }}>{describirStock(lote.cantidad, lote, stockEnPacks)}</span>
-                <span style={{ flex: 1.2 }}>{formatearFecha(lote.fecha_vencimiento)}</span>
-                <span style={{ flex: 1 }}>
-                  <span className="vencimientos-badge vencimientos-badge-vencido">
-                    Vencido hace {etiquetaDias(lote.dias_vencido, 'día', 'días')}
-                  </span>
-                </span>
-                <span style={{ width: 104, flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
-                  {puedeRetirar &&
-                    (confirmandoLoteId === lote.lote_id ? (
-                      <div className="vencimientos-confirm">
-                        <button type="button" className="btn" onClick={() => setConfirmandoLoteId(null)}>
-                          No
-                        </button>
-                        <button type="button" className="btn" disabled={retirando} onClick={() => retirarLote(lote)}>
-                          Sí
-                        </button>
+          <div className="cliente-tabla-wrap">
+            <table className="cliente-tabla vencimientos-tabla">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th className="vencimientos-td-fecha">Vencimiento</th>
+                  <th>Estado</th>
+                  <th className="num">Cantidad</th>
+                  <th className="accion" aria-label="Acciones" />
+                </tr>
+              </thead>
+              <tbody>
+                {vencidos.length > 0 && (
+                  <tr className="grupo-fila">
+                    <td colSpan={5}>
+                      <div className="grupo-h grupo-h-rojo">
+                        <Icono nombre="alerta" tam={16} />
+                        {vencidos.length === 1 ? '1 lote vencido' : `${vencidos.length} lotes vencidos`}
                       </div>
-                    ) : (
-                      <button type="button" className="btn vencimientos-btn-retirar" onClick={() => setConfirmandoLoteId(lote.lote_id)}>
-                        Retirar
-                      </button>
-                    ))}
-                </span>
-              </div>
-            ))}
-
-            {porVencer.map((lote) => (
-              <div className="vencimientos-fila" key={`p-${lote.lote_id}`}>
-                <span style={{ flex: 2 }} className="vencimientos-fila-nombre">
-                  {lote.producto_nombre}
-                </span>
-                <span style={{ flex: 1 }} className="vencimientos-fila-muted">
-                  Lote #{lote.lote_id}
-                </span>
-                <span style={{ flex: 1, textAlign: 'center', fontWeight: 700 }}>{describirStock(lote.cantidad, lote, stockEnPacks)}</span>
-                <span style={{ flex: 1.2 }}>{formatearFecha(lote.fecha_vencimiento)}</span>
-                <span style={{ flex: 1 }}>
-                  <span className="vencimientos-badge vencimientos-badge-aviso">
-                    {lote.dias_restantes === 0 ? 'Vence hoy' : `Vence en ${etiquetaDias(lote.dias_restantes, 'día', 'días')}`}
-                  </span>
-                </span>
-                <span style={{ width: 104, flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
-                  <button
-                    type="button"
-                    className="btn vencimientos-btn-ver"
-                    onClick={() => navigate(`/stock/${lote.producto_id}`)}
-                  >
-                    Ver lote
-                  </button>
-                </span>
-              </div>
-            ))}
+                    </td>
+                  </tr>
+                )}
+                {vencidos.map((lote) => fila(lote, true))}
+                {porVencer.length > 0 && (
+                  <tr className="grupo-fila">
+                    <td colSpan={5}>
+                      <div className="grupo-h grupo-h-amarillo">
+                        <Icono nombre="reloj" tam={16} />
+                        {porVencer.length === 1 ? '1 lote por vencer' : `${porVencer.length} lotes por vencer`}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {porVencer.map((lote) => fila(lote, false))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

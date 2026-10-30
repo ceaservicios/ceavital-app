@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
+import Hero from '../components/Hero.jsx';
+import { ConIcono } from '../components/ConAvatar.jsx';
+import { COLOR, COLOR_MEDIO } from '../utils/colores.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { cuandoFueElCierre, fechaHoyISO, formatearFecha, formatearHora, formatearMonto } from '../utils/format.js';
+import { cuandoFueElCierre, cuandoFueElCierreCorto, fechaHoyISO, formatearFecha, formatearHora, formatearMonto } from '../utils/format.js';
 import './ClientesEmpresaPage.css';
 import './CierreCajaPage.css';
 
@@ -55,10 +58,10 @@ const ICONOS = {
 // Las ventas del turno, agrupadas por dónde está la plata. "Efectivo" es lo vendido en efectivo
 // (antes la fila mostraba lo esperado en caja, que ya incluía el fondo, y no sumaba con el total).
 const GRUPOS = [
-  { titulo: 'Entró a la caja', nota: 'Billetes en el cajón', medios: [{ campo: 'total_efectivo', label: 'Efectivo', icono: 'cash' }] },
+  { titulo: 'Ingresó a la caja', nota: 'Se cuenta en el arqueo', medios: [{ campo: 'total_efectivo', label: 'Efectivo', icono: 'cash' }] },
   {
-    titulo: 'Banco y billeteras',
-    nota: 'No se cuenta en el cajón',
+    titulo: 'Bancos y billeteras virtuales',
+    nota: 'No ingresa a la caja',
     medios: [
       { campo: 'total_tarjeta', label: 'Tarjeta (débito / crédito)', icono: 'tarjeta' },
       { campo: 'total_transferencia_qr', label: 'Transferencia / QR', icono: 'qr' },
@@ -67,10 +70,10 @@ const GRUPOS = [
   },
   {
     titulo: 'A cobrar',
-    nota: 'Todavía no entró',
+    nota: 'Pendiente de cobro',
     medios: [
       { campo: 'total_fiado', label: 'Pago pendiente', icono: 'fiado' },
-      { campo: 'total_cta_cte', label: 'Cuenta Corriente', icono: 'ctacte', modulo: 'clientes_empresa' },
+      { campo: 'total_cta_cte', label: 'Cuenta corriente', icono: 'ctacte', modulo: 'clientes_empresa' },
     ],
   },
 ];
@@ -132,7 +135,7 @@ export default function CierreCajaPage() {
     setExito(null);
     try {
       const cierre = await api.post('/caja/cierres', { total_efectivo_contado: contado, fondo_dejado: fondoNuevo });
-      setExito(`Cierre #${cierre.id} registrado. Quedan ${formatearMonto(cierre.fondo_dejado)} de fondo y arranca un turno nuevo.`);
+      setExito(`Cierre #${cierre.id} registrado. Fondo para el próximo turno: ${formatearMonto(cierre.fondo_dejado)}.`);
       setMontoContado('');
       setFondoDejado('');
       await cargar();
@@ -150,12 +153,16 @@ export default function CierreCajaPage() {
 
   return (
     <div className="cierre-page">
-      <div className="cierre-cabecera">
-        <span className="cierre-turno">Turno abierto · {diaConNombre(resumen?.fecha ?? fechaHoyISO())}</span>
-        <span className="cierre-sub">
-          {resumen?.desde ? `Desde el cierre ${cuandoFueElCierre(resumen.desde)}.` : 'Desde el inicio del día (todavía no hay cierres anteriores).'}
-        </span>
-      </div>
+      <Hero
+        etiqueta={`Turno abierto · ${diaConNombre(resumen?.fecha ?? fechaHoyISO())}`}
+        valor={formatearMonto(resumen?.total_general ?? 0)}
+        sub={resumen?.desde ? `Vendido desde el cierre (${cuandoFueElCierreCorto(resumen.desde)}).` : 'Vendido desde el inicio del día.'}
+        minis={[
+          { etiqueta: 'Efectivo esperado', valor: formatearMonto(esperado), icono: 'billete', tono: esperado < 0 ? 'rojo' : 'verde' },
+          { etiqueta: 'Gastos y pagos', valor: formatearMonto(gastos), icono: 'billetera', tono: 'amarillo' },
+          { etiqueta: 'Fondo inicial', valor: formatearMonto(fondo), icono: 'caja', tono: 'azul' },
+        ]}
+      />
 
       {error && <div className="alert alert-danger">{error}</div>}
       {exito && <div className="alert alert-exito">{exito}</div>}
@@ -174,7 +181,9 @@ export default function CierreCajaPage() {
                 {medios.map((m) => (
                   <div className="cierre-medio" key={m.campo}>
                     <span className="cierre-medio-label">
-                      {ICONOS[m.icono]}
+                      <span className="icono-cat icono-cat-chico" style={{ '--c': COLOR_MEDIO[m.campo.replace('total_', '')] }}>
+                        {ICONOS[m.icono]}
+                      </span>
                       {m.label}
                     </span>
                     <span className="cierre-medio-valor">{formatearMonto(resumen?.[m.campo] ?? 0)}</span>
@@ -190,12 +199,12 @@ export default function CierreCajaPage() {
         </div>
 
         <div className="card cierre-arqueo">
-          <span className="cierre-titulo">Arqueo del efectivo</span>
+          <span className="cierre-titulo">Arqueo de efectivo</span>
           <div className="cierre-cuenta">
             <div className="cierre-cuenta-fila">
               <span>
-                Fondo con que arrancó el turno
-                <small>{resumen?.desde ? `Dejado en el cierre ${cuandoFueElCierre(resumen.desde)}` : 'No hay cierres anteriores'}</small>
+                Fondo inicial del turno
+                <small>{resumen?.desde ? `Dejado en el cierre ${cuandoFueElCierre(resumen.desde)}` : 'Sin cierres anteriores'}</small>
               </span>
               <span>{formatearMonto(fondo)}</span>
             </div>
@@ -207,8 +216,8 @@ export default function CierreCajaPage() {
               <span>− Gastos y pagos a proveedores</span>
               <span>{gastos > 0 ? `− ${formatearMonto(gastos)}` : formatearMonto(0)}</span>
             </div>
-            <div className="cierre-cuenta-total">
-              <span>Tiene que haber en la caja</span>
+            <div className={`cierre-cuenta-total${esperado < 0 ? ' cierre-cuenta-negativa' : ''}`}>
+              <span>Efectivo esperado</span>
               <span>{formatearMonto(esperado)}</span>
             </div>
           </div>
@@ -216,25 +225,25 @@ export default function CierreCajaPage() {
           {puedeCerrar ? (
             <>
               <div className="field">
-                <label htmlFor="cierre-contado">¿Cuánto hay en la caja? (lo que contaste)</label>
+                <label htmlFor="cierre-contado">Efectivo contado</label>
                 <input id="cierre-contado" type="number" min="0" value={montoContado} onChange={(e) => setMontoContado(e.target.value)} placeholder="0" />
               </div>
               {diferencia !== null && (
                 <div className={`cierre-diferencia ${claseDiferencia}`}>
-                  <span>{diferencia === 0 ? 'Caja exacta' : diferencia > 0 ? 'Sobra' : 'Falta'}</span>
-                  <span>{diferencia === 0 ? '✓' : formatearMonto(Math.abs(diferencia))}</span>
+                  <span>{diferencia === 0 ? 'Sin diferencia' : diferencia > 0 ? 'Sobrante' : 'Faltante'}</span>
+                  <span>{formatearMonto(Math.abs(diferencia))}</span>
                 </div>
               )}
               <div className="field">
-                <label htmlFor="cierre-fondo">Fondo para el próximo turno (queda en el cajón)</label>
+                <label htmlFor="cierre-fondo">Fondo para el próximo turno</label>
                 <input id="cierre-fondo" type="number" min="0" value={fondoDejado} onChange={(e) => setFondoDejado(e.target.value)} placeholder="0" />
               </div>
               {fondoDeMas ? (
-                <div className="alert alert-danger">El fondo no puede ser mayor que lo que contaste.</div>
+                <div className="alert alert-danger">El fondo no puede superar el efectivo contado.</div>
               ) : (
                 seRetira !== null && (
                   <div className="cierre-retiro">
-                    <span>Se retira de la caja</span>
+                    <span>Retiro de efectivo</span>
                     <strong>{formatearMonto(seRetira)}</strong>
                   </div>
                 )
@@ -245,11 +254,11 @@ export default function CierreCajaPage() {
                 disabled={contado === null || fondoDeMas || enviando}
                 onClick={confirmarCierre}
               >
-                {enviando ? 'Registrando…' : 'Confirmar cierre del turno'}
+                {enviando ? 'Registrando…' : 'Registrar cierre'}
               </button>
             </>
           ) : (
-            <div className="cierre-hint">El cierre lo confirma el Administrador o el Encargado. Vos podés ver los totales.</div>
+            <div className="cierre-hint">El cierre lo registra un Administrador o un Encargado.</div>
           )}
         </div>
       </div>
@@ -257,15 +266,15 @@ export default function CierreCajaPage() {
       <div className="card cierre-historial">
         <span className="cierre-titulo">Cierres anteriores</span>
         {cierres.length === 0 ? (
-          <div className="cierre-vacio">Todavía no se registró ningún cierre.</div>
+          <div className="cliente-vacio">Todavía no hay cierres registrados.</div>
         ) : (
           <div className="cliente-tabla-wrap">
             <table className="cliente-tabla cierre-tabla">
               <thead>
                 <tr>
                   <th>Fecha</th>
-                  <th className="cierre-opcional">Cerró</th>
-                  <th className="num cierre-opcional">Tenía que haber</th>
+                  <th className="cierre-opcional">Registrado por</th>
+                  <th className="num cierre-opcional">Esperado</th>
                   <th className="num">Contado</th>
                   <th className="num">Diferencia</th>
                   <th className="num">Fondo dejado</th>
@@ -276,14 +285,19 @@ export default function CierreCajaPage() {
                 {cierres.map((c) => (
                   <tr key={c.id} className="sin-click">
                     <td>
-                      {formatearFecha(c.fecha)}
-                      <span className="cierre-hora">{formatearHora(c.creado_en)}</span>
+                      <ConIcono
+                        icono={c.diferencia_efectivo === 0 ? 'check' : c.diferencia_efectivo < 0 ? 'alerta' : 'mas'}
+                        color={c.diferencia_efectivo === 0 ? COLOR.verde : c.diferencia_efectivo < 0 ? COLOR.rojo : COLOR.ambar}
+                      >
+                        {formatearFecha(c.fecha)}
+                        <span className="cierre-hora">{formatearHora(c.creado_en)}</span>
+                      </ConIcono>
                     </td>
                     <td className="cierre-opcional">{c.usuario_nombre}</td>
                     <td className="num cierre-opcional">{formatearMonto(c.total_efectivo_esperado)}</td>
                     <td className="num">{formatearMonto(c.total_efectivo_contado)}</td>
                     <td className={`num cierre-dif ${c.diferencia_efectivo < 0 ? 'cierre-txt-falta' : c.diferencia_efectivo > 0 ? 'cierre-txt-sobra' : ''}`}>
-                      {c.diferencia_efectivo === 0 ? 'Exacta' : `${c.diferencia_efectivo > 0 ? 'Sobró' : 'Faltó'} ${formatearMonto(Math.abs(c.diferencia_efectivo))}`}
+                      {c.diferencia_efectivo === 0 ? 'Sin diferencia' : `${c.diferencia_efectivo > 0 ? 'Sobrante' : 'Faltante'} ${formatearMonto(Math.abs(c.diferencia_efectivo))}`}
                     </td>
                     <td className="num">{c.fondo_dejado > 0 ? formatearMonto(c.fondo_dejado) : '—'}</td>
                     <td className="num cierre-opcional">{formatearMonto(c.total_general)}</td>

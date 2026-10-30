@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client.js';
 import { CLIENTE_VACIO, CamposCliente, aPayload, useCondicionesPago } from './clientesEmpresaComun.jsx';
 import './ClientesEmpresaPage.css';
+import './ProveedoresPage.css';
 
 // Alta de cliente-empresa en una página propia, con todos los campos a la
-// vista (pedido del usuario 2026-09-18).
+// vista (pedido del usuario 2026-09-18). Volver a la lista está en la barra superior.
 export default function ClienteEmpresaNuevoPage() {
   const navigate = useNavigate();
   const condiciones = useCondicionesPago();
@@ -34,13 +35,10 @@ export default function ClienteEmpresaNuevoPage() {
   return (
     <div className="cliente-page">
       <div className="cliente-encabezado">
-        <Link to="/clientes-empresa" className="cliente-volver">
-          ← Volver a clientes
-        </Link>
-        <h1 className="cliente-h1">Nuevo cliente-empresa</h1>
+        <h1 className="cliente-h1">Nuevo cliente</h1>
       </div>
 
-      <form className="card cliente-card cliente-form-card" onSubmit={crear}>
+      <form className="card cliente-card cliente-form-card form-angosto" onSubmit={crear}>
         {error && <div className="alert alert-danger">{error}</div>}
         <span className="cliente-seccion-titulo">Datos del cliente</span>
         <CamposCliente form={form} setForm={setForm} condiciones={condiciones} />

@@ -9,9 +9,9 @@ import { formatearFechaHora } from '../utils/format.js';
 // Mientras corre, el sistema queda en mantenimiento y acá se ven las etapas.
 
 const ETAPAS = [
-  { id: 'resguardo', texto: 'Copia de cómo estaba todo (queda en el Drive)' },
-  { id: 'descargando', texto: 'Bajando la copia elegida' },
-  { id: 'restaurando', texto: 'Reemplazando los datos' },
+  { id: 'resguardo', texto: 'Resguardo del estado actual (queda en el Drive)' },
+  { id: 'descargando', texto: 'Descarga de la copia elegida' },
+  { id: 'restaurando', texto: 'Reemplazo de los datos' },
 ];
 const TIPO = { automatica: 'Automática', manual: 'Pedida desde el panel', resguardo: 'Resguardo antes de restaurar' };
 
@@ -76,7 +76,7 @@ export default function SuperadminRestaurar({ irAlLogin, configuradas, copiaEnCu
   const manejarError = useCallback(
     (err) => {
       if (err instanceof ApiError && err.status === 401) return irAlLogin();
-      setError(err instanceof ApiError ? err.message : 'No se pudo completar la acción. Probá de nuevo.');
+      setError(err instanceof ApiError ? err.message : 'No se pudo completar la acción. Intentá de nuevo.');
     },
     [irAlLogin]
   );
@@ -175,12 +175,12 @@ export default function SuperadminRestaurar({ irAlLogin, configuradas, copiaEnCu
         </div>
         <p className="sa-detalle sa-quiebre">{enCurso.archivo}</p>
         <p className="sa-ayuda">
-          Nadie del negocio ni del portal puede usar el sistema mientras tanto. Lleva {duracion(enCurso.iniciada_en)}. Sigue en el servidor aunque
-          cierres esta ventana.
+          Mientras tanto, nadie del negocio ni del portal puede usar el sistema. Tiempo transcurrido: {duracion(enCurso.iniciada_en)}. El proceso
+          sigue en el servidor aunque cierres esta ventana.
         </p>
         <ol className="sa-etapas">
           {ETAPAS.map((e, i) => {
-            const marca = i < indice ? '✓' : i === indice ? '●' : '○';
+            const marca = i < indice ? '✓' : i === indice ? '●' : '';
             return (
               <li key={e.id} className={i < indice ? 'sa-etapa-lista' : i === indice ? 'sa-etapa-actual' : ''}>
                 <span className="sa-etapa-marca" aria-hidden="true">
@@ -201,14 +201,15 @@ export default function SuperadminRestaurar({ irAlLogin, configuradas, copiaEnCu
       <div className="sa-card-cabecera">
         <h2 className="sa-h2">Restaurar una copia</h2>
       </div>
+      <p className="sa-ayuda">Devuelve los datos del negocio al estado de una copia anterior del Drive.</p>
 
       {ultima && (
-        <div className={`alert ${ultima.estado === 'ok' ? 'sa-alert-ok' : 'alert-danger'} sa-restaurar-ultima`}>
+        <div className={`alert ${ultima.estado === 'ok' ? 'alert-exito' : 'alert-danger'} sa-restaurar-ultima`}>
           {ultima.estado === 'ok' ? (
             <>
               <strong>Última restauración: {formatearFechaHora(ultima.terminada_en)}</strong> ({ultima.superadmin}). Se restauró la copia{' '}
-              <span className="sa-quiebre">{ultima.archivo}</span>. Si hace falta volver atrás, está el resguardo{' '}
-              <span className="sa-quiebre">{ultima.resguardo}</span> en la lista.
+              <span className="sa-quiebre">{ultima.archivo}</span>. Para volver atrás, el resguardo{' '}
+              <span className="sa-quiebre">{ultima.resguardo}</span> está en la lista.
               {ultima.migraciones?.length > 0 && ` Se aplicaron ${ultima.migraciones.length} actualizaciones del sistema.`}
               {ultima.cambios_admins?.length > 0 && (
                 <ul className="sa-restaurar-cambios">
@@ -220,151 +221,157 @@ export default function SuperadminRestaurar({ irAlLogin, configuradas, copiaEnCu
             </>
           ) : (
             <>
-              <strong>Última restauración: falló ({formatearFechaHora(ultima.terminada_en)}).</strong> No se cambió nada: el sistema quedó como
-              estaba. Detalle: {ultima.detalle}
+              <strong>Última restauración fallida ({formatearFechaHora(ultima.terminada_en)}).</strong> No se modificó ningún dato. Detalle:{' '}
+              {ultima.detalle}
             </>
           )}
         </div>
       )}
 
       <details
-        className="sa-eventos"
+        className="sa-plegable"
         onToggle={(e) => {
           if (e.currentTarget.open && !copias && !cargandoLista && configuradas) cargarLista();
         }}
       >
         <summary>Elegir una copia para restaurar</summary>
-        <p className="sa-ayuda">
-          Reemplaza <strong>todos</strong> los datos del negocio (stock, clientes y cuentas corrientes, ventas, caja, gastos, proveedores, pedidos y
-          usuarios) por los de la copia que elijas. Usalo solo si se perdió o se rompió algo.
-        </p>
-        {!configuradas && <p className="sa-ayuda">Las copias no están configuradas en el servidor (ver arriba).</p>}
-        {configuradas && !estado.permiso && (
-          <div className="alert alert-danger">
-            El usuario de la base de datos no tiene permiso para restaurar (tiene que ser dueño de la base). Revisalo en Easypanel antes de usar esto.
-          </div>
-        )}
-        {error && !confirmando && <div className="alert alert-danger">{error}</div>}
-        {cargandoLista &&<p className="sa-cargando">Buscando las copias en el Drive…</p>}
-        {configuradas && !cargandoLista && copias === null && error && (
-          <button type="button" className="btn" onClick={cargarLista}>
-            Reintentar
-          </button>
-        )}
-        {copias?.length === 0 && <p className="sa-ayuda">No hay copias en el Drive. Se guardan 30 días.</p>}
-
-        {copias?.length > 0 && !confirmando && (
-          <>
-            <div className="sa-restaurar-lista" role="radiogroup" aria-label="Copias del Drive">
-              {copias.map((c) => (
-                <label key={c.id} className={`sa-restaurar-opcion${elegida?.id === c.id ? ' sa-restaurar-elegida' : ''}`}>
-                  <input type="radio" name="copia" checked={elegida?.id === c.id} onChange={() => setElegida(c)} />
-                  <span className="sa-restaurar-dato">
-                    <strong>{fechaLarga(c.fecha)}</strong> · {antiguedad(c.fecha)}
-                  </span>
-                  <span className="sa-restaurar-dato sa-detalle-fila">
-                    {TIPO[c.tipo] ?? 'Copia'} · {tamanio(c.bytes)}
-                    {masNueva && c.bytes < masNueva.bytes / 2 && <span className="sa-restaurar-chica"> · ⚠ mucho más chica que la última</span>}
-                  </span>
-                </label>
-              ))}
+        <div className="sa-plegable-cuerpo">
+          <p className="sa-ayuda">
+            Reemplaza <strong>todos</strong> los datos del negocio (stock, clientes y cuentas corrientes, ventas, caja, gastos, proveedores, pedidos
+            y usuarios) por los de la copia elegida. Usala solo si se perdieron o se dañaron datos.
+          </p>
+          {!configuradas && <p className="sa-ayuda">Las copias no están configuradas en el servidor (ver arriba).</p>}
+          {configuradas && !estado.permiso && (
+            <div className="alert alert-danger">
+              El usuario de la base de datos no tiene permiso para restaurar (tiene que ser dueño de la base). Revisalo en Easypanel antes de
+              restaurar.
             </div>
-            <div className="sa-restaurar-pie">
-              <button type="button" className="btn" onClick={cargarLista} disabled={cargandoLista}>
-                Actualizar la lista
-              </button>
-              <button
-                type="button"
-                className="btn sa-btn-peligro"
-                disabled={!elegida || copiaEnCurso || !estado.permiso}
-                title={copiaEnCurso ? 'Esperá que termine la copia en curso' : undefined}
-                onClick={() => setConfirmando(true)}
-              >
-                Restaurar la copia elegida…
+          )}
+          {error && !confirmando && <div className="alert alert-danger">{error}</div>}
+          {cargandoLista && <p className="sa-cargando">Buscando las copias en el Drive…</p>}
+          {configuradas && !cargandoLista && copias === null && error && (
+            <div>
+              <button type="button" className="btn" onClick={cargarLista}>
+                Reintentar
               </button>
             </div>
-            {copiaEnCurso && <p className="sa-ayuda">Esperá que termine la copia en curso.</p>}
-          </>
-        )}
+          )}
+          {copias?.length === 0 && <p className="sa-vacio">No hay copias en el Drive (se conservan 30 días).</p>}
 
-        {confirmando && elegida && (
-          <div className="sa-restaurar-confirmar">
-            <h3 className="sa-h3">Restaurar la copia del {fechaLarga(elegida.fecha)}</h3>
-            <p className="sa-restaurar-perdida">⚠ Se pierde todo lo cargado en {loQueSePierde(elegida.fecha)}</p>
-            <ul className="sa-restaurar-puntos">
-              <li>
-                Stock, clientes y cuentas corrientes, ventas, caja, gastos, proveedores, pedidos y los usuarios del negocio vuelven a como estaban
-                ese día a esa hora. Lo cargado después se pierde.
-              </li>
-              <li>No vuelven atrás: tu cuenta, el plan, la cuota y sus pagos, la seguridad, el registro de acciones y el historial de copias.</li>
-              <li>Antes se guarda una copia de cómo está todo ahora: si te equivocaste, la restaurás desde esta misma lista.</li>
-              <li>
-                Tarda unos minutos. Mientras, nadie del negocio ni del portal puede entrar, y al terminar todos tienen que volver a ingresar.{' '}
-                <strong>Avisale al negocio antes.</strong>
-              </li>
-            </ul>
-            {error && <div className="alert alert-danger">{error}</div>}
-            <div className="sa-restaurar-campos">
-              <div className="field">
-                <label htmlFor="sa-restaurar-dominio">
-                  Para confirmar, escribí <span className="sa-mono">{estado.dominio}</span>
-                </label>
-                <input
-                  id="sa-restaurar-dominio"
-                  type="text"
-                  autoComplete="off"
-                  spellCheck="false"
-                  value={dominio}
-                  onChange={(e) => setDominio(e.target.value)}
-                  disabled={ocupado}
-                />
+          {copias?.length > 0 && !confirmando && (
+            <>
+              <div className="sa-restaurar-lista" role="radiogroup" aria-label="Copias del Drive">
+                {copias.map((c) => (
+                  <label key={c.id} className={`sa-restaurar-opcion${elegida?.id === c.id ? ' sa-restaurar-elegida' : ''}`}>
+                    <input type="radio" name="copia" checked={elegida?.id === c.id} onChange={() => setElegida(c)} />
+                    <span className="sa-restaurar-dato">
+                      <strong>{fechaLarga(c.fecha)}</strong>
+                      <span className="sa-meta">{antiguedad(c.fecha)}</span>
+                    </span>
+                    <span className="sa-restaurar-dato sa-meta">
+                      {TIPO[c.tipo] ?? 'Copia'} · {tamanio(c.bytes)}
+                      {masNueva && c.bytes < masNueva.bytes / 2 && <span className="sa-chip sa-chip-aviso">Mucho menor que la última copia</span>}
+                    </span>
+                  </label>
+                ))}
               </div>
-              {!desafio ? (
+              <div className="sa-restaurar-pie">
+                <button type="button" className="btn" onClick={cargarLista} disabled={cargandoLista}>
+                  Actualizar lista
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-peligro"
+                  disabled={!elegida || copiaEnCurso || !estado.permiso}
+                  title={copiaEnCurso ? 'Esperá a que termine la copia en curso' : undefined}
+                  onClick={() => setConfirmando(true)}
+                >
+                  Restaurar copia elegida…
+                </button>
+              </div>
+              {copiaEnCurso && <p className="sa-ayuda">Esperá a que termine la copia en curso.</p>}
+            </>
+          )}
+
+          {confirmando && elegida && (
+            <div className="sa-restaurar-confirmar">
+              <h3 className="sa-h3">Restaurar la copia del {fechaLarga(elegida.fecha)}</h3>
+              <p className="sa-restaurar-perdida">Se pierde todo lo cargado en {loQueSePierde(elegida.fecha)}.</p>
+              <ul className="sa-restaurar-puntos">
+                <li>
+                  Stock, clientes y cuentas corrientes, ventas, caja, gastos, proveedores, pedidos y los usuarios del negocio vuelven a como estaban
+                  ese día a esa hora. Lo cargado después se pierde.
+                </li>
+                <li>No vuelven atrás: tu cuenta, el plan, la cuota y sus pagos, la seguridad, el registro de acciones y el historial de copias.</li>
+                <li>Antes se guarda un resguardo del estado actual: si fue un error, se restaura desde esta misma lista.</li>
+                <li>
+                  Tarda unos minutos. Mientras tanto nadie del negocio ni del portal puede ingresar, y al terminar todos tienen que volver a
+                  iniciar sesión. <strong>Avisale al negocio antes.</strong>
+                </li>
+              </ul>
+              {error && <div className="alert alert-danger">{error}</div>}
+              <div className="sa-restaurar-campos">
                 <div className="field">
-                  <label htmlFor="sa-restaurar-password">Tu contraseña</label>
-                  <input
-                    id="sa-restaurar-password"
-                    type="password"
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={ocupado}
-                  />
-                </div>
-              ) : (
-                <div className="field">
-                  <label htmlFor="sa-restaurar-codigo">
-                    {desafio.metodo === 'mail' ? `Código que te mandamos a ${desafio.email}` : 'Código de tu app autenticadora'}
+                  <label htmlFor="sa-restaurar-dominio">
+                    Para confirmar, escribí <span className="sa-mono">{estado.dominio}</span>
                   </label>
                   <input
-                    id="sa-restaurar-codigo"
+                    id="sa-restaurar-dominio"
                     type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={20}
-                    value={codigo}
-                    onChange={(e) => setCodigo(e.target.value)}
+                    autoComplete="off"
+                    spellCheck="false"
+                    value={dominio}
+                    onChange={(e) => setDominio(e.target.value)}
                     disabled={ocupado}
                   />
                 </div>
-              )}
-            </div>
-            <div className="sa-restaurar-pie">
-              <button type="button" className="btn" onClick={cancelar} disabled={ocupado}>
-                Cancelar
-              </button>
-              {!desafio ? (
-                <button type="button" className="btn btn-primary" onClick={pedirCodigo} disabled={ocupado || !password}>
-                  Seguir
+                {!desafio ? (
+                  <div className="field">
+                    <label htmlFor="sa-restaurar-password">Tu contraseña</label>
+                    <input
+                      id="sa-restaurar-password"
+                      type="password"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={ocupado}
+                    />
+                  </div>
+                ) : (
+                  <div className="field">
+                    <label htmlFor="sa-restaurar-codigo">
+                      {desafio.metodo === 'mail' ? `Código enviado a ${desafio.email}` : 'Código de tu app autenticadora'}
+                    </label>
+                    <input
+                      id="sa-restaurar-codigo"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={20}
+                      value={codigo}
+                      onChange={(e) => setCodigo(e.target.value)}
+                      disabled={ocupado}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="sa-restaurar-pie">
+                <button type="button" className="btn" onClick={cancelar} disabled={ocupado}>
+                  Cancelar
                 </button>
-              ) : (
-                <button type="button" className="btn sa-btn-restaurar" onClick={restaurar} disabled={ocupado || !dominioOk || codigo.trim().length < 6}>
-                  Restaurar ahora
-                </button>
-              )}
+                {!desafio ? (
+                  <button type="button" className="btn btn-primary" onClick={pedirCodigo} disabled={ocupado || !password}>
+                    Continuar
+                  </button>
+                ) : (
+                  <button type="button" className="btn sa-btn-restaurar" onClick={restaurar} disabled={ocupado || !dominioOk || codigo.trim().length < 6}>
+                    Restaurar copia
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </details>
     </section>
   );

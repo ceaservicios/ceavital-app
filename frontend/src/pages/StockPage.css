@@ -1,8 +1,10 @@
-/* Stock y Lotes (2026-10-28, "queda todo muy amontonado"): la lista va a todo el ancho y el
-   alta y la ficha del producto en páginas propias. Usan las clases cliente-* (tarjetas, KPIs,
-   tablas, formularios); acá va solo lo propio. */
+/* Stock: lista, ficha y alta del producto (rediseño 2026-10-29, "desprolijo, todo amontonado").
+   Usan las piezas cliente-* (ClientesEmpresaPage.css); acá va solo lo propio.
+   Ojo: Proveedores (ficha del proveedor e Ingreso de mercadería) también usa boton-icono,
+   stock-en-packs, stock-cuenta, stock-hint, stock-section-label, stock-td-stock,
+   stock-fila-packs, stock-nowrap, producto-form y las columnas .accion / .centro. */
 
-/* Tablas: columnas centradas y la de acciones (lápiz) pegada a la derecha. */
+/* ---------- Tablas ---------- */
 .cliente-tabla .centro {
   text-align: center;
 }
@@ -12,44 +14,230 @@
   white-space: nowrap;
 }
 .stock-td-stock {
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .stock-valor-alerta {
   color: var(--color-danger);
 }
+.stock-fila-packs {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+.stock-fila-alerta {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-danger);
+}
+.stock-nowrap {
+  white-space: nowrap;
+}
+.stock-falta {
+  color: var(--text-muted);
+}
+.stock-precio-sufijo {
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+.stock-kpi-alerta {
+  color: var(--color-danger);
+}
+/* Filtros de la lista (pedido del usuario, 2026-10-29): buscador, proveedor y categoría en la
+   barra; el filtro elegido se marca en verde y, abajo, "N de M productos". */
+.stock-toolbar {
+  flex-wrap: wrap;
+}
+.stock-toolbar .cliente-buscar {
+  flex: 1 1 160px;
+}
+/* Si la barra no entra en un renglón, el botón baja y queda a la derecha. */
+.stock-toolbar .btn {
+  margin-left: auto;
+}
+.stock-filtro {
+  flex: 0 1 220px;
+  min-width: 0;
+  height: var(--control-height);
+  padding: 0 34px 0 12px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23687370' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 12px center;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  appearance: none;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+.stock-filtro:hover {
+  border-color: #b9c1ba;
+}
+.stock-filtro:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+.stock-filtro-activo,
+.stock-filtro-activo:hover {
+  border-color: var(--color-primary);
+  background-color: #e6f2ec;
+  color: var(--color-primary);
+  font-weight: 700;
+}
+.stock-filtro-limpiar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--control-height);
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-primary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.stock-filtro-limpiar:hover {
+  background: #e6f2ec;
+}
+.stock-filtro-cuenta {
+  flex-basis: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
 
-/* Botón de ícono al final de cada fila (editar, ver, eliminar, quitar). */
+/* Botón de ícono al final de cada fila (editar, ver, eliminar, quitar): fantasma, el borde
+   aparece al pasar. */
 .boton-icono {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   padding: 0;
-  border: 1px solid var(--border-default);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  background: var(--bg-surface);
-  color: var(--text-secondary);
+  background: transparent;
+  color: var(--text-tertiary);
   font: inherit;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .boton-icono:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  background: var(--bg-surface);
+  border-color: var(--border-control);
+  color: var(--text-primary);
 }
 .boton-icono-peligro:hover {
-  border-color: var(--color-danger);
-  color: var(--color-danger);
+  background: var(--danger-bg);
+  border-color: #f1c6ca;
+  color: var(--danger-ink);
 }
 .boton-icono:disabled {
   opacity: 0.5;
-  cursor: default;
+  cursor: not-allowed;
+}
+.boton-icono:disabled:hover {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-tertiary);
 }
 
-/* Alta y ficha del producto: la página crece con su contenido y scrollea entera (son varias
-   tarjetas, no una lista). Dos columnas (datos | cómo se mide y se vende) que se apilan antes
-   de apretarse. */
+/* Tablet: la categoría se ve en la ficha; así nombre y proveedor no se parten en tres renglones. */
+@media (max-width: 900px) {
+  .stock-tabla-productos .stock-td-categoria {
+    display: none;
+  }
+}
+/* Tablet y celular: buscador arriba, los dos filtros lado a lado, el botón a todo el ancho y,
+   arriba de la lista, "N de M productos" con Limpiar. */
+@media (max-width: 860px) {
+  .stock-toolbar .cliente-buscar {
+    flex-basis: 100%;
+  }
+  .stock-filtro {
+    flex: 1 1 calc(50% - 4px);
+  }
+  .stock-toolbar .btn {
+    flex: 1 1 100%;
+    order: 3;
+  }
+  .stock-filtro-cuenta {
+    flex: 1 1 auto;
+    order: 4;
+    align-self: center;
+  }
+  .stock-filtro-limpiar {
+    order: 5;
+    height: 32px;
+  }
+}
+
+/* Lista de Stock en celular: renglones de dos líneas (producto a la izquierda; stock y precio
+   a la derecha). Categoría y proveedor se ven en la ficha. */
+@media (max-width: 600px) {
+  .stock-lista-page .cliente-kpis > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  .stock-tabla-productos thead {
+    display: none;
+  }
+  .stock-tabla-productos,
+  .stock-tabla-productos tbody {
+    display: block;
+  }
+  .stock-tabla-productos tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 16px;
+    row-gap: 2px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-rule);
+  }
+  .stock-tabla-productos tbody tr:last-child {
+    border-bottom: none;
+  }
+  .stock-tabla-productos tbody td {
+    display: block;
+    height: auto;
+    padding: 0;
+    border: none;
+  }
+  .stock-tabla-productos td.stock-td-producto {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+  .stock-tabla-productos td.stock-td-stock {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .stock-tabla-productos td.stock-td-precio {
+    grid-column: 2;
+    grid-row: 2;
+    font-size: 13px;
+    color: var(--text-tertiary);
+  }
+  .stock-tabla-productos .stock-td-categoria,
+  .stock-tabla-productos .stock-td-proveedor,
+  .stock-tabla-productos td.accion {
+    display: none;
+  }
+}
+
+/* ---------- Ficha y alta del producto ---------- */
+/* La página crece con su contenido y scrollea entera (no es una lista). */
 .cliente-page.producto-pagina {
   height: auto;
 }
@@ -60,307 +248,557 @@
 .producto-pagina .cliente-tabla th {
   position: static;
 }
+/* Formulario en columna (también lo usa Ingreso de mercadería). */
 .producto-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-}
-/* Los paneles uno debajo del otro, a todo el ancho (pedido del usuario, 2026-10-29: el de "Cómo se
-   mide y cómo se vende" a la derecha dejaba todo angosto). */
-.producto-columnas {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 20px;
-}
-.producto-columna {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  min-width: 0;
-}
-/* Stock bajo el mínimo: alerta (Rosa Coral, como el KPI de la lista). */
-.producto-badge-bajo {
-  background: rgba(224, 90, 101, 0.15);
-  color: #a13640;
-}
-.producto-badge-vencido {
-  margin-left: 8px;
-}
-.producto-eliminar {
-  padding-top: 0;
-  border-top: none;
+  gap: 16px;
 }
 
+/* Cifras del producto: la franja la arma global.css ([class$='-kpis']). */
+.producto-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.producto-kpi-alerta {
+  color: var(--color-danger);
+}
+.producto-kpi-sub {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+.producto-kpi-sub-alerta {
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+/* Hoja del formulario: una tarjeta, secciones separadas por una línea y el guardado al pie.
+   Es contenedor: las grillas de adentro cambian de columnas según el ancho de la tarjeta. */
+.producto-hoja {
+  display: flex;
+  flex-direction: column;
+  container-type: inline-size;
+  min-width: 0;
+}
+.producto-seccion {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px 24px;
+  min-width: 0;
+}
+.producto-seccion + .producto-seccion {
+  border-top: 1px solid var(--border-rule);
+}
+.producto-seccion-cabecera {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.producto-seccion-titulo {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+}
+.producto-subtitulo {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.producto-opcional {
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+.producto-seccion-ayuda {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+.producto-pie {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-rule);
+  background: var(--bg-muted);
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+}
+.producto-pie-error {
+  flex: 1 1 100%;
+}
+
+/* Datos del producto: 4 columnas que cierran (nombre ancho + código; categoría, proveedor,
+   mínimo y aviso), 2 en tablet y 1 en celular. */
+.producto-datos {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-areas:
+    'nombre nombre nombre codigo'
+    'categoria proveedor minimo aviso';
+  gap: 16px 20px;
+  align-items: start;
+}
+.producto-campo-nombre {
+  grid-area: nombre;
+}
+.producto-campo-codigo {
+  grid-area: codigo;
+}
+.producto-campo-categoria {
+  grid-area: categoria;
+}
+.producto-campo-proveedor {
+  grid-area: proveedor;
+}
+.producto-campo-minimo {
+  grid-area: minimo;
+}
+.producto-campo-aviso {
+  grid-area: aviso;
+}
+
+/* Ingreso de stock (stock inicial del alta y ajuste manual de la ficha): los campos que haya,
+   en columnas iguales. */
+.producto-campos-ingreso {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px 20px;
+  align-items: start;
+}
+.producto-cargar-en .stock-en-packs {
+  display: flex;
+  align-self: stretch;
+}
+.producto-cargar-en .stock-en-packs button {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Lotes: tabla y, abajo, el ajuste manual. */
+.producto-lotes {
+  container-type: inline-size;
+}
+.producto-contador {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.producto-lotes-tabla td,
+.producto-lotes-tabla th {
+  white-space: nowrap;
+}
+.producto-lotes-tabla td.producto-td-origen {
+  white-space: normal;
+}
+.producto-vence {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.producto-origen {
+  font-weight: 600;
+}
+.producto-origen-manual {
+  color: var(--text-tertiary);
+}
+.producto-td-cantidad {
+  font-weight: 600;
+}
+.producto-ajuste {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-rule);
+}
+.producto-ajuste-pie {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.producto-ajuste-pie .stock-cuenta {
+  margin-right: auto;
+}
+
+/* Eliminar producto: al final, discreto, en rojo; la confirmación en dos pasos. */
+.producto-eliminar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.producto-eliminar-confirm {
+  align-self: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 16px 24px;
+  border-color: #f1c6ca;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.producto-lote-confirm {
+  margin-top: 12px;
+}
+
+@media (max-width: 600px) {
+  .producto-seccion {
+    padding: 16px;
+  }
+  .producto-pie {
+    padding: 12px 16px;
+  }
+  .producto-pie .btn,
+  .producto-ajuste-pie .btn {
+    flex: 1;
+    min-height: 44px;
+  }
+  .producto-kpis > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  .producto-eliminar-confirm {
+    padding: 16px;
+  }
+}
+
+/* ---------- Piezas de formulario ---------- */
 .stock-campo-oculto {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-height);
+  padding: 0 12px;
+  border: 1px solid var(--border-rule);
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
   font-size: 14px;
   color: var(--text-tertiary);
-  padding: 11px 14px;
-  background: var(--bg-muted);
-  border-radius: var(--radius-sm);
 }
 .stock-hint {
-  font-size: 11.5px;
-  color: var(--text-tertiary);
+  font-size: 12.5px;
   font-weight: 500;
+  line-height: 1.4;
+  color: var(--text-tertiary);
 }
 .stock-section-label {
-  font-size: 13.5px;
-  font-weight: 700;
   display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 .stock-form-grid2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.stock-badge-vencido {
-  background: rgba(224, 90, 101, 0.15);
-  color: #a13640;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: var(--radius-pill);
-}
-
-/* Venta por pack y precio por cantidad (2026-10-11): casillas del producto y selector
-   "Unidades / Packs" del ingreso de mercadería. */
-.stock-presentacion {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  background: var(--bg-muted);
-}
-.stock-presentacion-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-primary);
-  cursor: pointer;
-}
-.stock-presentacion-check input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  flex-shrink: 0;
-}
-.stock-presentacion .field input {
-  background: var(--bg-surface);
-}
-/* "También se vende en pack" y debajo, alineado con el texto, "de [12] unidades". */
-.stock-presentacion-fila {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.stock-presentacion-fila > span {
-  padding-left: 24px;
-}
-.stock-presentacion-check input.stock-presentacion-cantidad {
-  width: 64px;
-  height: auto;
-  padding: 5px 8px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface);
-  font: inherit;
-  font-weight: 600;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
 }
 .stock-label-unidad {
   display: block;
-  font-size: 11.5px;
+  margin-top: 2px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* "¿Cómo se vende?": unidades del catálogo como botones (2026-10-11). */
-.stock-unidades {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.stock-unidades button {
-  border: 1px solid var(--border-default);
+/* Estados: píldora pálida de 24px. Vencido y stock bajo son alertas (Rosa Coral). */
+.stock-badge-vencido,
+.producto-badge-bajo {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
   border-radius: var(--radius-pill);
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* Campo con unidad: "$" adelante y "unidades", "kg", "por caja" o "días" atrás, dentro del
+   mismo recuadro. `.field` adelante: global.css se carga después y pisaría el input. */
+.stock-input {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-height);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
   background: var(--bg-surface);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.stock-input:hover {
+  border-color: #b9c1ba;
+}
+.stock-input:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+.stock-input:has(input:disabled) {
+  background: var(--bg-muted);
+  border-color: var(--border-control);
+}
+.field .stock-input input {
+  flex: 1;
+  min-width: 0;
+  min-height: calc(var(--control-height) - 2px);
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  box-shadow: none;
+}
+.field .stock-input input:focus,
+.field .stock-input input:disabled {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+.stock-input-prefijo,
+.stock-input-sufijo {
+  flex-shrink: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.stock-input-prefijo {
+  padding-left: 12px;
+  margin-right: -8px;
+}
+.stock-input-sufijo {
+  padding: 0 12px 0 4px;
+}
+.stock-input input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.stock-input input::-webkit-outer-spin-button,
+.stock-input input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Selector segmentado (Unidades / Caja, Remito / Factura, medios de pago): riel gris y la
+   opción elegida en blanco. */
+.stock-en-packs,
+.stock-unidades {
+  display: inline-flex;
+  align-self: flex-start;
+  max-width: 100%;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+}
+.stock-en-packs button,
+.stock-unidades button {
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
   color: var(--text-secondary);
   font: inherit;
   font-size: 13.5px;
   font-weight: 600;
-  padding: 8px 16px;
-  cursor: pointer;
-}
-.stock-unidades button.activo {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: #fff;
-}
-.stock-en-packs {
-  display: inline-flex;
-  align-self: flex-start;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-pill);
-  overflow: hidden;
-}
-.stock-en-packs button {
-  border: none;
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 7px 16px;
-  cursor: pointer;
-}
-.stock-en-packs button.activo {
-  background: var(--color-primary);
-  color: #fff;
-}
-.stock-fila-packs {
-  display: block;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--text-tertiary);
-}
-.stock-nowrap {
   white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.stock-en-packs button:hover,
+.stock-unidades button:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+.stock-en-packs button.activo,
+.stock-unidades button.activo {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(16, 32, 26, 0.12);
+}
+.stock-unidades button:disabled {
+  cursor: not-allowed;
+}
+.stock-unidades button:disabled:not(.activo) {
+  color: var(--text-muted);
+  opacity: 0.7;
 }
 
-/* "¿Cómo se mide?" / "¿Cómo se vende?" (2026-10-11): cada forma de venta en su recuadro;
-   la marcada se destaca con el verde de marca. */
+/* ---------- Medida y formas de venta (FormasDeVenta) ---------- */
 .formas-venta {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
-/* "¿Cómo se vende?" (2026-10-29, pedido del usuario): opciones para tildar con forma de botón,
-   como "¿Cómo se mide?"; abajo, a todo el ancho, solo los campos de lo elegido. Selectores con
-   .formas-venta: .field label y .field input (global.css, que se carga después) los pisarían. */
+/* Arriba, lado a lado: unidad de medida y formas de venta. */
+.formas-eleccion {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+  align-items: start;
+}
 .formas-opciones {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
+/* Selectores con .formas-venta: .field label y .field input (global.css, que se carga
+   después) los pisarían. */
 .formas-venta .formas-opcion {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  height: var(--control-height);
+  padding: 0 14px 0 12px;
   overflow: visible;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
   background: var(--bg-surface);
   color: var(--text-secondary);
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 600;
-  padding: 8px 16px 8px 12px;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.formas-venta .formas-opcion:hover {
+  border-color: #b9c1ba;
+  color: var(--text-primary);
+}
+.formas-venta .formas-opcion.activo {
+  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 0.5px var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
 }
 .formas-venta .formas-opcion input {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
   margin: 0;
   padding: 0;
   accent-color: var(--color-primary);
   cursor: inherit;
 }
-.formas-venta .formas-opcion.activo {
-  border-color: var(--color-primary);
-  background: rgba(14, 75, 56, 0.08);
-  color: var(--color-primary);
-}
 .formas-venta .formas-opcion:has(input:disabled) {
   cursor: not-allowed;
-  opacity: 0.7;
+  opacity: 0.75;
+}
+/* Cada forma de venta elegida: un pozo gris dentro de la tarjeta. */
+.stock-presentacion {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 20px 20px;
+  border: 1px solid var(--border-rule);
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
 }
 .formas-seccion-titulo {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
 }
-/* Mismas columnas en las dos formas: los campos quedan del mismo ancho y alineados. Por abajo,
-   porque unos títulos tienen aclaración ("por caja") y otros no. */
+/* Las dos formas con las mismas columnas: los campos quedan alineados entre sí. */
 .formas-campos {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
-  align-items: end;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px 20px;
+  align-items: start;
 }
-.formas-venta .stock-cuenta {
-  align-self: flex-start;
-}
-/* Precio por cantidad dentro de cada forma de venta (2026-10-11). */
+/* Precio por cantidad, dentro de cada forma de venta. */
 .stock-precio-cantidad {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--border-default);
+  gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-default);
 }
-.stock-precio-cantidad .stock-presentacion-check {
+.stock-presentacion-check {
+  display: flex;
   align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
 }
-.stock-precio-cantidad .stock-presentacion-check input {
-  margin-top: 2px;
-}
-.stock-presentacion-activa {
-  border-color: rgba(14, 75, 56, 0.45);
-  background: rgba(14, 75, 56, 0.04);
-}
-.stock-unidades button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
+.stock-presentacion-check input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  flex-shrink: 0;
+  accent-color: var(--color-primary);
 }
 
-/* Circuito unidad / caja (2026-10-11): cuenta del ingreso, aviso de envase y conversión. */
+/* Cuenta del ingreso o del envase ("5 cajas = 30 unidades · el stock queda en…"). */
 .stock-cuenta {
-  font-size: 12.5px;
+  align-self: flex-start;
+  font-size: 13px;
   font-weight: 500;
-  color: var(--color-primary);
-  background: rgba(14, 75, 56, 0.06);
-  border-radius: var(--radius-sm);
-  padding: 6px 10px;
+  line-height: 1.45;
+  color: var(--text-secondary);
 }
 .stock-cuenta strong {
-  font-weight: 800;
+  font-weight: 700;
+  color: var(--text-primary);
 }
-/* Dorado: aviso de atención media (marca.md), con texto oscuro. */
+
+/* Producto viejo cargado con un envase como unidad: aviso en Dorado (marca.md). */
 .stock-aviso-envase {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--warn-border);
   border-radius: var(--radius-sm);
-  background: rgba(243, 192, 67, 0.16);
-  border: 1px solid rgba(243, 192, 67, 0.7);
-  color: #5c4300;
-  font-size: 13px;
-  line-height: 1.45;
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.stock-aviso-envase strong {
+  font-weight: 700;
 }
 .stock-aviso-envase .btn {
   white-space: normal;
   text-align: left;
 }
+.stock-aviso-envase .stock-hint {
+  color: var(--warn-ink);
+}
+/* "Pasar a unidad + caja": pozo dentro de la tarjeta. */
 .stock-pasar-pack {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px;
-  border: 2px solid var(--color-primary);
-  border-radius: var(--radius-md);
+  gap: 16px;
+  padding: 16px 20px 20px;
+  border: 1px solid var(--border-rule);
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+}
+.stock-pasar-pack .field input {
   background: var(--bg-surface);
 }
 .stock-pasar-resumen {
   margin: 0;
-  padding: 10px 12px 10px 28px;
+  padding: 12px 16px 12px 32px;
+  border: 1px solid var(--border-rule);
   border-radius: var(--radius-sm);
-  background: var(--bg-muted);
-  font-size: 13px;
+  background: var(--bg-surface);
+  font-size: 13.5px;
   line-height: 1.6;
   color: var(--text-secondary);
 }
@@ -368,4 +806,102 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* ---------- Grillas según el ancho de la tarjeta (al final: tienen que ganarle a las
+   reglas de arriba, que tienen el mismo peso) ---------- */
+/* Contenedor angosto (tablet): 2 columnas. */
+@container (max-width: 820px) {
+  .producto-datos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      'nombre codigo'
+      'categoria proveedor'
+      'minimo aviso';
+  }
+  .formas-eleccion {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .formas-campos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* Ingreso de stock: 3 campos en una fila; con "Cargar en" son 4, de a 2. */
+  .producto-campos-ingreso {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .producto-campos-ingreso:has(.producto-cargar-en) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* Contenedor de celular: 1 columna. */
+@container (max-width: 520px) {
+  .producto-datos {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'nombre' 'codigo' 'categoria' 'proveedor' 'minimo' 'aviso';
+  }
+  .formas-campos,
+  .stock-form-grid2,
+  .producto-campos-ingreso,
+  .producto-campos-ingreso:has(.producto-cargar-en) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Lotes en celular: renglones de dos líneas (ingreso, vencimiento y cantidad arriba, con su
+     rótulo; origen y eliminar abajo). */
+  .producto-lotes-tabla thead {
+    display: none;
+  }
+  .producto-lotes-tabla,
+  .producto-lotes-tabla tbody {
+    display: block;
+  }
+  .producto-lotes-tabla tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-areas:
+      'ingreso vence cantidad'
+      'origen origen accion';
+    align-items: start;
+    gap: 8px 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-rule);
+  }
+  .producto-lotes-tabla tbody tr:last-child {
+    border-bottom: none;
+  }
+  .producto-lotes-tabla tbody td {
+    display: block;
+    height: auto;
+    padding: 0;
+    border: none;
+    white-space: normal;
+  }
+  .producto-lotes-tabla td.producto-td-ingreso {
+    grid-area: ingreso;
+  }
+  .producto-lotes-tabla td.producto-td-vence {
+    grid-area: vence;
+  }
+  .producto-lotes-tabla td.producto-td-cantidad {
+    grid-area: cantidad;
+  }
+  .producto-lotes-tabla td.producto-td-origen {
+    grid-area: origen;
+  }
+  .producto-lotes-tabla td.accion {
+    grid-area: accion;
+    width: auto;
+    align-self: center;
+  }
+  .producto-lotes-tabla td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+  }
+  .producto-vence {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
 }

@@ -1,53 +1,78 @@
 :root {
-  /* Paleta -- Book de Marca (marca.md) + valores exactos ya usados en el
-     mockup aprobado (Artifact de Claude Design) para fondos/bordes neutros
-     que marca.md no fija en hex (ese documento deja la base neutra como
-     "Blanco/Gris Claro" nomás). */
-  --color-primary: #0e4b38; /* Verde Esmeralda Oscuro -- marca, nav, acciones primarias */
-  --color-primary-hover: #0b3c2d;
-  --color-secondary: #22428c; /* Azul -- links, acciones secundarias */
+  /* Rediseño 2026-10-29 ("muy poco profesional... trucho, monótono"): misma paleta de marca
+     (marca.md), con superficies planas separadas por un borde fino en vez de sombras, un
+     solo tamaño de control, texto en tres tonos y el color reservado para acciones, estados
+     y alertas. Coral y Dorado siguen siendo solo de alerta. */
+  --color-primary: #0e4b38; /* Verde Esmeralda Oscuro -- marca, acción principal, activo */
+  --color-primary-hover: #0a3a2b;
+  --color-primary-soft: #e8f0ec; /* fondo de lo seleccionado */
+  --color-primary-ring: rgba(14, 75, 56, 0.16);
+  --color-secondary: #22428c; /* Azul -- links, información */
   --color-warning: #f3c043; /* Dorado -- aviso, nunca decorativo */
-  --color-danger: #e05a65; /* Rosa Coral -- alerta urgente, nunca decorativo */
+  --color-danger: #c8414c; /* Rosa Coral oscurecido para texto legible (AA) */
 
-  --bg-app: #ebecee;
+  --bg-app: #f4f5f3;
   --bg-surface: #ffffff;
-  --bg-muted: #f1f3f4;
-  --border-default: #dcdfe2;
+  --bg-muted: #f7f8f6; /* pozos dentro de una tarjeta */
+  --bg-hover: #f2f4f1;
+  --border-default: #e1e5e0; /* borde de tarjetas */
+  --border-rule: #edf0ec; /* renglones de tablas */
+  --border-control: #cdd3cd; /* campos y botones */
 
-  --text-primary: #1b2622;
-  --text-secondary: #3a4642;
-  --text-tertiary: #6b7672;
-  --text-muted: #8a9490;
+  --text-primary: #17211c;
+  --text-secondary: #46514b;
+  --text-tertiary: #5f6964;
+  --text-muted: #687370;
 
-  /* Menú lateral "isla flotante", invertido al verde de marca (2026-10-11, "está todo muy
-     blanco"): la marca va en una tarjetita blanca arriba (el isotipo es verde y no se ve
-     sobre verde) y la pantalla actual se marca en blanco. */
-  --sidebar-bg: linear-gradient(180deg, #11563f 0%, var(--color-primary) 45%, #0b3c2d 100%);
+  /* Estados: fondo pálido con texto oscuro del mismo tono. */
+  --ok-bg: #e3f2e9;
+  --ok-ink: #145a3b;
+  --info-bg: #e8edf8;
+  --info-ink: #22428c;
+  --warn-bg: #fdf3d4;
+  --warn-ink: #6d5100;
+  --warn-border: #f0d78a;
+  --danger-bg: #fcebec;
+  --danger-ink: #9b2833;
+  --neutral-bg: #eef0ed;
+  --neutral-ink: #4a544f;
+
+  /* Menú lateral verde de marca (el claro quedaba "todo blanco": cambio pedido por el usuario
+     el 2026-10-29). El activo es una píldora verde suave con texto verde. */
+  --sidebar-bg: var(--color-primary);
+  --sidebar-border: var(--color-primary-hover);
   --sidebar-text-strong: #ffffff;
-  --sidebar-text: rgba(255, 255, 255, 0.82);
-  --sidebar-text-muted: rgba(255, 255, 255, 0.66);
-  --sidebar-text-faint: rgba(255, 255, 255, 0.5);
-  --sidebar-item-hover-bg: rgba(255, 255, 255, 0.08);
-  --sidebar-item-active-bg: #ffffff;
+  --sidebar-text: rgba(255, 255, 255, 0.86);
+  --sidebar-text-muted: rgba(255, 255, 255, 0.62);
+  --sidebar-icon: rgba(255, 255, 255, 0.74);
+  --sidebar-item-hover-bg: rgba(255, 255, 255, 0.09);
+  --sidebar-item-active-bg: var(--color-primary-soft);
   --sidebar-item-active-text: var(--color-primary);
-  --sidebar-icon-bg: rgba(255, 255, 255, 0.08);
   --sidebar-line: rgba(255, 255, 255, 0.14);
-  --sidebar-badge-bg: #fbeaec; /* Rosa Coral: solo alerta (lotes vencidos) */
-  --sidebar-badge-text: #a8323d;
+  --sidebar-brand-a: #ffffff; /* "CEA" */
+  --sidebar-brand-b: #b9cdf5; /* "Vital": el azul de marca, aclarado para leerse sobre el verde */
+  --sidebar-badge-bg: var(--danger-bg); /* Rosa Coral: solo alerta (lotes vencidos) */
+  --sidebar-badge-text: var(--danger-ink);
 
+  --radius-xs: 6px;
   --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-card: 14px;
-  --radius-pill: 20px;
+  --radius-md: 8px;
+  --radius-card: 16px;
+  --radius-pill: 999px;
 
-  --shadow-card: 0 1px 2px rgba(16, 40, 32, 0.05), 0 4px 14px rgba(16, 40, 32, 0.05);
-  --shadow-float: 0 1px 2px rgba(16, 40, 32, 0.06), 0 10px 30px rgba(16, 40, 32, 0.08);
-  --shadow-active: 0 6px 14px rgba(14, 75, 56, 0.28);
+  /* Sin sombras en lo que está quieto: solo en lo que flota (menús, cajón, avisos). */
+  --shadow-card: none;
+  --shadow-float: 0 12px 32px rgba(16, 32, 26, 0.14), 0 2px 6px rgba(16, 32, 26, 0.06);
+  --shadow-active: none;
+
+  --control-height: 40px;
+  --gap: 16px;
 
   --font-sans: 'Manrope', system-ui, -apple-system, sans-serif;
 
   color-scheme: light;
 }
+
 
 * {
   box-sizing: border-box;
@@ -62,9 +87,19 @@ body,
 body {
   margin: 0;
   font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.45;
   background: var(--bg-app);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'tnum' 0;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.01em;
 }
 
 a {
@@ -79,34 +114,49 @@ button {
   font-family: inherit;
 }
 
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Botones: un solo alto para todos (40px), borde fino, peso 600. */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px 20px;
+  min-height: var(--control-height);
+  padding: 0 16px;
   border-radius: var(--radius-sm);
-  border: 1.5px solid var(--border-default);
+  border: 1px solid var(--border-control);
   background: var(--bg-surface);
-  color: var(--text-secondary);
-  font-size: 14.5px;
-  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
 }
 .btn:hover {
-  border-color: var(--color-primary);
+  background: var(--bg-hover);
+  border-color: #b9c1ba;
+}
+.btn:active {
+  transform: translateY(0.5px);
 }
 .btn:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: not-allowed;
 }
-/* Un <a> con forma de botón conserva los colores del botón (la regla de los
-   links, `a:hover`, le cambiaba el texto a azul oscuro sobre el fondo verde). */
+.btn:disabled:hover {
+  background: var(--bg-surface);
+  border-color: var(--border-control);
+}
+/* Un <a> con forma de botón conserva los colores del botón. */
 a.btn,
 a.btn:hover {
-  color: var(--text-secondary);
+  color: var(--text-primary);
   text-decoration: none;
 }
 a.btn-primary,
@@ -115,13 +165,33 @@ a.btn-primary:hover {
 }
 
 .btn-primary {
-  border: 2px solid var(--color-primary);
+  border-color: var(--color-primary);
   background: var(--color-primary);
   color: #ffffff;
+  box-shadow: 0 6px 16px rgba(14, 75, 56, 0.22);
 }
 .btn-primary:hover {
   background: var(--color-primary-hover);
   border-color: var(--color-primary-hover);
+}
+/* Deshabilitado: gris legible, no un verde lavado que parece activo. */
+.btn-primary:disabled,
+.btn-primary:disabled:hover {
+  box-shadow: none;
+  opacity: 1;
+  background: #dde2de;
+  border-color: #dde2de;
+  color: #66706b;
+}
+.btn.btn-peligro,
+.btn-peligro {
+  border-color: #e7b9be;
+  color: var(--danger-ink);
+  background: var(--bg-surface);
+}
+.btn.btn-peligro:hover {
+  background: var(--danger-bg);
+  border-color: #dc9aa1;
 }
 
 .field {
@@ -133,7 +203,7 @@ a.btn-primary:hover {
 
 .field label {
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -141,63 +211,90 @@ a.btn-primary:hover {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   width: 100%;
   font: inherit;
-  font-size: 14.5px;
-  padding: 11px 14px;
+  font-size: 14px;
+  min-height: var(--control-height);
+  padding: 8px 12px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  background: var(--bg-muted);
+  border: 1px solid var(--border-control);
+  background: var(--bg-surface);
   color: var(--text-primary);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.field textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+.field input::placeholder,
+.field textarea::placeholder {
+  color: #7d8682;
+}
+.field input:hover,
+.field select:hover {
+  border-color: #b9c1ba;
 }
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   outline: none;
   border-color: var(--color-primary);
-  background: var(--bg-surface);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
 }
 .field input:disabled,
 .field select:disabled {
-  opacity: 0.7;
+  background: var(--bg-muted);
+  color: var(--text-tertiary);
   cursor: not-allowed;
 }
 
-/* Tarjetas: sombra suave en vez de borde, mismo idioma que el menú flotante. El borde
-   queda transparente (no se saca) para no mover ni un píxel los tamaños de nada. */
+/* Tarjetas: planas, borde fino, sin sombra. */
 .card {
   background: var(--bg-surface);
-  border: 1px solid transparent;
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
+  box-shadow: none;
 }
 
 .alert {
   border-radius: var(--radius-sm);
-  padding: 12px 14px;
+  padding: 10px 14px;
   font-size: 13.5px;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 .alert-danger {
-  background: rgba(224, 90, 101, 0.1);
-  color: #a13640;
-  border: 1px solid rgba(224, 90, 101, 0.3);
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+  border: 1px solid #f1c6ca;
 }
 /* Aviso que no es un error (Dorado, como pide marca.md para los avisos). */
 .alert-aviso {
-  background: rgba(243, 192, 67, 0.16);
-  color: #6b5000;
-  border: 1px solid rgba(243, 192, 67, 0.5);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  border: 1px solid var(--warn-border);
+}
+.alert-exito {
+  background: var(--ok-bg);
+  color: var(--ok-ink);
+  border: 1px solid #bfe0cc;
+}
+
+/* Números: siempre con cifras del mismo ancho, así las columnas quedan alineadas. */
+.num,
+[class*='-kpi-value'],
+[class*='monto'],
+[class*='total'] {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Columnas de las "tablas" armadas con flex (Stock, Vencimientos, Proveedores,
    Costos, Usuarios, Cierre de Caja, carrito de Caja): cada columna recibe su
-   ancho por `style={{ flex: N }}` en el encabezado y en cada fila. Sin
-   `min-width: 0` el ancho real dependía del contenido de cada fila y las
-   columnas dejaban de coincidir con su encabezado (textos pegados, "$2.200La
-   Serenisima"). Con min-width: 0 el reparto es exactamente proporcional en
-   todas las filas, y el padding evita que un valor toque al de al lado. */
+   ancho por `style={{ flex: N }}` en el encabezado y en cada fila. Con
+   min-width: 0 el reparto es exactamente proporcional en todas las filas, y el
+   padding evita que un valor toque al de al lado. */
 [style*='flex:'] {
   min-width: 0;
   padding-right: 12px;
@@ -207,7 +304,7 @@ a.btn-primary:hover {
   padding-right: 0;
 }
 
-/* Encabezados de esas tablas: una sola línea ("PRECIO VENTA" no se parte). */
+/* Encabezados de esas tablas: una sola línea, en minúscula y gris (no en mayúsculas). */
 [class$='-head'] > span {
   white-space: nowrap;
   overflow: hidden;
@@ -219,50 +316,326 @@ input {
   text-overflow: ellipsis;
 }
 
-/* Celular: las tarjetas de resumen (KPI) van de a dos por fila, no una por
-   fila (ocupaban toda la pantalla antes de llegar al contenido). */
+/* Números de resumen (KPI): una sola franja dividida por líneas finas, no una tarjeta
+   suelta por número. Sirve para todas las pantallas que usan <algo>-kpis. */
+.app-layout-content [class$='-kpis'] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+.app-layout-content [class$='-kpis'] > * {
+  min-width: 0;
+  margin: 0;
+  padding: 16px 20px;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  box-shadow: -1px 0 0 var(--border-rule);
+}
+.app-layout-content [class*='-kpi-label'] {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.app-layout-content [class*='-kpi-value'] {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+/* Celular: las cifras de resumen van de a dos por fila. Cada pantalla resuelve sus tablas
+   (renglones de dos líneas o scroll dentro de su marco), sin un ancho mínimo global. */
 @media (max-width: 600px) {
+  .app-layout-content [class$='-kpis'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .app-layout-content [class$='-kpis'] > * {
-    flex: 1 1 calc(50% - 8px);
-    min-width: 0;
     padding: 12px 14px;
+    box-shadow: -1px 0 0 var(--border-rule), 0 -1px 0 var(--border-rule);
   }
   .app-layout-content [class*='-kpi-value'] {
-    font-size: 22px;
+    font-size: 20px;
   }
-
-  /* Tablas armadas con columnas flex (Stock, Costos, Proveedores, Usuarios,
-     Vencimientos, historial de Cierre, carrito): en un ancho de celular las
-     columnas se aplastaban ("$2.2 / 00"). Mantienen un ancho mínimo legible y
-     la tabla scrollea de costado dentro de su tarjeta, sin mover la página. */
-  .stock-tabla,
-  .costos-tabla,
-  .proveedores-tabla,
-  .usuarios-tabla,
-  .vencimientos-tabla-scroll,
-  .cierre-historial-tabla,
-  .caja-cart-list {
-    overflow-x: auto;
-  }
-  .stock-tabla > *,
-  .costos-tabla > *,
-  .proveedores-tabla > *,
-  .usuarios-tabla > *,
-  .vencimientos-tabla-scroll > *,
-  .cierre-historial-tabla > *,
-  .caja-cart-list > * {
-    min-width: 520px;
+  /* Con una cantidad impar de cifras, la última ocupa la fila entera (no medio renglón vacío). */
+  .app-layout-content [class$='-kpis'] > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 }
 
-/* Badges/píldoras: nunca se parten en dos líneas ("Administrad/or"). */
+/* Badges/píldoras: nunca se parten en dos líneas. */
 [class*='badge'] {
   white-space: nowrap;
 }
-/* Texto largo de una celda (email, etc.): una línea con "…" en vez de
-   cortarse a la mitad de una palabra. Poner el texto completo en title. */
+/* Texto largo de una celda (email, etc.): una línea con "…". Poner el texto completo en title. */
 .celda-ellipsis {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Estilo "panel protagonista" (elegido por el usuario el 2026-10-29): listas con grupos de
+   encabezado de color, ícono de color por tipo (--c), etiquetas y estados. El panel verde está en
+   components/Hero. */
+.grupo-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border-top: 1px solid var(--border-rule);
+}
+/* Encabezado de grupo dentro de una tabla: la fila no lleva relleno ni efecto al pasar. */
+tr.grupo-fila td,
+tr.grupo-fila:hover td {
+  padding: 0;
+  background: transparent;
+  cursor: default;
+}
+tr.grupo-fila .grupo-h {
+  border-top: 0;
+}
+.grupo-h-rojo {
+  background: #fff1f2;
+  color: #a8323c;
+}
+.grupo-h-amarillo {
+  background: #fff8e1;
+  color: #7a5900;
+}
+.grupo-h-verde {
+  background: #f3f7f4;
+  color: #3d6b55;
+}
+.grupo-h-azul {
+  background: #eef3fc;
+  color: var(--color-secondary);
+}
+.icono-cat {
+  --c: #6b7570;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: #ffffff;
+  background: linear-gradient(140deg, color-mix(in srgb, var(--c) 72%, #ffffff), var(--c));
+  font-size: 14px;
+  font-weight: 800;
+}
+.icono-cat svg {
+  width: 20px;
+  height: 20px;
+}
+/* Un avatar de iniciales que ya existía, con el color fijo de esa persona. */
+.avatar-color {
+  background: linear-gradient(140deg, color-mix(in srgb, var(--c) 72%, #ffffff), var(--c)) !important;
+  color: #ffffff !important;
+}
+.con-avatar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.con-avatar-texto {
+  min-width: 0;
+}
+.icono-cat-chico {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+.icono-cat-chico svg {
+  width: 16px;
+  height: 16px;
+}
+.tag {
+  --c: #6b7570;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--c) 13%, #ffffff);
+  color: color-mix(in srgb, var(--c) 85%, #000000);
+}
+.tag svg {
+  width: 12px;
+  height: 12px;
+}
+/* Boletas de proveedores hechas o tocadas a mano (2026-10-29). */
+.tag.tag-mano {
+  --c: #2f5fc4;
+}
+.tag.tag-corregido {
+  --c: #b07d00;
+}
+.estado {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.estado svg {
+  width: 13px;
+  height: 13px;
+}
+.estado-rojo {
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+}
+.estado-amarillo {
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+.estado-verde {
+  background: var(--ok-bg);
+  color: var(--ok-ink);
+}
+.estado-azul {
+  background: var(--info-bg);
+  color: var(--info-ink);
+}
+.estado-gris {
+  background: var(--neutral-bg);
+  color: var(--neutral-ink);
+}
+/* Títulos de sección de tarjetas y formularios con la marca verde del panel (body delante: le
+   gana a la regla de cada pantalla, que carga después). */
+body :is(.cliente-seccion-titulo, .producto-seccion-titulo, .config-seccion-titulo, .cuenta-h2, .cpagar-seccion-h) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+body :is(.cliente-seccion-titulo, .producto-seccion-titulo, .config-seccion-titulo, .cuenta-h2, .cpagar-seccion-h)::before {
+  content: '';
+  flex-shrink: 0;
+  width: 6px;
+  height: 20px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #2a9a6f, #0e4b38);
+}
+/* Alta de cliente o proveedor: el primer título es la cabecera verde de la tarjeta. */
+body .cliente-form-card {
+  padding-top: 0;
+  overflow: hidden;
+}
+body .cliente-form-card > .cliente-seccion-titulo:first-of-type {
+  margin: 0 -24px 2px;
+  padding: 16px 24px;
+  color: #ffffff;
+  background: radial-gradient(120% 160% at 100% 0%, #2a9a6f 0%, rgba(42, 154, 111, 0) 60%),
+    linear-gradient(135deg, #0b3d2e, #0e4b38 60%, #13644a);
+}
+body .cliente-form-card > .cliente-seccion-titulo:first-of-type::before {
+  background: #f3c043;
+}
+/* Alta de producto (2026-10-29): lo mismo con el primer título de la hoja; la sección tiene su
+   propio relleno (20px 24px, 16px en celular), que la cabecera ocupa entero. */
+body .producto-hoja-alta {
+  overflow: hidden;
+}
+body .producto-hoja-alta > .producto-seccion:first-child > .producto-seccion-titulo {
+  margin: -20px -24px 2px;
+  padding: 16px 24px;
+  color: #ffffff;
+  background: radial-gradient(120% 160% at 100% 0%, #2a9a6f 0%, rgba(42, 154, 111, 0) 60%),
+    linear-gradient(135deg, #0b3d2e, #0e4b38 60%, #13644a);
+}
+body .producto-hoja-alta > .producto-seccion:first-child > .producto-seccion-titulo::before {
+  background: #f3c043;
+}
+@media (max-width: 600px) {
+  body .producto-hoja-alta > .producto-seccion:first-child > .producto-seccion-titulo {
+    margin: -16px -16px 2px;
+    padding: 14px 16px;
+  }
+}
+.hero {
+  flex-shrink: 0;
+}
+
+/* Botón oscuro de acción por fila ("Pagar"); en rojo cuando la fila está vencida. */
+.btn-fila {
+  height: 36px;
+  min-width: 92px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--text-primary);
+  color: #ffffff;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.15s ease-out;
+}
+.btn-fila:hover {
+  filter: brightness(1.25);
+}
+/* Acción secundaria de la fila ("Corregir"), al lado de la principal. */
+.btn-fila.btn-fila-sec {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px var(--border-control);
+}
+.btn-fila.btn-fila-sec:hover {
+  filter: none;
+  background: var(--bg-hover);
+}
+.btn-fila-rojo {
+  background: #c13d48;
+}
+/* Filtros en píldora: el activo en oscuro. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.chip-activo {
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+  color: #ffffff;
+}
+/* Las pestañas con ícono y color están en components/Pestanas. */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

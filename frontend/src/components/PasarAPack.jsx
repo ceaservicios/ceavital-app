@@ -31,7 +31,7 @@ export default function PasarAPack({ producto, onHecho, onCancelar }) {
     e.preventDefault();
     if (enviandoRef.current) return;
     if (!nValido || !datos.pack_nombre.trim() || (datos.vende_suelto && datos.precio_venta === '')) {
-      setError(`Completá el nombre, cuántas unidades trae${datos.vende_suelto ? ' y el precio por unidad' : ''}.`);
+      setError(`Completá el nombre del envase, las unidades por ${nombrePack}${datos.vende_suelto ? ' y el precio por unidad' : ''}.`);
       return;
     }
     enviandoRef.current = true;
@@ -56,8 +56,13 @@ export default function PasarAPack({ producto, onHecho, onCancelar }) {
     }
   }
 
+  // No es un <form>: va dentro del form de la ficha, y un form dentro de otro no se envía (el navegador
+  // recargaba la página y la conversión no salía). Enter en un campo convierte, sin enviar la ficha (2026-10-29).
   return (
-    <form className="stock-pasar-pack" onSubmit={convertir}>
+    <div
+      className="stock-pasar-pack"
+      onKeyDown={(e) => e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type !== 'checkbox' && convertir(e)}
+    >
       <span className="stock-section-label">Pasar a unidad + {nombrePack}</span>
       <div className="stock-form-grid2">
         <div className="field">
@@ -65,12 +70,12 @@ export default function PasarAPack({ producto, onHecho, onCancelar }) {
           <input maxLength={20} value={datos.pack_nombre} onChange={(e) => fijar({ pack_nombre: e.target.value })} />
         </div>
         <div className="field">
-          <label>Unidades que trae</label>
+          <label>Unidades por {nombrePack}</label>
           <input
             type="number"
             min="2"
             step="1"
-            placeholder="ej: 12"
+            placeholder="Ej.: 12"
             value={datos.pack_unidades}
             onChange={(e) => fijar({ pack_unidades: e.target.value })}
           />
@@ -99,12 +104,12 @@ export default function PasarAPack({ producto, onHecho, onCancelar }) {
             checked={datos.codigo_es_del_pack}
             onChange={(e) => fijar({ codigo_es_del_pack: e.target.checked })}
           />
-          El código {producto.codigo_barras} es el del envase ({nombrePack})
+          El código {producto.codigo_barras} corresponde al envase ({nombrePack}), no a la unidad
         </label>
       )}
       {producto.codigo_barras && datos.codigo_es_del_pack && datos.vende_suelto && (
         <div className="field">
-          <label>Código de la unidad suelta</label>
+          <label>Código de barras de la unidad</label>
           <input
             placeholder="Opcional"
             value={datos.codigo_barras_unidad}
@@ -119,18 +124,18 @@ export default function PasarAPack({ producto, onHecho, onCancelar }) {
             <strong>{producto.stock_total * n} unidades</strong>
           </li>
           <li>
-            Precio por {nombrePack}: <strong>{formatearMonto(producto.precio_venta)}</strong> (el que tenía)
+            Precio por {nombrePack}: <strong>{formatearMonto(producto.precio_venta)}</strong> (sin cambios)
           </li>
           {producto.precio_costo != null && (
             <li>
               {datos.vende_suelto
                 ? `Costo por unidad: ${formatearMonto(Math.round(producto.precio_costo / n))}`
-                : `Costo por ${nombrePack}: ${formatearMonto(producto.precio_costo)} (el que tenía)`}
+                : `Costo por ${nombrePack}: ${formatearMonto(producto.precio_costo)} (sin cambios)`}
             </li>
           )}
           <li>{datos.vende_suelto ? `Se vende suelto y por ${nombrePack}.` : `Se vende solo por ${nombrePack}.`}</li>
           <li>
-            Las ventas anteriores quedan como «{datos.pack_nombre.trim() || 'Caja'} x {n}».
+            Las ventas anteriores se registran como «{datos.pack_nombre.trim() || 'Caja'} x {n}».
           </li>
         </ul>
       )}
@@ -139,10 +144,10 @@ export default function PasarAPack({ producto, onHecho, onCancelar }) {
         <button type="button" className="btn" onClick={onCancelar} disabled={enviando}>
           Cancelar
         </button>
-        <button type="submit" className="btn btn-primary" disabled={enviando}>
-          {enviando ? 'Convirtiendo…' : 'Convertir'}
+        <button type="button" className="btn btn-primary" disabled={enviando} onClick={convertir}>
+          {enviando ? 'Convirtiendo…' : 'Convertir producto'}
         </button>
       </div>
-    </form>
+    </div>
   );
 }

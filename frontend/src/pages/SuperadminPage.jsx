@@ -15,8 +15,8 @@ import './SuperadminPage.css';
 // Panel de CEA sobre esta instalación (/sa): estado, plan y módulos, cuota y pagos (en dólares desde el
 // 2026-10-21: aviso del mes, implementación, abono y modificaciones, ver SuperadminCobro.jsx), topes de
 // usuarios y Administradores del negocio, los dos correos, copias de seguridad, seguridad, registro de acciones y la
-// verificación en dos pasos propia. Arriba,
-// un resumen fijo (estado, plan, cuota) y abajo una pestaña por tema, con tarjetas del mismo ancho.
+// verificación en dos pasos propia. Arriba, una franja fija con las cifras clave (instalación, plan,
+// vencimiento y aviso del mes) y abajo una pestaña por tema (rediseño 2026-10-29).
 // Sesión propia (cookie sa_token + token CSRF en memoria), aparte del sistema del negocio. Sin la
 // verificación en dos pasos configurada, lo único que se ve es la pantalla para activarla (EST-01 §4).
 
@@ -26,7 +26,7 @@ const PESTANAS = [
   { id: 'cuota', nombre: 'Cuota y pagos' },
   { id: 'usuarios', nombre: 'Usuarios' },
   { id: 'correo', nombre: 'Correo' },
-  { id: 'copias', nombre: 'Copias' },
+  { id: 'copias', nombre: 'Copias de seguridad' },
   { id: 'seguridad', nombre: 'Seguridad' },
   { id: 'registro', nombre: 'Registro' },
   { id: 'verificacion', nombre: 'Mi verificación' },
@@ -43,19 +43,19 @@ const ETIQUETA_AVISO = {
 const ETIQUETA_ROL = { admin: 'Administradores', encargado: 'Encargados', cajero: 'Cajeros' };
 
 const ESTADO_CUOTA = {
-  sin_definir: { texto: 'Sin cuota definida', clase: 'sa-chip-neutro' },
-  vigente: { texto: 'Cuota vigente', clase: 'sa-chip-ok' },
-  por_vencer: { texto: 'Cuota por vencer', clase: 'sa-chip-aviso' },
-  vencida: { texto: 'Cuota vencida', clase: 'sa-chip-alerta' },
+  sin_definir: { texto: 'Sin cuota definida', corto: 'Sin definir', clase: 'sa-chip-neutro' },
+  vigente: { texto: 'Cuota vigente', corto: 'Vigente', clase: 'sa-chip-ok' },
+  por_vencer: { texto: 'Cuota por vencer', corto: 'Por vencer', clase: 'sa-chip-aviso' },
+  vencida: { texto: 'Cuota vencida', corto: 'Vencida', clase: 'sa-chip-alerta' },
 };
 
 function textoSuspension(instancia) {
   const { cuota } = instancia;
-  if (!cuota.suspender_dias) return 'No se suspende sola.';
-  if (!cuota.suspende_el || instancia.estado === 'suspendida') return `Se suspende sola a los ${cuota.suspender_dias} días de vencida.`;
-  if (instancia.suspension_auto_vence === cuota.vence) return 'Reactivada a mano sin el pago: no se vuelve a suspender sola por este vencimiento.';
-  if (cuota.dias_para_suspender <= 0) return 'Se suspende sola en la próxima revisión (dentro de una hora).';
-  return `Se suspende sola el ${formatearFecha(cuota.suspende_el)} si no se anota el pago.`;
+  if (!cuota.suspender_dias) return 'Sin suspensión automática.';
+  if (!cuota.suspende_el || instancia.estado === 'suspendida') return `Se suspende automáticamente a los ${cuota.suspender_dias} días del vencimiento.`;
+  if (instancia.suspension_auto_vence === cuota.vence) return 'Reactivada manualmente sin el pago: no se vuelve a suspender por este vencimiento.';
+  if (cuota.dias_para_suspender <= 0) return 'Se suspende automáticamente en la próxima revisión (dentro de una hora).';
+  return `Se suspende automáticamente el ${formatearFecha(cuota.suspende_el)} si no se registra el pago.`;
 }
 
 function textoDias(cuota) {
@@ -85,7 +85,7 @@ export default function SuperadminPage() {
   const [error, setError] = useState(null);
   // EST-01 §3: si el ingreso cerró una sesión abierta en otro dispositivo, se le avisa.
   const [aviso, setAviso] = useState(() =>
-    location.state?.sesionAnteriorCerrada ? 'Tenías una sesión abierta en otro dispositivo: se cerró al entrar acá.' : null
+    location.state?.sesionAnteriorCerrada ? 'Se cerró la sesión que tenías abierta en otro dispositivo.' : null
   );
   const [ocupado, setOcupado] = useState(false);
   const guardia = useRef(false); // sincrónica: un doble click no manda dos veces
@@ -169,7 +169,7 @@ export default function SuperadminPage() {
       setAviso(typeof mensajeOk === 'function' ? mensajeOk(resultado) : mensajeOk);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) return irAlLogin();
-      setError(err instanceof ApiError ? err.message : 'No se pudo completar la acción. Probá de nuevo.');
+      setError(err instanceof ApiError ? err.message : 'No se pudo completar la acción. Intentá de nuevo.');
     } finally {
       guardia.current = false;
       setOcupado(false);
@@ -192,7 +192,7 @@ export default function SuperadminPage() {
     if (pendienteDosfa && estado.metodo) {
       await cargar();
       setPendienteDosfa(false);
-      setAviso('Listo: la verificación en dos pasos quedó activa.');
+      setAviso('La verificación en dos pasos quedó activa.');
       return;
     }
     setAviso(mensaje);
@@ -212,11 +212,11 @@ export default function SuperadminPage() {
       <div>
         <h1 className="sa-h1">Administración CEA</h1>
         <p className="sa-subtitulo">
-          {panel ? `Versión ${panel.version} · ` : ''}sesión de {usuario}
+          {panel ? `Versión ${panel.version} · ` : ''}Sesión de {usuario}
         </p>
       </div>
       <button type="button" className="btn" onClick={salir}>
-        Salir
+        Cerrar sesión
       </button>
     </header>
   );
@@ -226,9 +226,9 @@ export default function SuperadminPage() {
       <div className="sa-page">
         {encabezado}
         {error && <div className="alert alert-danger">{error}</div>}
-        <section className="card sa-card sa-card-dosfa">
+        <section className="card sa-card sa-card-angosta">
           <h2 className="sa-h2">Activá la verificación en dos pasos</h2>
-          <p className="sa-ayuda">Para usar el panel tenés que activarla: además de la contraseña, se pide una vez por semana en cada navegador.</p>
+          <p className="sa-ayuda">Es obligatoria para usar el panel. Se pide una vez por semana en cada navegador, además de la contraseña.</p>
           <ConfigurarDosfa base="/sa/2fa" estado={dosfa} onCambio={alCambiarDosfa} onSesionVencida={irAlLogin} />
         </section>
       </div>
@@ -252,24 +252,31 @@ export default function SuperadminPage() {
   // ---- Secciones (cada una es una tarjeta a todo el ancho) ----
 
   const seccionEstado = (
-    <section className="card sa-card" key="estado">
+    <section className="card sa-card sa-card-angosta" key="estado">
       <div className="sa-card-cabecera">
         <h2 className="sa-h2">Estado de la instalación</h2>
         <span className={`sa-chip ${suspendida ? 'sa-chip-alerta' : 'sa-chip-ok'}`}>{suspendida ? 'Suspendida' : 'Activa'}</span>
       </div>
       {suspendida ? (
         <>
-          <p className="sa-detalle">
-            Motivo: {instancia.motivo_suspension} · desde {formatearFechaHora(instancia.suspendida_en)}
-          </p>
+          <dl className="sa-datos sa-datos-2">
+            <div>
+              <dt>Motivo</dt>
+              <dd>{instancia.motivo_suspension}</dd>
+            </div>
+            <div>
+              <dt>Suspendida desde</dt>
+              <dd>{formatearFechaHora(instancia.suspendida_en)}</dd>
+            </div>
+          </dl>
           <p className="sa-ayuda">
             Nadie del negocio ni ningún cliente puede ingresar. Los datos se conservan.
             {instancia.suspension_por_cuota &&
-              ' La suspendió el sistema por la cuota: anotar el pago la reactiva sola. Si la reactivás a mano sin el pago, no se vuelve a suspender sola por este vencimiento.'}
+              ' La suspendió el sistema por falta de pago: registrar el pago la reactiva automáticamente. Si la reactivás manualmente sin el pago, no se vuelve a suspender por este vencimiento.'}
           </p>
           {confirmando === 'reactivar' ? (
             <div className="sa-confirmar">
-              <span>¿Reactivar la instalación?</span>
+              <span>¿Reactivar la instalación? El negocio y sus clientes vuelven a poder ingresar.</span>
               <button
                 type="button"
                 className="btn btn-primary"
@@ -277,28 +284,28 @@ export default function SuperadminPage() {
                 onClick={() =>
                   ejecutar(
                     () => api.post('/sa/reactivar', {}),
-                    (r) => `Instalación reactivada.${r.avisado_a ? ` Se le avisó por mail a ${r.avisado_a}.` : ''}`
+                    (r) => `Instalación reactivada.${r.avisado_a ? ` Se notificó por mail a ${r.avisado_a}.` : ''}`
                   )
                 }
               >
-                Sí, reactivar
+                Reactivar instalación
               </button>
               <button type="button" className="btn" disabled={ocupado} onClick={() => setConfirmando(null)}>
                 Cancelar
               </button>
             </div>
           ) : (
-            <div>
+            <div className="sa-form-pie">
               <button type="button" className="btn btn-primary" onClick={() => setConfirmando('reactivar')}>
-                Reactivar
+                Reactivar instalación
               </button>
             </div>
           )}
         </>
       ) : (
         <>
-          <p className="sa-ayuda">Suspender corta las sesiones abiertas y bloquea los ingresos del negocio y de sus clientes. No borra ningún dato.</p>
-          <div className="sa-form-fila">
+          <p className="sa-ayuda">Suspender cierra las sesiones abiertas y bloquea el ingreso del negocio y de sus clientes. No se borra ningún dato.</p>
+          <div className="sa-form-fila sa-form-ancha">
             <div className="field">
               <label htmlFor="sa-motivo">Motivo de la suspensión</label>
               <input
@@ -308,15 +315,15 @@ export default function SuperadminPage() {
                 value={motivo}
                 onChange={(e) => setMotivo(e.target.value)}
                 disabled={ocupado}
-                placeholder="Ej.: cuota impaga…"
+                placeholder="Ej.: cuota impaga"
               />
             </div>
             {confirmando === 'suspender' ? (
-              <div className="sa-confirmar sa-confirmar-linea">
-                <span>¿Suspender ahora?</span>
+              <div className="sa-confirmar">
+                <span>¿Suspender la instalación ahora? Se cierran todas las sesiones del negocio y del portal.</span>
                 <button
                   type="button"
-                  className="btn sa-btn-peligro"
+                  className="btn btn-peligro"
                   disabled={ocupado}
                   onClick={() =>
                     ejecutar(async () => {
@@ -325,14 +332,14 @@ export default function SuperadminPage() {
                     }, 'Instalación suspendida.')
                   }
                 >
-                  Sí, suspender
+                  Suspender instalación
                 </button>
                 <button type="button" className="btn" disabled={ocupado} onClick={() => setConfirmando(null)}>
                   Cancelar
                 </button>
               </div>
             ) : (
-              <button type="button" className="btn sa-btn-peligro" disabled={!motivo.trim()} onClick={() => setConfirmando('suspender')}>
+              <button type="button" className="btn btn-peligro" disabled={!motivo.trim()} onClick={() => setConfirmando('suspender')}>
                 Suspender
               </button>
             )}
@@ -347,7 +354,7 @@ export default function SuperadminPage() {
       <div className="sa-card-cabecera">
         <h2 className="sa-h2">Plan y módulos</h2>
       </div>
-      <p className="sa-ayuda">Al cambiar de plan, lo que queda afuera se oculta: sus datos no se borran.</p>
+      <p className="sa-ayuda">Al cambiar de plan, los módulos que quedan afuera se ocultan; sus datos se conservan.</p>
       <div className="sa-planes-grilla">
         {panel.planes.map((p) => {
           const actual = p.id === panel.plan.id;
@@ -376,7 +383,7 @@ export default function SuperadminPage() {
                   {confirmando === `plan:${p.id}` ? (
                     <div className="sa-confirmar">
                       <span>
-                        ¿Pasar a {p.nombre}?
+                        ¿Cambiar a {p.nombre}?
                         {quedanAfuera.length > 0 && ` Se ocultan: ${quedanAfuera.map((m) => moduloPorId[m]?.nombre ?? m).join(', ')}.`}
                       </span>
                       <button
@@ -385,7 +392,7 @@ export default function SuperadminPage() {
                         disabled={ocupado}
                         onClick={() => ejecutar(() => api.put('/sa/plan', { plan: p.id }), `Plan cambiado a ${p.nombre}.`)}
                       >
-                        Sí, cambiar
+                        Cambiar de plan
                       </button>
                       <button type="button" className="btn" disabled={ocupado} onClick={() => setConfirmando(null)}>
                         Cancelar
@@ -393,7 +400,7 @@ export default function SuperadminPage() {
                     </div>
                   ) : (
                     <button type="button" className="btn" disabled={ocupado} onClick={() => setConfirmando(`plan:${p.id}`)}>
-                      Pasar a {p.nombre}
+                      Cambiar a {p.nombre}
                     </button>
                   )}
                 </div>
@@ -406,7 +413,8 @@ export default function SuperadminPage() {
   );
 
   // Aviso del mes: el vencimiento pendiente, la suspensión automática y el desglose en dólares de lo
-  // que se cobra ese mes (2026-10-21; el importe fijo en pesos ya no se usa).
+  // que se cobra ese mes (2026-10-21; el importe fijo en pesos ya no se usa). A la izquierda el
+  // desglose; a la derecha, vencimiento y suspensión.
   const seccionCuota = (
     <section className="card sa-card" key="cuota">
       <div className="sa-card-cabecera">
@@ -417,78 +425,97 @@ export default function SuperadminPage() {
         {instancia.cuota.vence ? `Vence el ${formatearFecha(instancia.cuota.vence)} · ${textoDias(instancia.cuota)}. ` : ''}
         {textoSuspension(instancia)}
       </p>
-      <TablaAviso aviso={panel.cobro.aviso} />
-      <LineaCotizacion cotizacion={panel.cotizacion} />
-      <p className="sa-ayuda">
-        Todos los meses se le manda a la empresa un aviso con la cuota de la implementación que toca, el abono y las modificaciones con costo,
-        el total (con su equivalente en pesos al dólar blue venta del día, si hay cotización) y cómo pagar por Mercado Pago. Con &quot;Suspender a los … días&quot; la instalación se suspende sola esos días después del
-        vencimiento y se le avisa por mail (antes, con el aviso previo, y al suspenderse). Vacío = no se suspende sola.
-      </p>
-      <form
-        className="sa-form-cuota"
-        onSubmit={(e) => {
-          e.preventDefault();
-          ejecutar(
-            () =>
-              api.put('/sa/cuota', {
-                vence: vence || null,
-                aviso_dias: Number(avisoDias),
-                suspender_dias: suspenderDias === '' ? null : Number(suspenderDias),
-                aviso_suspension_dias: avisoSuspension === '' ? 0 : Number(avisoSuspension),
-              }),
-            'Cuota guardada.'
-          );
-        }}
-      >
-        <div className="field">
-          <label htmlFor="sa-vence">Próximo vencimiento</label>
-          <input id="sa-vence" type="date" value={vence} onChange={(e) => setVence(e.target.value)} disabled={ocupado} />
+      <div className="sa-aviso-grilla">
+        <div className="sa-desglose">
+          <TablaAviso aviso={panel.cobro.aviso} />
+          <LineaCotizacion cotizacion={panel.cotizacion} />
         </div>
-        <div className="field">
-          <label htmlFor="sa-aviso">Avisar (días antes)</label>
-          <input
-            id="sa-aviso"
-            type="number"
-            min="0"
-            max="365"
-            step="1"
-            value={avisoDias}
-            onChange={(e) => setAvisoDias(e.target.value)}
-            disabled={ocupado}
-            required
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="sa-suspender">Suspender a los (días de vencida)</label>
-          <input
-            id="sa-suspender"
-            type="number"
-            min="1"
-            max="365"
-            step="1"
-            value={suspenderDias}
-            onChange={(e) => setSuspenderDias(e.target.value)}
-            disabled={ocupado}
-            placeholder="No se suspende sola"
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="sa-aviso-suspension">Avisar (días antes de suspender)</label>
-          <input
-            id="sa-aviso-suspension"
-            type="number"
-            min="0"
-            max="364"
-            step="1"
-            value={avisoSuspension}
-            onChange={(e) => setAvisoSuspension(e.target.value)}
-            disabled={ocupado || suspenderDias === ''}
-          />
-        </div>
-        <button type="submit" className="btn btn-primary" disabled={ocupado}>
-          Guardar cuota
-        </button>
-      </form>
+        <form
+          className="sa-aviso-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            ejecutar(
+              () =>
+                api.put('/sa/cuota', {
+                  vence: vence || null,
+                  aviso_dias: Number(avisoDias),
+                  suspender_dias: suspenderDias === '' ? null : Number(suspenderDias),
+                  aviso_suspension_dias: avisoSuspension === '' ? 0 : Number(avisoSuspension),
+                }),
+              'Vencimiento y suspensión guardados.'
+            );
+          }}
+        >
+          <h3 className="sa-h3">Vencimiento y suspensión</h3>
+          <div className="sa-campos sa-campos-2">
+            <div className="field">
+              <label htmlFor="sa-vence">Próximo vencimiento</label>
+              <input id="sa-vence" type="date" value={vence} onChange={(e) => setVence(e.target.value)} disabled={ocupado} />
+            </div>
+            <div className="field">
+              <label htmlFor="sa-aviso">Aviso previo (días antes)</label>
+              <input
+                id="sa-aviso"
+                type="number"
+                min="0"
+                max="365"
+                step="1"
+                value={avisoDias}
+                onChange={(e) => setAvisoDias(e.target.value)}
+                disabled={ocupado}
+                required
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="sa-suspender">Suspender a los (días de atraso)</label>
+              <input
+                id="sa-suspender"
+                type="number"
+                min="1"
+                max="365"
+                step="1"
+                value={suspenderDias}
+                onChange={(e) => setSuspenderDias(e.target.value)}
+                disabled={ocupado}
+                placeholder="Sin suspensión"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="sa-aviso-suspension">Aviso de suspensión (días antes)</label>
+              <input
+                id="sa-aviso-suspension"
+                type="number"
+                min="0"
+                max="364"
+                step="1"
+                value={avisoSuspension}
+                onChange={(e) => setAvisoSuspension(e.target.value)}
+                disabled={ocupado || suspenderDias === ''}
+              />
+            </div>
+          </div>
+          <div className="sa-form-pie">
+            <button type="submit" className="btn btn-primary" disabled={ocupado}>
+              Guardar cambios
+            </button>
+          </div>
+        </form>
+      </div>
+      <details className="sa-como">
+        <summary>Cómo funcionan los avisos</summary>
+        <ul>
+          <li>
+            Todos los meses se envía a la empresa un aviso con la cuota de la implementación que corresponde, el abono y las modificaciones
+            con costo; el total va en dólares, con su equivalente en pesos al dólar blue venta del día si hay cotización, y con los datos para
+            pagar por Mercado Pago.
+          </li>
+          <li>
+            Con «Suspender a los … días», la instalación se suspende automáticamente esa cantidad de días después del vencimiento, y se avisa por
+            mail antes (con el aviso de suspensión) y al suspenderse. Vacío: no se suspende automáticamente.
+          </li>
+          <li>Los avisos salen solos en la revisión de cada hora.</li>
+        </ul>
+      </details>
     </section>
   );
 
@@ -529,8 +556,8 @@ export default function SuperadminPage() {
       </div>
       <p className="sa-ayuda">
         {panel.correo.disponible
-          ? 'Se le manda un mail a la empresa cuando la cuota entra en el período de aviso, el día que vence, cuando ya está vencida, antes de la suspensión automática y al suspenderse (uno por etapa), y cada vez que se reactiva.'
-          : 'Faltan las variables SA_SMTP_* en el servidor: hasta cargarlas no se manda ningún mail.'}
+          ? 'Se envía un mail a la empresa en cada etapa (uno por etapa): al entrar en el período de aviso, el día del vencimiento, con la cuota vencida, antes de la suspensión automática, al suspenderse y al reactivarse.'
+          : 'Faltan las variables SA_SMTP_* en el servidor: hasta configurarlas no se envía ningún mail.'}
       </p>
       <form
         className="sa-form-fila"
@@ -571,13 +598,13 @@ export default function SuperadminPage() {
       </form>
       {panel.correo.avisos.length > 0 && (
         <div className="sa-tabla-scroll">
-          <table className="sa-tabla">
+          <table className="sa-tabla sa-tabla-avisos">
             <thead>
               <tr>
-                <th>Enviado</th>
-                <th>Aviso</th>
-                <th>Cuota vence</th>
-                <th>A</th>
+                <th>Fecha de envío</th>
+                <th>Etapa</th>
+                <th>Vencimiento</th>
+                <th>Destinatario</th>
               </tr>
             </thead>
             <tbody>
@@ -586,7 +613,7 @@ export default function SuperadminPage() {
                   <td>{formatearFechaHora(a.enviado_en)}</td>
                   <td>{ETIQUETA_AVISO[a.tipo] ?? a.tipo}</td>
                   <td>{formatearFecha(a.cuota_vence)}</td>
-                  <td>{a.destinatario}</td>
+                  <td className="sa-quiebre">{a.destinatario}</td>
                 </tr>
               ))}
             </tbody>
@@ -605,51 +632,55 @@ export default function SuperadminPage() {
         </span>
       </div>
       <p className="sa-ayuda">
-        Cuántos usuarios de cada rol se pueden registrar (los Administradores los creás vos, abajo; los demás, el Admin del negocio) y
-        cuántos clientes pueden tener acceso al portal. Vacío = ninguno.
+        Cantidad máxima de usuarios por rol y de clientes con acceso al portal. Los Administradores los da de alta CEA (abajo); el resto, el
+        Administrador del negocio. Un tope vacío no permite ninguno.
         {!panel.usuarios.correo_empresa &&
-          ' Sin el correo de la empresa (variables SMTP_*) se trabaja igual, con la verificación del email de los empleados en pausa: el detalle está en la pestaña Correo.'}
+          ' Sin el correo de la empresa (variables SMTP_*) el sistema funciona igual, pero la verificación del email de los empleados queda en pausa (detalle en la pestaña Correo).'}
       </p>
       <form
-        className="sa-form-topes"
+        className="sa-aviso-form"
         onSubmit={(e) => {
           e.preventDefault();
           ejecutar(() => api.put('/sa/cupos', topes), 'Topes guardados.');
         }}
       >
-        {panel.usuarios.cupos.map((c) => (
-          <div className="field" key={c.rol}>
-            <label htmlFor={`sa-tope-${c.rol}`}>{ETIQUETA_ROL[c.rol]}</label>
+        <div className="sa-campos sa-campos-4">
+          {panel.usuarios.cupos.map((c) => (
+            <div className="field" key={c.rol}>
+              <label htmlFor={`sa-tope-${c.rol}`}>{ETIQUETA_ROL[c.rol]}</label>
+              <input
+                id={`sa-tope-${c.rol}`}
+                type="number"
+                min="0"
+                max="999"
+                step="1"
+                value={topes[c.rol] ?? ''}
+                onChange={(e) => setTopes({ ...topes, [c.rol]: e.target.value })}
+                disabled={ocupado}
+              />
+              <span className="sa-campo-nota">En uso: {c.usados}</span>
+            </div>
+          ))}
+          <div className="field">
+            <label htmlFor="sa-tope-portal">Clientes con portal</label>
             <input
-              id={`sa-tope-${c.rol}`}
+              id="sa-tope-portal"
               type="number"
               min="0"
-              max="999"
+              max="99999"
               step="1"
-              value={topes[c.rol] ?? ''}
-              onChange={(e) => setTopes({ ...topes, [c.rol]: e.target.value })}
+              value={topes.portal ?? ''}
+              onChange={(e) => setTopes({ ...topes, portal: e.target.value })}
               disabled={ocupado}
             />
-            <span className="sa-detalle-fila">En uso: {c.usados}</span>
+            <span className="sa-campo-nota">En uso: {panel.usuarios.portal.usados}</span>
           </div>
-        ))}
-        <div className="field">
-          <label htmlFor="sa-tope-portal">Clientes con portal</label>
-          <input
-            id="sa-tope-portal"
-            type="number"
-            min="0"
-            max="99999"
-            step="1"
-            value={topes.portal ?? ''}
-            onChange={(e) => setTopes({ ...topes, portal: e.target.value })}
-            disabled={ocupado}
-          />
-          <span className="sa-detalle-fila">En uso: {panel.usuarios.portal.usados}</span>
         </div>
-        <button type="submit" className="btn btn-primary" disabled={ocupado}>
-          Guardar topes
-        </button>
+        <div className="sa-form-pie">
+          <button type="submit" className="btn btn-primary" disabled={ocupado}>
+            Guardar topes
+          </button>
+        </div>
       </form>
     </section>
   );
@@ -674,9 +705,9 @@ export default function SuperadminPage() {
   const seccionRegistro = <SuperadminRegistro key="registro" irAlLogin={irAlLogin} />;
 
   const seccionVerificacion = dosfa && (
-    <section className="card sa-card" key="verificacion">
+    <section className="card sa-card sa-card-angosta" key="verificacion">
       <div className="sa-card-cabecera">
-        <h2 className="sa-h2">Tu verificación en dos pasos</h2>
+        <h2 className="sa-h2">Verificación en dos pasos</h2>
       </div>
       <ConfigurarDosfa key={dosfa.metodo ?? 'sin-metodo'} base="/sa/2fa" estado={dosfa} onCambio={alCambiarDosfa} onSesionVencida={irAlLogin} />
     </section>
@@ -698,26 +729,46 @@ export default function SuperadminPage() {
     <div className="sa-page">
       {encabezado}
 
-      {/* Resumen fijo: lo que importa de un vistazo, en cualquier pestaña */}
+      {/* Franja fija: lo que importa de un vistazo, en cualquier pestaña */}
       <div className="sa-resumen">
-        <span className={`sa-chip ${suspendida ? 'sa-chip-alerta' : 'sa-chip-ok'}`}>{suspendida ? 'Suspendida' : 'Activa'}</span>
-        <span className="sa-chip sa-chip-neutro">{panel.plan.nombre}</span>
-        <span className={`sa-chip ${estadoCuota.clase}`}>
-          {estadoCuota.texto}
-          {instancia.cuota.vence ? ` · vence el ${formatearFecha(instancia.cuota.vence)}` : ''}
-        </span>
-        {avisoMes?.configurado && (
-          <span className="sa-chip sa-chip-neutro">
-            {formatearUsd(avisoMes.total)}
-            {avisoMes.implementacion
-              ? ` · implementación cuota ${avisoMes.implementacion.numero} de ${avisoMes.implementacion.de}`
-              : ` · aviso del ${formatearFecha(avisoMes.vence)}`}
+        <div className="sa-resumen-item">
+          <span className="sa-resumen-label">Instalación</span>
+          <span className="sa-resumen-valor">
+            <span className={`sa-punto${suspendida ? ' sa-punto-alerta' : ''}`} aria-hidden="true" />
+            {suspendida ? 'Suspendida' : 'Activa'}
           </span>
-        )}
+          <span className="sa-resumen-meta">{suspendida ? `Desde el ${formatearFechaHora(instancia.suspendida_en)}` : `Versión ${panel.version}`}</span>
+        </div>
+        <div className="sa-resumen-item">
+          <span className="sa-resumen-label">Plan</span>
+          <span className="sa-resumen-valor">{panel.plan.nombre}</span>
+          <span className="sa-resumen-meta">
+            {panel.plan.modulos.length} módulo{panel.plan.modulos.length === 1 ? '' : 's'}
+          </span>
+        </div>
+        <div className="sa-resumen-item">
+          <span className="sa-resumen-label">Próximo vencimiento</span>
+          <span className="sa-resumen-valor">{instancia.cuota.vence ? formatearFecha(instancia.cuota.vence) : '—'}</span>
+          <span className="sa-resumen-meta">
+            <span className={`sa-chip ${estadoCuota.clase}`}>{estadoCuota.corto}</span>
+            {textoDias(instancia.cuota) && <span>{textoDias(instancia.cuota)}</span>}
+          </span>
+        </div>
+        <div className="sa-resumen-item">
+          <span className="sa-resumen-label">Aviso del mes</span>
+          <span className="sa-resumen-valor">{avisoMes?.configurado ? formatearUsd(avisoMes.total) : '—'}</span>
+          <span className="sa-resumen-meta">
+            {avisoMes?.configurado
+              ? avisoMes.implementacion
+                ? `Implementación cuota ${avisoMes.implementacion.numero} de ${avisoMes.implementacion.de}`
+                : `Aviso del ${formatearFecha(avisoMes.vence)}`
+              : 'Sin desglose cargado'}
+          </span>
+        </div>
       </div>
 
       {error && <div className="alert alert-danger">{error}</div>}
-      {aviso && <div className="alert sa-alert-ok">{aviso}</div>}
+      {aviso && <div className="alert alert-exito">{aviso}</div>}
 
       <nav className="sa-pestanas" role="tablist" aria-label="Secciones del panel">
         {PESTANAS.map((p) => (

@@ -1,23 +1,22 @@
-/* Clientes-Empresa: todo el módulo fluye en una sola columna a todo el ancho,
-   sin alturas fijas ni paneles con scroll propio (eso era lo que hacía que los
-   bloques se pisaran). El scroll lo maneja solo .app-layout-content. */
+/* Piezas comunes de las fichas y listas (Clientes, Proveedores, Stock, Pedidos, Ventas).
+   Todo fluye en una sola columna a todo el ancho, sin alturas fijas ni paneles con scroll
+   propio en celular. Rediseño 2026-10-29: tablas con encabezado gris en minúscula, renglones
+   finos, cifras alineadas a la derecha, estados en píldoras pálidas, pestañas subrayadas. */
 .cliente-page {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   width: 100%;
 }
 
-/* Encabezado de páginas internas */
+/* Encabezado de las pantallas de adentro: el nombre es el título; volver está en la barra. */
 .cliente-encabezado {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 .cliente-volver {
-  font-size: 13.5px;
-  font-weight: 600;
-  align-self: flex-start;
+  display: none;
 }
 .cliente-titulo-fila {
   display: flex;
@@ -28,39 +27,24 @@
 .cliente-h1 {
   margin: 0;
   font-size: 24px;
-  font-weight: 800;
-  line-height: 1.2;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
 }
 .cliente-subtitulo {
   font-size: 14px;
   color: var(--text-tertiary);
 }
 
-/* KPIs */
-.cliente-kpis {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-}
+/* Cifras de resumen: la franja dividida la arma global.css ([class$='-kpis']). */
 .cliente-kpi {
-  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
-.cliente-kpi-label {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-tertiary);
-}
-.cliente-kpi-value {
-  font-size: 26px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
 .cliente-kpi-texto {
-  font-size: 17px;
+  font-size: 18px !important;
 }
 
 /* Tabla de movimientos: fecha, tipo, usuario y monto en una línea; solo el
@@ -72,21 +56,21 @@
 
 /* Pestaña Acceso: estado, contraseña con botones, datos para entregar */
 .cliente-acceso-estado {
-  padding: 4px 12px;
+  padding: 3px 10px;
   border-radius: var(--radius-pill);
   font-size: 12.5px;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
-  background: var(--bg-muted);
-  color: var(--text-secondary);
+  background: var(--neutral-bg);
+  color: var(--neutral-ink);
 }
 .cliente-acceso-ok {
-  background: #d9f0e6;
-  color: #0e4b38;
+  background: var(--ok-bg);
+  color: var(--ok-ink);
 }
 .cliente-acceso-bloqueado {
-  background: #f5c6cb;
-  color: #8a2530;
+  background: var(--danger-bg);
+  color: var(--danger-ink);
 }
 .cliente-pass-fila {
   display: flex;
@@ -97,11 +81,10 @@
   min-width: 0;
 }
 .cliente-pass-fila .btn {
-  padding: 10px 14px;
   flex-shrink: 0;
 }
 .cliente-credenciales {
-  border: 2px solid var(--color-primary);
+  border-color: var(--color-primary);
 }
 .cliente-credenciales-lista {
   margin: 0;
@@ -118,17 +101,15 @@
 .cliente-credenciales-lista dt {
   width: 92px;
   flex-shrink: 0;
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 .cliente-credenciales-lista dd {
   margin: 0;
   font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
   word-break: break-all;
   user-select: all;
 }
@@ -143,8 +124,8 @@
   word-break: break-word;
 }
 .cliente-btn-peligro {
-  color: var(--color-danger);
-  border-color: var(--color-danger);
+  color: var(--danger-ink);
+  border-color: #e7b9be;
 }
 
 /* Selector de período del resumen de cuenta (todo / entre fechas) */
@@ -169,59 +150,66 @@
   accent-color: var(--color-primary);
 }
 
-@media (max-width: 600px) {
-  .cliente-kpis {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px 16px;
-  }
-}
-
 /* Tarjetas */
 .cliente-card {
-  padding: 22px 24px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   min-width: 0;
 }
 .cliente-seccion-titulo {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
+  letter-spacing: -0.005em;
 }
 .cliente-seccion-cabecera {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
-/* Barra de herramientas del listado */
+/* Barra de herramientas del listado: buscador con lupa + acciones. */
 .cliente-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 .cliente-buscar {
   flex: 1;
   min-width: 0;
-  padding: 11px 14px;
+  height: var(--control-height);
+  padding: 0 12px 0 38px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  background: var(--bg-muted);
+  border: 1px solid var(--border-control);
+  background: var(--bg-surface)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23687370' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E")
+    no-repeat 13px center;
   font: inherit;
   font-size: 14px;
+  color: var(--text-primary);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.cliente-buscar::placeholder {
+  color: #7d8682;
 }
 .cliente-buscar:focus {
   outline: none;
   border-color: var(--color-primary);
-  background: var(--bg-surface);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
 }
 .cliente-toolbar .btn {
   flex-shrink: 0;
   white-space: nowrap;
 }
+/* Suelto dentro de una tarjeta en columna, el buscador no se estira ni se aplasta. */
+.cliente-card > .cliente-buscar {
+  flex: none;
+}
 
-/* Tablas reales: encabezado y celdas comparten columna, así nunca se desalinean */
+/* Tablas reales: encabezado y celdas comparten columna, así nunca se desalinean. */
 .cliente-tabla-wrap {
   overflow-x: auto;
 }
@@ -231,144 +219,124 @@
   font-size: 14px;
 }
 .cliente-tabla th {
-  padding: 10px 14px;
+  height: 40px;
+  padding: 0 12px;
   text-align: left;
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
   border-bottom: 1px solid var(--border-default);
   white-space: nowrap;
 }
 .cliente-tabla td {
-  padding: 13px 14px;
+  height: 48px;
+  padding: 10px 12px;
   vertical-align: middle;
-  border-bottom: 1px solid var(--bg-app);
+  border-bottom: 1px solid var(--border-rule);
+}
+.cliente-tabla th:first-child,
+.cliente-tabla td:first-child {
+  padding-left: 0;
+}
+.cliente-tabla th:last-child,
+.cliente-tabla td:last-child {
+  padding-right: 0;
+}
+.cliente-tabla tbody tr:last-child td {
+  border-bottom: none;
 }
 .cliente-tabla tbody tr {
   cursor: pointer;
+  transition: background 0.12s ease;
 }
 .cliente-tabla tbody tr:hover {
-  background: #f6f7f8;
+  background: var(--bg-hover);
 }
 .cliente-tabla tbody tr.sin-click {
   cursor: default;
+}
+.cliente-tabla tbody tr.sin-click:hover {
+  background: transparent;
 }
 .cliente-tabla .num {
   text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.cliente-tabla .centro {
+  text-align: center;
+}
 .cliente-td-nombre {
-  font-weight: 700;
+  font-weight: 600;
 }
 .cliente-td-sub {
   margin-top: 2px;
-  font-size: 12px;
-  color: var(--text-muted);
+  font-size: 12.5px;
+  color: var(--text-tertiary);
 }
 .cliente-vacio {
-  padding: 32px 16px;
+  padding: 28px 16px;
   text-align: center;
   color: var(--text-tertiary);
   font-size: 14px;
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-sm);
 }
 .cliente-mov-monto {
-  font-weight: 800;
+  font-weight: 700;
 }
 
 /* Saldos: deudor en énfasis neutro, NO Rosa Coral/Dorado (marca.md los reserva
    para alertas urgentes; un saldo a cobrar es información normal de negocio). */
 .cliente-saldo {
-  font-weight: 800;
+  font-weight: 700;
 }
 .cliente-saldo-debe {
   color: var(--text-primary);
 }
 .cliente-saldo-favor {
-  color: #0e4b38;
+  color: var(--ok-ink);
 }
 .cliente-saldo-aldia {
   color: var(--text-muted);
 }
-.cliente-badge {
+.cliente-badge,
+.cliente-tipo {
   display: inline-flex;
   align-items: center;
-  padding: 4px 12px;
+  justify-content: center;
+  height: 24px;
+  padding: 0 10px;
   border-radius: var(--radius-pill);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 600;
   white-space: nowrap;
+  flex: none;
 }
-.cliente-badge-debe {
-  background: #dde4f1;
-  color: #22428c;
+.cliente-badge-debe,
+.cliente-tipo-CARGO {
+  background: var(--info-bg);
+  color: var(--info-ink);
 }
-.cliente-badge-favor {
-  background: #dceee5;
-  color: #0e4b38;
+.cliente-badge-favor,
+.cliente-tipo-PAGO {
+  background: var(--ok-bg);
+  color: var(--ok-ink);
 }
-.cliente-badge-aldia {
-  background: #f1f3f4;
-  color: #5b6664;
+.cliente-badge-aldia,
+.cliente-tipo-AJUSTE {
+  background: var(--neutral-bg);
+  color: var(--neutral-ink);
 }
 .cliente-tipo {
-  display: inline-block;
   min-width: 64px;
-  text-align: center;
-  padding: 3px 10px;
-  border-radius: var(--radius-pill);
-  font-size: 12px;
-  font-weight: 700;
-}
-.cliente-tipo-CARGO {
-  background: #dde4f1;
-  color: #22428c;
-}
-.cliente-tipo-PAGO {
-  background: #dceee5;
-  color: #0e4b38;
-}
-.cliente-tipo-AJUSTE {
-  background: #e3e6e8;
-  color: #5b6664;
 }
 
-/* Pestañas */
-.cliente-tabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--border-default);
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-.cliente-tab {
-  padding: 11px 18px;
-  border: none;
-  border-bottom: 3px solid transparent;
-  margin-bottom: -1px;
-  background: transparent;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.cliente-tab:hover {
-  color: var(--text-primary);
-}
-.cliente-tab-activa {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
-}
-
-/* Formularios: grilla de 2 columnas, cada celda con la misma altura de label
-   + input, así todo queda alineado a la misma línea. */
+/* Formularios: grilla de columnas, cada celda con la misma altura de label + input. */
 .cliente-campos {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 18px 20px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px 20px;
   align-items: start;
 }
 .cliente-campo-full {
@@ -377,7 +345,7 @@
 .cliente-acciones {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
 }
 .cliente-hint {
   font-size: 13px;
@@ -393,12 +361,16 @@
   cursor: pointer;
   padding: 0;
 }
+.cliente-link:hover {
+  text-decoration: underline;
+}
 .cliente-ajuste {
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding: 16px;
   background: var(--bg-muted);
+  border: 1px solid var(--border-rule);
   border-radius: var(--radius-sm);
 }
 
@@ -407,19 +379,17 @@
   margin: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 18px 24px;
+  gap: 16px 24px;
 }
 .cliente-datos dt {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  margin-bottom: 2px;
 }
 .cliente-datos dd {
   margin: 0;
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -427,28 +397,22 @@
   grid-column: 1 / -1;
 }
 
-/* Mensajes y eliminar */
-.alert-exito {
-  background: rgba(14, 75, 56, 0.08);
-  color: #0e4b38;
-  border: 1px solid rgba(14, 75, 56, 0.25);
-}
-.btn-peligro {
-  border-color: var(--color-danger);
-  color: var(--color-danger);
-}
+/* Eliminar: al pie, separado, en el color de peligro. */
 .cliente-eliminar {
   padding-top: 16px;
-  border-top: 1px solid var(--border-default);
+  border-top: 1px solid var(--border-rule);
 }
 .cliente-eliminar-link {
   border: none;
   background: transparent;
-  color: var(--color-danger);
+  color: var(--danger-ink);
   font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
   padding: 0;
+}
+.cliente-eliminar-link:hover {
+  text-decoration: underline;
 }
 .cliente-eliminar-confirm {
   display: flex;
@@ -458,7 +422,7 @@
   color: var(--text-secondary);
 }
 
-/* Las páginas de clientes encajan en la ventana: encabezado, KPIs y pestañas
+/* Las páginas de clientes encajan en la ventana: encabezado, cifras y pestañas
    quedan fijos y solo el contenido (tabla/ficha) scrollea por dentro. */
 .cliente-page {
   height: 100%;
@@ -473,7 +437,11 @@
 .cliente-scroll {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
+}
+/* Lo que va adentro del área que scrollea mide lo suyo: la franja de cifras no se recorta. */
+.cliente-scroll > * {
+  flex-shrink: 0;
 }
 /* Celular / tablet vertical: la página crece con su contenido y scrollea una
    sola vez (sin tarjetas con scroll propio dentro de la página). */
@@ -486,6 +454,20 @@
   .cliente-scroll {
     flex: none;
     overflow: visible;
+  }
+}
+@media (max-width: 600px) {
+  .cliente-card {
+    padding: 16px;
+  }
+  .cliente-toolbar {
+    flex-wrap: wrap;
+  }
+  .cliente-toolbar .cliente-buscar {
+    flex-basis: 100%;
+  }
+  .cliente-toolbar .btn {
+    flex: 1;
   }
 }
 
@@ -501,5 +483,39 @@
 .cliente-tabla th {
   position: sticky;
   top: 0;
+  z-index: 1;
   background: var(--bg-surface);
+}
+
+/* Listas largas (Stock y Proveedores, 2026-10-29, usuario: "no me gusta que se tenga que
+   scrollear, queda incómodo"): sin scroll adentro de la tarjeta; la lista mide lo que tiene y baja
+   la página entera. Desde 861px, al bajar, la barra de búsqueda queda fija arriba y los títulos de
+   la tabla debajo de ella (`--alto-barra` lo mide useBarraFija). El contenedor que scrollea es
+   `.app-layout-content`: Chrome cuenta el `top` desde su padding (8px), de ahí el -8px; la tabla
+   no puede tener overflow propio o el sticky no funciona. */
+.cliente-page.lista-entera {
+  height: auto;
+}
+.cliente-page.lista-entera > .cliente-card:last-child {
+  flex: none;
+  overflow: visible;
+}
+@media (min-width: 861px) {
+  .lista-entera .cliente-card .cliente-tabla-wrap {
+    overflow: visible;
+  }
+  .lista-entera .cliente-toolbar {
+    position: sticky;
+    top: -8px;
+    z-index: 3;
+    margin: -20px -24px -16px;
+    padding: 20px 24px 16px;
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    background: var(--bg-surface);
+  }
+  /* En una tabla con border-collapse el borde no acompaña al título fijo: la línea va de sombra. */
+  .lista-entera .cliente-tabla th {
+    top: calc(var(--alto-barra, 76px) - 8px);
+    box-shadow: inset 0 -1px 0 var(--border-default);
+  }
 }

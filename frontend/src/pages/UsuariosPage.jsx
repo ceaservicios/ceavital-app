@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
-import { etiquetaRol } from '../constants/roles.js';
+import Hero from '../components/Hero.jsx';
+import { colorDe } from '../utils/colores.js';
+import { etiquetaRol, iniciales } from '../constants/roles.js';
 import { formatearFechaHora } from '../utils/format.js';
 import './UsuariosPage.css';
 
@@ -8,7 +10,7 @@ const ROLES = ['admin', 'encargado', 'cajero'];
 // A los Administradores los da de alta, restablece y da de baja CEA Servicios desde su panel
 // (EST-01 §5): acá el Admin gestiona Encargados y Cajeros, y ve a los Administradores.
 const ROLES_CREABLES = ['encargado', 'cajero'];
-const ETIQUETA_KPI = { admin: 'Dueño / Administrador', encargado: 'Encargado / Supervisor', cajero: 'Empleado / Cajero' };
+const ETIQUETA_KPI = { admin: 'Administradores', encargado: 'Encargados', cajero: 'Cajeros' };
 
 // bloqueado_hasta viene en UTC sin zona ('YYYY-MM-DD HH:MM:SS'): sin la 'Z' el navegador lo
 // leía como hora local y un bloqueo de 15 min se veía 3 h de más (mismo criterio que
@@ -23,10 +25,21 @@ function entraConUsuarioAparte(usuario) {
 }
 
 function textoCupo(cupo) {
-  if (cupo?.rol === 'admin') return 'Los da de alta CEA Servicios';
-  if (!cupo || cupo.tope === null) return 'Sin lugares habilitados';
-  return `Tope ${cupo.tope} · ${cupo.libres === 1 ? '1 libre' : `${cupo.libres} libres`}`;
+  if (cupo?.rol === 'admin') return 'Alta por CEA Servicios';
+  if (!cupo || cupo.tope === null) return 'Sin cupo habilitado';
+  return `Cupo ${cupo.tope} · ${cupo.libres === 1 ? '1 disponible' : `${cupo.libres} disponibles`}`;
 }
+
+const IconoMas = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+const IconoFlecha = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M9 18l6-6-6-6" />
+  </svg>
+);
 
 const usuarioVacio = (rol) => ({ nombre: '', email: '', rol, password: '', dos_fa: false });
 
@@ -170,35 +183,46 @@ export default function UsuariosPage() {
   }
 
   if (cargando && usuarios.length === 0) {
-    return <div className="card usuarios-vacio">Cargando…</div>;
+    return <div className="card usuarios-cargando">Cargando…</div>;
   }
+
+  // Rediseño 2026-10-29: la lista ocupa todo el ancho; el alta y la ficha de un usuario se abren
+  // en su lugar, en un formulario de ancho proporcionado (antes era un panel lateral que quedaba
+  // vacío y angosto al lado de la lista).
+  const conPanel = panel !== 'ninguno';
 
   return (
     <div className="usuarios-page">
-      <div className="usuarios-kpis">
-        {ROLES.map((rol) => (
-          <div className="card usuarios-kpi" key={rol}>
-            <span className="usuarios-kpi-label">{ETIQUETA_KPI[rol]}</span>
-            <span className="usuarios-kpi-value">{usuarios.filter((u) => u.rol === rol).length}</span>
-            <span className={`usuarios-kpi-cupo${rol === 'admin' || hayLugar(rol) ? '' : ' usuarios-kpi-cupo-lleno'}`}>
-              {textoCupo(cupoDe(rol))}
-            </span>
-          </div>
-        ))}
-      </div>
+      <Hero
+        etiqueta="Usuarios del sistema"
+        valor={usuarios.length}
+        sub="Cada rol tiene su cupo según el plan."
+        minis={ROLES.map((rol) => ({
+          etiqueta: ETIQUETA_KPI[rol],
+          valor: usuarios.filter((u) => u.rol === rol).length,
+          sub: textoCupo(cupoDe(rol)),
+          icono: 'usuarios',
+          tono: { admin: 'verde', encargado: 'azul', cajero: 'amarillo' }[rol] ?? 'blanco',
+        }))}
+      />
 
       {error && <div className="alert alert-danger">{error}</div>}
       {!correoDisponible && (
         <div className="alert alert-aviso">
-          Todavía no está configurado el correo de la empresa: los usuarios entran sin verificar su email (se les va a pedir cuando se
-          configure) y no se puede activar el 2FA. Lo configura CEA Servicios.
+          El correo de la empresa todavía no está configurado: los usuarios ingresan sin verificar su email y no se puede activar la
+          verificación en dos pasos. La configuración está a cargo de CEA Servicios.
         </div>
       )}
 
-      <div className="usuarios-body">
+      {!conPanel && (
         <div className="card usuarios-lista">
           <div className="usuarios-lista-header">
-            <span className="usuarios-titulo">Usuarios del sistema</span>
+            <div className="usuarios-lista-titulos">
+              <h2 className="usuarios-titulo">Usuarios del sistema</h2>
+              {!puedeCrear && (
+                <span className="usuarios-hint">No hay cupos disponibles para nuevos usuarios. Para ampliarlos, contactá a CEA Servicios.</span>
+              )}
+            </div>
             <button
               type="button"
               className="btn btn-primary"
@@ -206,260 +230,316 @@ export default function UsuariosPage() {
               disabled={!puedeCrear}
               title={puedeCrear ? undefined : 'No quedan lugares libres'}
             >
-              + Nuevo Usuario
+              <IconoMas />
+              Agregar usuario
             </button>
           </div>
           <div className="usuarios-tabla">
             <div className="usuarios-tabla-head">
-              <span style={{ flex: 1.4 }}>Nombre</span>
-              <span style={{ flex: 1.6 }}>Email / usuario</span>
-              <span style={{ flex: 1 }}>Rol</span>
-              <span style={{ flex: 1.1 }}>Estado</span>
+              <span style={{ flex: 2.4 }}>Usuario</span>
+              <span style={{ flex: 1.1 }}>Rol</span>
+              <span style={{ flex: 1.5 }}>Estado</span>
+              <span style={{ flex: 1.3 }}>Último ingreso</span>
+              <span className="usuarios-col-flecha" />
             </div>
             {usuarios.map((u) => {
               // Los Administradores no verifican el email con un código: su resguardo es la verificación en dos pasos.
               const sinVerificar = u.rol !== 'admin' && u.email && !u.email_verificado_en;
               return (
                 <button type="button" className="usuarios-fila" key={u.id} onClick={() => abrirDetalle(u)}>
-                  <span style={{ flex: 1.4 }} className="usuarios-fila-nombre">
-                    {u.nombre}
+                  <span style={{ flex: 2.4 }} className="usuarios-fila-usuario">
+                    <span className="usuarios-avatar avatar-color" style={{ '--c': colorDe(u.id) }} aria-hidden="true">
+                      {iniciales(u.nombre)}
+                    </span>
+                    <span className="usuarios-fila-textos">
+                      <span className="usuarios-fila-nombre">{u.nombre}</span>
+                      <span className="usuarios-fila-sub celda-ellipsis" title={u.email ?? u.usuario}>
+                        {u.email ?? u.usuario}
+                      </span>
+                    </span>
                   </span>
-                  <span style={{ flex: 1.6 }} className="usuarios-fila-muted usuarios-fila-email">
-                    {u.email ?? u.usuario}
-                  </span>
-                  <span style={{ flex: 1 }}>
+                  <span style={{ flex: 1.1 }} className="usuarios-fila-rol">
                     <span className={`usuarios-badge usuarios-badge-${u.rol}`}>{etiquetaRol(u.rol)}</span>
                   </span>
-                  <span style={{ flex: 1.1 }} className="usuarios-estado">
-                    <span
-                      className={`usuarios-dot ${
-                        estaBloqueado(u) ? 'usuarios-dot-bloqueado' : sinVerificar ? 'usuarios-dot-pendiente' : 'usuarios-dot-activo'
-                      }`}
-                    />
-                    {estaBloqueado(u) ? 'Bloqueado' : u.debe_cambiar_password ? 'Sin primer ingreso' : sinVerificar ? 'Sin verificar' : 'Activo'}
-                    {(u.dos_fa || u.dosfa_configurado) && <span className="usuarios-2fa">2FA</span>}
+                  <span style={{ flex: 1.5 }} className="usuarios-estado">
+                    <span className="usuarios-estado-linea">
+                      <span
+                        className={`usuarios-dot ${
+                          estaBloqueado(u) ? 'usuarios-dot-bloqueado' : sinVerificar ? 'usuarios-dot-pendiente' : 'usuarios-dot-activo'
+                        }`}
+                      />
+                      {estaBloqueado(u)
+                        ? 'Bloqueado'
+                        : u.debe_cambiar_password
+                          ? 'Primer ingreso pendiente'
+                          : sinVerificar
+                            ? 'Email sin verificar'
+                            : 'Activo'}
+                    </span>
+                    {(u.dos_fa || u.dosfa_configurado) && <span className="usuarios-fila-sub">Verificación en dos pasos</span>}
+                  </span>
+                  <span style={{ flex: 1.3 }} className="usuarios-fila-fecha num">
+                    {u.ultimo_acceso ? formatearFechaHora(u.ultimo_acceso) : <span className="usuarios-sin-dato">Sin ingresos</span>}
+                  </span>
+                  <span className="usuarios-col-flecha">
+                    <IconoFlecha />
                   </span>
                 </button>
               );
             })}
           </div>
         </div>
+      )}
 
-        <div className="card usuarios-panel">
-          {panel === 'ninguno' && <div className="usuarios-panel-vacio">Seleccioná un usuario para ver el detalle.</div>}
-
-          {panel === 'nuevo' && (
-            <form className="usuarios-form" onSubmit={crearUsuario}>
-              <div className="usuarios-panel-titulo">
-                <span>Nuevo Usuario</span>
-                <button type="button" className="usuarios-panel-cerrar" onClick={cerrarPanel}>
-                  ✕
-                </button>
-              </div>
-              {panelError && <div className="alert alert-danger">{panelError}</div>}
-              <div className="field">
-                <label>Nombre</label>
-                <input required value={nuevoUsuario.nombre} onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, nombre: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>Email (con el que va a entrar)</label>
-                <input
-                  required
-                  type="email"
-                  maxLength={100}
-                  value={nuevoUsuario.email}
-                  onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, email: e.target.value })}
-                />
+      {panel === 'nuevo' && (
+        <form className="card usuarios-form-card" onSubmit={crearUsuario}>
+          <div className="usuarios-form-cabecera">
+            <h2 className="usuarios-form-titulo">Nuevo usuario</h2>
+            <span className="usuarios-hint">Alta de Encargados y Cajeros. Las altas de Administradores están a cargo de CEA Servicios.</span>
+          </div>
+          {panelError && <div className="alert alert-danger">{panelError}</div>}
+          <div className="usuarios-campos">
+            <div className="field usuarios-campo-full">
+              <label htmlFor="nuevo-nombre">Nombre y apellido</label>
+              <input
+                id="nuevo-nombre"
+                required
+                value={nuevoUsuario.nombre}
+                onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, nombre: e.target.value })}
+              />
+            </div>
+            <div className="field usuarios-campo-full">
+              <label htmlFor="nuevo-email">Email</label>
+              <input
+                id="nuevo-email"
+                required
+                type="email"
+                maxLength={100}
+                value={nuevoUsuario.email}
+                onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, email: e.target.value })}
+              />
+              <span className="usuarios-hint">
+                {correoDisponible
+                  ? 'Lo usa para ingresar. En el primer ingreso recibe un código en este email para confirmarlo.'
+                  : 'Lo usa para ingresar. Cuando se configure el correo de la empresa, se le va a pedir confirmarlo con un código.'}
+              </span>
+            </div>
+            <div className="field">
+              <label htmlFor="nuevo-rol">Rol</label>
+              <select id="nuevo-rol" value={nuevoUsuario.rol} onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, rol: e.target.value })}>
+                {ROLES_CREABLES.map((r) => (
+                  <option key={r} value={r} disabled={!hayLugar(r)}>
+                    {etiquetaRol(r)}
+                    {hayLugar(r) ? '' : ' (sin cupo disponible)'}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="nuevo-password">Contraseña inicial</label>
+              <input
+                id="nuevo-password"
+                required
+                type="password"
+                minLength={8}
+                maxLength={72}
+                value={nuevoUsuario.password}
+                onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, password: e.target.value })}
+              />
+              <span className="usuarios-hint">Mínimo 8 caracteres.</span>
+            </div>
+            <label className="usuarios-check usuarios-campo-full">
+              <input
+                type="checkbox"
+                checked={nuevoUsuario.dos_fa}
+                disabled={!correoDisponible}
+                onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, dos_fa: e.target.checked })}
+              />
+              <span className="usuarios-check-textos">
+                <span className="usuarios-check-titulo">Verificación en dos pasos</span>
                 <span className="usuarios-hint">
                   {correoDisponible
-                    ? 'La primera vez que entre le va a llegar un código a este email para confirmar que es suyo.'
-                    : 'Cuando se configure el correo de la empresa, le va a llegar un código a este email para confirmar que es suyo.'}
+                    ? 'Pide un código por email al ingresar, una vez por semana en cada navegador.'
+                    : 'Requiere el correo de la empresa, que todavía no está configurado.'}
                 </span>
-              </div>
-              <div className="field">
-                <label>Rol</label>
-                <select value={nuevoUsuario.rol} onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, rol: e.target.value })}>
-                  {ROLES_CREABLES.map((r) => (
-                    <option key={r} value={r} disabled={!hayLugar(r)}>
-                      {etiquetaRol(r)}
-                      {hayLugar(r) ? '' : ' (sin lugares libres)'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label>Contraseña (mínimo 8 caracteres)</label>
-                <input
-                  required
-                  type="password"
-                  minLength={8}
-                  maxLength={72}
-                  value={nuevoUsuario.password}
-                  onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, password: e.target.value })}
-                />
-              </div>
-              <label className="usuarios-check">
-                <input
-                  type="checkbox"
-                  checked={nuevoUsuario.dos_fa}
-                  disabled={!correoDisponible}
-                  onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, dos_fa: e.target.checked })}
-                />
-                <span>
-                  Activar 2FA
-                  <span className="usuarios-hint">
-                    {correoDisponible
-                      ? ' — pide un código por mail al entrar, una vez por semana en cada navegador.'
-                      : ' — necesita el correo de la empresa, que todavía no está configurado.'}
-                  </span>
-                </span>
-              </label>
-              <button type="submit" className="btn btn-primary" disabled={guardando} style={{ width: '100%' }}>
-                {guardando ? 'Creando…' : 'Crear Usuario'}
-              </button>
-            </form>
-          )}
+              </span>
+            </label>
+          </div>
+          <div className="usuarios-form-acciones">
+            <button type="button" className="btn" onClick={cerrarPanel}>
+              Cancelar
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={guardando}>
+              {guardando ? 'Creando…' : 'Crear usuario'}
+            </button>
+          </div>
+        </form>
+      )}
 
-          {panel === 'detalle' && detalle && detalle.rol === 'admin' && (
-            <div className="usuarios-detalle">
-              <div className="usuarios-panel-titulo">
-                <span>{detalle.nombre}</span>
-                <button type="button" className="usuarios-panel-cerrar" onClick={cerrarPanel}>
-                  ✕
-                </button>
-              </div>
-              <dl className="usuarios-ficha">
-                <dt>Email</dt>
-                <dd>{detalle.email ?? detalle.usuario}</dd>
-                <dt>Rol</dt>
-                <dd>{etiquetaRol(detalle.rol)}</dd>
-                <dt>Verificación en dos pasos</dt>
-                <dd>{detalle.dosfa_configurado ? 'Activa' : 'Sin configurar (la configura al entrar)'}</dd>
-                <dt>Último ingreso</dt>
-                <dd>{detalle.ultimo_acceso ? formatearFechaHora(detalle.ultimo_acceso) : 'Todavía no ingresó'}</dd>
-              </dl>
-              <p className="usuarios-hint">
-                A los Administradores los gestiona CEA Servicios: alta, contraseña nueva, verificación en dos pasos y baja. Para
-                cambiar tu propia contraseña, entrá a Mi cuenta (arriba a la derecha).
-              </p>
+      {panel === 'detalle' && detalle && detalle.rol === 'admin' && (
+        <div className="card usuarios-form-card">
+          <div className="usuarios-ficha-cabecera">
+            <span className="usuarios-avatar usuarios-avatar-grande avatar-color" style={{ '--c': colorDe(detalle.id) }} aria-hidden="true">
+              {iniciales(detalle.nombre)}
+            </span>
+            <div className="usuarios-ficha-nombre">
+              <h2 className="usuarios-form-titulo">{detalle.nombre}</h2>
+              <span className="usuarios-fila-sub">Gestionado por CEA Servicios</span>
             </div>
-          )}
+            <span className={`usuarios-badge usuarios-badge-${detalle.rol}`}>{etiquetaRol(detalle.rol)}</span>
+          </div>
+          <dl className="usuarios-ficha">
+            <div>
+              <dt>Email o usuario</dt>
+              <dd>{detalle.email ?? detalle.usuario}</dd>
+            </div>
+            <div>
+              <dt>Rol</dt>
+              <dd>{etiquetaRol(detalle.rol)}</dd>
+            </div>
+            <div>
+              <dt>Verificación en dos pasos</dt>
+              <dd>{detalle.dosfa_configurado ? 'Activa' : 'Sin configurar (se configura al ingresar)'}</dd>
+            </div>
+            <div>
+              <dt>Último ingreso</dt>
+              <dd>{detalle.ultimo_acceso ? formatearFechaHora(detalle.ultimo_acceso) : 'Todavía no ingresó'}</dd>
+            </div>
+          </dl>
+          <p className="usuarios-nota">
+            Los Administradores los gestiona CEA Servicios: alta, contraseña, verificación en dos pasos y baja. Para cambiar tu propia
+            contraseña, ingresá a Mi cuenta.
+          </p>
+          <div className="usuarios-form-acciones">
+            <button type="button" className="btn" onClick={cerrarPanel}>
+              Volver al listado
+            </button>
+          </div>
+        </div>
+      )}
 
-          {panel === 'detalle' && detalle && detalle.rol !== 'admin' && edicion && (
-            <div className="usuarios-detalle">
-              <div className="usuarios-panel-titulo">
-                <span>{detalle.nombre}</span>
-                <button type="button" className="usuarios-panel-cerrar" onClick={cerrarPanel}>
-                  ✕
-                </button>
-              </div>
-              {panelError && <div className="alert alert-danger">{panelError}</div>}
-              {panelExito && (
-                <div className="alert" style={{ background: 'rgba(14,75,56,0.08)', color: '#0e4b38', border: '1px solid rgba(14,75,56,0.25)' }}>
-                  {panelExito}
-                </div>
-              )}
+      {panel === 'detalle' && detalle && detalle.rol !== 'admin' && edicion && (
+        <div className="card usuarios-form-card">
+          <div className="usuarios-ficha-cabecera">
+            <span className="usuarios-avatar usuarios-avatar-grande avatar-color" style={{ '--c': colorDe(detalle.id) }} aria-hidden="true">
+              {iniciales(detalle.nombre)}
+            </span>
+            <div className="usuarios-ficha-nombre">
+              <h2 className="usuarios-form-titulo">{detalle.nombre}</h2>
+              <span className="usuarios-fila-sub">
+                {detalle.ultimo_acceso ? `Último ingreso: ${formatearFechaHora(detalle.ultimo_acceso)}` : 'Todavía no ingresó'}
+              </span>
+            </div>
+            <span className={`usuarios-badge usuarios-badge-${detalle.rol}`}>{etiquetaRol(detalle.rol)}</span>
+          </div>
+          {panelError && <div className="alert alert-danger">{panelError}</div>}
+          {panelExito && <div className="alert alert-exito">{panelExito}</div>}
 
+          <div className="usuarios-campos">
+            <div className="field">
+              <label htmlFor="edicion-nombre">Nombre y apellido</label>
+              <input id="edicion-nombre" value={edicion.nombre} onChange={(e) => setEdicion({ ...edicion, nombre: e.target.value })} />
+            </div>
+            <div className="field">
+              <label htmlFor="edicion-rol">Rol</label>
+              <select id="edicion-rol" value={edicion.rol} onChange={(e) => setEdicion({ ...edicion, rol: e.target.value })}>
+                {ROLES_CREABLES.map((r) => (
+                  <option key={r} value={r} disabled={r !== detalle.rol && !hayLugar(r)}>
+                    {etiquetaRol(r)}
+                    {r !== detalle.rol && !hayLugar(r) ? ' (sin cupo disponible)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field usuarios-campo-full">
+              <label htmlFor="edicion-email">Email</label>
+              <input
+                id="edicion-email"
+                type="email"
+                maxLength={100}
+                value={edicion.email}
+                onChange={(e) => setEdicion({ ...edicion, email: e.target.value })}
+                placeholder={detalle.email ? undefined : 'Sin email'}
+              />
+              <span className="usuarios-hint">
+                {!detalle.email
+                  ? 'Sin email: ingresa con su usuario y sin código. Si se le registra uno, lo confirma con un código en su próximo ingreso.'
+                  : detalle.email_verificado_en
+                    ? 'Email confirmado. Si se modifica, se vuelve a confirmar con un código en su próximo ingreso.'
+                    : 'Sin confirmar: lo confirma con el código que recibe en su próximo ingreso.'}
+              </span>
+            </div>
+            {entraConUsuarioAparte(detalle) && (
               <div className="field">
-                <label>Nombre</label>
-                <input value={edicion.nombre} onChange={(e) => setEdicion({ ...edicion, nombre: e.target.value })} />
+                <label htmlFor="edicion-usuario">Usuario de ingreso</label>
+                <input id="edicion-usuario" value={edicion.usuario} onChange={(e) => setEdicion({ ...edicion, usuario: e.target.value })} />
               </div>
-              <div className="field">
-                <label>Email</label>
-                <input
-                  type="email"
-                  maxLength={100}
-                  value={edicion.email}
-                  onChange={(e) => setEdicion({ ...edicion, email: e.target.value })}
-                  placeholder={detalle.email ? undefined : 'Sin email'}
-                />
+            )}
+            <div className="field">
+              <label htmlFor="edicion-password">Nueva contraseña</label>
+              <input
+                id="edicion-password"
+                type="password"
+                minLength={8}
+                maxLength={72}
+                value={edicion.password}
+                onChange={(e) => setEdicion({ ...edicion, password: e.target.value })}
+              />
+              <span className="usuarios-hint">Dejala vacía para mantener la actual.</span>
+            </div>
+            <label className="usuarios-check usuarios-campo-full">
+              <input
+                type="checkbox"
+                checked={edicion.dos_fa}
+                disabled={!edicion.dos_fa && (!edicion.email.trim() || !correoDisponible)}
+                onChange={(e) => setEdicion({ ...edicion, dos_fa: e.target.checked })}
+              />
+              <span className="usuarios-check-textos">
+                <span className="usuarios-check-titulo">Verificación en dos pasos</span>
                 <span className="usuarios-hint">
-                  {!detalle.email
-                    ? 'Sin email: entra con su usuario, sin código. Si le cargás uno, se confirma con un código en su próximo ingreso.'
-                    : detalle.email_verificado_en
-                      ? 'Email confirmado. Si lo cambiás, se vuelve a confirmar con un código en su próximo ingreso.'
-                      : 'Sin confirmar: se confirma con el código que le llega en su próximo ingreso.'}
+                  {edicion.dos_fa || (edicion.email.trim() && correoDisponible)
+                    ? 'Pide un código por email al ingresar, una vez por semana en cada navegador.'
+                    : !edicion.email.trim()
+                      ? 'Requiere un email registrado.'
+                      : 'Requiere el correo de la empresa, que todavía no está configurado.'}
                 </span>
-              </div>
-              {entraConUsuarioAparte(detalle) && (
-                <div className="field">
-                  <label>Usuario (login)</label>
-                  <input value={edicion.usuario} onChange={(e) => setEdicion({ ...edicion, usuario: e.target.value })} />
-                </div>
-              )}
-              <div className="field">
-                <label>Rol</label>
-                <select value={edicion.rol} onChange={(e) => setEdicion({ ...edicion, rol: e.target.value })}>
-                  {ROLES_CREABLES.map((r) => (
-                    <option key={r} value={r} disabled={r !== detalle.rol && !hayLugar(r)}>
-                      {etiquetaRol(r)}
-                      {r !== detalle.rol && !hayLugar(r) ? ' (sin lugares libres)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <label className="usuarios-check">
-                <input
-                  type="checkbox"
-                  checked={edicion.dos_fa}
-                  disabled={!edicion.dos_fa && (!edicion.email.trim() || !correoDisponible)}
-                  onChange={(e) => setEdicion({ ...edicion, dos_fa: e.target.checked })}
-                />
-                <span>
-                  2FA
-                  <span className="usuarios-hint">
-                    {edicion.dos_fa || (edicion.email.trim() && correoDisponible)
-                      ? ' — pide un código por mail al entrar, una vez por semana en cada navegador.'
-                      : !edicion.email.trim()
-                        ? ' — necesita un email cargado.'
-                        : ' — necesita el correo de la empresa, que todavía no está configurado.'}
-                  </span>
-                </span>
-              </label>
-              <div className="field">
-                <label>Nueva contraseña (dejar vacío para no cambiarla)</label>
-                <input
-                  type="password"
-                  minLength={8}
-                  maxLength={72}
-                  value={edicion.password}
-                  onChange={(e) => setEdicion({ ...edicion, password: e.target.value })}
-                />
-                <span className="usuarios-hint">Cambiar el rol o la contraseña cierra la sesión activa de este usuario de inmediato.</span>
-              </div>
+              </span>
+            </label>
+          </div>
+
+          <div className="usuarios-form-pie">
+            <span className="usuarios-hint">Cambiar el rol o la contraseña cierra de inmediato la sesión activa de este usuario.</span>
+            <div className="usuarios-form-acciones">
+              <button type="button" className="btn" onClick={cerrarPanel}>
+                Volver al listado
+              </button>
               <button type="button" className="btn btn-primary" disabled={guardando} onClick={guardarUsuario}>
                 {guardando ? 'Guardando…' : 'Guardar cambios'}
               </button>
+            </div>
+          </div>
 
-              <div className="usuarios-eliminar">
-                {!confirmandoEliminar ? (
-                  <button type="button" className="usuarios-eliminar-link" onClick={() => setConfirmandoEliminar(true)}>
+          <div className="usuarios-eliminar">
+            {!confirmandoEliminar ? (
+              <button type="button" className="usuarios-eliminar-link" onClick={() => setConfirmandoEliminar(true)}>
+                Eliminar usuario
+              </button>
+            ) : (
+              <div className="usuarios-eliminar-confirm">
+                <span>¿Eliminar a "{detalle.nombre}"? Ya no va a poder ingresar al sistema.</span>
+                <div>
+                  <button type="button" className="btn" onClick={() => setConfirmandoEliminar(false)}>
+                    Cancelar
+                  </button>
+                  <button type="button" className="btn btn-peligro" disabled={guardando} onClick={eliminarUsuario}>
                     Eliminar usuario
                   </button>
-                ) : (
-                  <div className="usuarios-eliminar-confirm">
-                    <span>¿Eliminar a "{detalle.nombre}"?</span>
-                    <div>
-                      <button type="button" className="btn" onClick={() => setConfirmandoEliminar(false)}>
-                        Cancelar
-                      </button>
-                      <button
-                        type="button"
-                        className="btn"
-                        style={{ borderColor: 'var(--color-danger)', color: 'var(--color-danger)' }}
-                        disabled={guardando}
-                        onClick={eliminarUsuario}
-                      >
-                        Sí, eliminar
-                      </button>
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

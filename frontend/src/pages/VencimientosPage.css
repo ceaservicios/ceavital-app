@@ -1,151 +1,157 @@
-.vencimientos-page {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  height: 100%;
-  min-height: 0;
+/* Vencimientos (rediseño 2026-10-29). Usa las piezas cliente-* (tarjeta, tabla, vacío); la franja
+   de cifras la arma global.css ([class$='-kpis']). Rosa Coral y Dorado solo como alerta. */
+
+/* La tarjeta mide lo que su tabla (no se estira en blanco) y, si no entra, scrollea por dentro. */
+.cliente-page.vencimientos-page > .cliente-card:last-child {
+  flex: 0 1 auto;
 }
 
-.vencimientos-kpis {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-}
 .vencimientos-kpi {
-  flex: 1;
-  min-width: 200px;
-  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  min-width: 0;
 }
-.vencimientos-kpi-label {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-tertiary);
+.vencimientos-kpi-vencido {
+  color: var(--color-danger);
 }
-.vencimientos-kpi-value {
-  font-size: 26px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-/* `.card.` adelante: global.css se carga después y su `.card` (mismo peso) dejaba las tarjetas en blanco. */
-.card.vencimientos-kpi-vencido {
-  background: #fbeaec;
-  border-color: #f1c4c9;
-}
-.vencimientos-kpi-vencido .vencimientos-kpi-label {
-  color: #8a3a41;
-}
-.vencimientos-kpi-vencido .vencimientos-kpi-value {
-  color: #b0333e;
-}
-.card.vencimientos-kpi-aviso {
-  background: #fdf3dd;
-  border-color: #f0dba0;
-}
-.vencimientos-kpi-aviso .vencimientos-kpi-label {
-  color: #7a5c15;
-}
-.vencimientos-kpi-aviso .vencimientos-kpi-value {
-  color: #8a6a1b;
+.vencimientos-kpi-aviso {
+  color: var(--warn-ink);
 }
 
-.vencimientos-banner {
+.vencimientos-alerta {
   display: flex;
   align-items: center;
-  gap: 12px;
-  background: #fbeaec;
-  border: 1px solid #f1c4c9;
-  border-radius: var(--radius-sm);
-  padding: 12px 16px;
+  gap: 10px;
 }
-.vencimientos-banner span {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: #8a3a41;
+.vencimientos-alerta svg {
+  flex-shrink: 0;
 }
 
-.vencimientos-tabla {
-  flex: 1;
-  padding: 20px;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-.vencimientos-tabla-scroll {
-  flex: 1;
-  overflow: auto;
-}
-.vencimientos-vacio {
-  margin: auto;
-  padding: 32px;
-  text-align: center;
-  color: var(--text-tertiary);
-  font-size: 14px;
-}
-.vencimientos-tabla-head {
-  display: flex;
-  padding: 8px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--bg-app);
-}
-.vencimientos-fila {
-  display: flex;
-  align-items: center;
-  padding: 12px 10px;
-  border-bottom: 1px solid var(--bg-app);
-}
-.vencimientos-fila:hover {
-  background: #f6f7f8;
-}
-/* Fechas, lotes y cantidades en una línea ("01/09/2 026" no se parte). */
-.vencimientos-fila > span:not(.vencimientos-fila-nombre) {
+/* Tabla */
+.vencimientos-tabla td,
+.vencimientos-tabla th {
   white-space: nowrap;
 }
-@media (max-width: 600px) {
-  .app-layout-content .vencimientos-tabla-scroll > * {
-    min-width: 700px;
-  }
+.vencimientos-tabla td.vencimientos-td-producto {
+  white-space: normal;
 }
-.vencimientos-fila-nombre {
-  font-size: 14px;
+.vencimientos-sub-fecha {
+  display: none;
+}
+.vencimientos-td-cantidad {
   font-weight: 600;
 }
-.vencimientos-fila-muted {
-  font-size: 13px;
-  color: var(--text-tertiary);
+/* Acción de la fila: botón de 36px en una columna fija a la derecha. */
+.vencimientos-td-accion {
+  min-width: 132px;
 }
-.vencimientos-badge {
-  display: inline-flex;
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  font-size: 12px;
-  font-weight: 700;
+.vencimientos-btn {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13.5px;
 }
-.vencimientos-badge-vencido {
-  background: #f5c6cb;
-  color: #8a2530;
+
+/* Confirmación de "Retirar": renglón propio debajo del lote, en un pozo gris. */
+.vencimientos-fila-confirmando td {
+  border-bottom: none;
 }
-.vencimientos-badge-aviso {
-  background: var(--color-warning);
-  color: #584006;
-}
-.vencimientos-btn-retirar,
-.vencimientos-btn-ver {
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 700;
+.vencimientos-confirm-fila td {
+  height: auto;
+  padding: 0 0 12px;
+  white-space: normal;
 }
 .vencimientos-confirm {
   display: flex;
-  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-rule);
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+  font-size: 14px;
+  color: var(--text-secondary);
 }
-.vencimientos-confirm .btn {
-  padding: 6px 10px;
-  font-size: 12px;
+.vencimientos-confirm strong {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.vencimientos-confirm-acciones {
+  display: flex;
+  gap: 8px;
+}
+
+/* Celular: renglones de dos líneas (producto y cantidad arriba; estado y acción abajo). La
+   fecha pasa al renglón gris del producto. */
+@media (max-width: 600px) {
+  .vencimientos-page .vencimientos-kpis > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  .vencimientos-tabla thead {
+    display: none;
+  }
+  .vencimientos-tabla,
+  .vencimientos-tabla tbody {
+    display: block;
+  }
+  .vencimientos-tabla tbody tr.vencimientos-fila {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'producto cantidad'
+      'estado accion';
+    align-items: center;
+    gap: 8px 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-rule);
+  }
+  .vencimientos-tabla tbody tr.vencimientos-fila-confirmando {
+    border-bottom: none;
+  }
+  .vencimientos-tabla tbody td {
+    display: block;
+    height: auto;
+    padding: 0;
+    border: none;
+  }
+  .vencimientos-tabla td.vencimientos-td-producto {
+    grid-area: producto;
+  }
+  .vencimientos-tabla td.vencimientos-td-fecha {
+    display: none;
+  }
+  .vencimientos-tabla td.vencimientos-td-estado {
+    grid-area: estado;
+  }
+  .vencimientos-tabla td.vencimientos-td-cantidad {
+    grid-area: cantidad;
+    align-self: start;
+  }
+  .vencimientos-tabla td.vencimientos-td-accion {
+    grid-area: accion;
+    min-width: 0;
+  }
+  .vencimientos-sub-fecha {
+    display: inline;
+  }
+  .vencimientos-btn {
+    min-height: 40px;
+  }
+  .vencimientos-tabla tbody tr.vencimientos-confirm-fila {
+    display: block;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-rule);
+  }
+  .vencimientos-tabla tr.vencimientos-confirm-fila td {
+    padding: 0;
+  }
+  .vencimientos-confirm-acciones {
+    width: 100%;
+  }
+  .vencimientos-confirm-acciones .btn {
+    flex: 1;
+    min-height: 44px;
+  }
 }

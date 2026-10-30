@@ -1,7 +1,62 @@
-/* Proveedores (2026-10-28): lista a todo el ancho, alta y perfil en páginas propias y carga de
-   la mercadería que trajo. Usan las clases cliente-* (tarjetas, KPIs, tablas, pestañas,
-   formularios) y pedido-* (detalle desplegable); acá va solo lo propio. */
+/* Proveedores, Clientes y Pedidos de clientes (rediseño 2026-10-29: "dice 'Lo que trajo', ¿eso es
+   profesional?", "desproporcionado, todo amontonado"). Usan las piezas comunes cliente-*
+   (ClientesEmpresaPage.css) y pedido-* (Pedidos.css); acá va lo propio del grupo: encabezado de
+   ficha, selector segmentado, renglones de dos líneas en celular, el detalle de una compra como
+   comprobante, el ingreso de mercadería y el formulario de pago. Lo importan también las páginas
+   de Clientes y Pedidos de clientes. */
 
+/* ---------- Tablas: renglones de dos líneas en celular ---------- */
+.tabla-solo-celu {
+  display: none;
+}
+@media (max-width: 600px) {
+  .tabla-oculto-celu,
+  .cliente-tabla .prov-opcional {
+    display: none;
+  }
+  .tabla-solo-celu {
+    display: block;
+  }
+  /* La primera columna visible arranca en el borde, como en escritorio. */
+  .cliente-tabla tr > .tabla-oculto-celu:first-child + :not(.tabla-oculto-celu),
+  .cliente-tabla tr > .tabla-oculto-celu:first-child + .tabla-oculto-celu + :not(.tabla-oculto-celu) {
+    padding-left: 0;
+  }
+  /* Cifras de resumen impares: la última ocupa la fila entera. */
+  .proveedores-lista .cliente-kpis > :last-child:nth-child(odd),
+  .clientes-lista .cliente-kpis > :last-child:nth-child(odd),
+  .pedidos-page .cliente-kpis > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  /* Botones de los formularios del grupo: táctiles y a todo el ancho. */
+  .proveedor-perfil .cliente-acciones .btn,
+  .ficha-cliente .cliente-acciones .btn,
+  .form-angosto .cliente-acciones .btn {
+    flex: 1 1 0;
+    min-height: 44px;
+  }
+}
+.dato-vacio {
+  color: var(--text-muted);
+}
+
+/* Saldo en las listas: una cifra limpia; en cero, gris. */
+.lista-saldo {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.lista-saldo-cero {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.lista-saldo-favor {
+  color: var(--ok-ink);
+}
+.lista-saldo-pildora {
+  margin-right: 8px;
+}
+
+/* Lista de proveedores */
 .proveedores-toolbar {
   flex-wrap: wrap;
 }
@@ -11,15 +66,13 @@
   }
   .proveedores-toolbar .btn {
     flex: 1 1 0;
-  }
-  /* En el celular entra lo importante: el proveedor y lo que se le debe. */
-  .cliente-tabla .prov-opcional {
-    display: none;
+    min-height: 44px;
   }
 }
 
-/* Perfil y carga: varias tarjetas y filas que se despliegan, así que la página crece con su
-   contenido y scrollea entera (como Pedidos de Clientes), no una tarjeta de altura fija. */
+/* ---------- Ficha (proveedor y cliente) ---------- */
+/* La ficha del proveedor tiene filas que se despliegan: la página crece con su contenido y
+   scrollea entera (como Pedidos de clientes), no una tarjeta de altura fija. */
 .cliente-page.proveedor-perfil,
 .cliente-page.carga-pagina {
   height: auto;
@@ -36,81 +89,434 @@
 .proveedor-perfil .cliente-tabla th {
   position: static;
 }
-.proveedor-titulo {
+/* Ficha del cliente: encabezado y pestañas fijos, el contenido scrollea por dentro. Sin esto, la
+   franja de cifras (overflow: hidden) se achicaba dentro del scroll y quedaba cortada. */
+.ficha-cliente .cliente-scroll > * {
+  flex-shrink: 0;
+}
+
+/* Encabezado: nombre con su estado y los datos de contacto a la izquierda, acciones a la derecha.
+   En celular las acciones pasan abajo, a todo el ancho. */
+.ficha-cabecera {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'titulo acciones'
+    'sub acciones';
+  align-items: center;
+  gap: 4px 16px;
+}
+.ficha-titulo {
+  grid-area: titulo;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  min-width: 0;
+}
+.ficha-titulo .cliente-h1 {
+  overflow-wrap: anywhere;
+}
+.ficha-cabecera .cliente-subtitulo {
+  grid-area: sub;
+  overflow-wrap: anywhere;
+}
+.ficha-acciones {
+  grid-area: acciones;
+  display: flex;
+  gap: 8px;
+}
+@media (max-width: 600px) {
+  .ficha-cabecera {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'titulo'
+      'sub'
+      'acciones';
+  }
+  .ficha-acciones {
+    margin-top: 12px;
+  }
+  .ficha-acciones .btn {
+    flex: 1 1 0;
+    min-height: 44px;
+  }
+}
+
+/* Formularios cortos (alta, Datos, Acceso al portal): no se estiran a todo el ancho; dos
+   columnas iguales y los campos largos a la fila entera. */
+.form-angosto {
+  width: 100%;
+  max-width: 760px;
+}
+@media (min-width: 601px) {
+  .form-angosto .cliente-campos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* Tarjeta con una tabla corta (≤3 columnas): mismo ancho que los formularios, sin huecos. */
+.tarjeta-angosta {
+  width: 100%;
+  max-width: 760px;
+}
+
+/* Datos del cliente (Resumen): cuatro columnas que cierran (la dirección ocupa dos). */
+.cliente-datos.ficha-datos-cliente {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.ficha-dato-doble {
+  grid-column: span 2;
+}
+@media (max-width: 1100px) {
+  .cliente-datos.ficha-datos-cliente {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .cliente-datos.ficha-datos-cliente {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ficha-dato-doble {
+    grid-column: auto;
+  }
+}
+.cliente-eliminar-confirm strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Dato con su rótulo en una fila (estado del acceso, etc.). */
+.ficha-datos-fila {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 24px;
+}
+.ficha-datos-fila dt {
+  margin-bottom: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.ficha-datos-fila dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+/* Acceso al portal: la contraseña lleva dos botones al lado, su columna es más ancha. */
+@media (min-width: 601px) {
+  .form-angosto .cliente-campos.acceso-campos {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .ficha-datos-fila {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Pie de una tarjeta: ayuda a la izquierda, acción a la derecha. */
+.ficha-pie {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
   flex-wrap: wrap;
+  gap: 12px 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-rule);
 }
-.proveedor-titulo-acciones {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+.ficha-pie .cliente-hint {
+  flex: 1 1 320px;
+}
+@media (max-width: 600px) {
+  .ficha-pie .btn {
+    flex: 1 1 100%;
+    min-height: 44px;
+  }
 }
 
-/* Estado de pago de una compra. Sin Rosa Coral ni Dorado (marca.md los reserva para alertas
-   urgentes): lo que se le debe a un proveedor es información normal del negocio. */
+/* ---------- Selector segmentado (Remito / Factura, medios de pago, pago ahora) ---------- */
+.prov-seg {
+  display: inline-flex;
+  align-self: flex-start;
+  max-width: 100%;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+}
+.prov-seg button {
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.prov-seg button:hover {
+  color: var(--text-primary);
+}
+.prov-seg button.activo {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(16, 32, 26, 0.12);
+}
+@media (max-width: 600px) {
+  .prov-seg {
+    display: flex;
+    align-self: stretch;
+  }
+  .prov-seg button {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 36px;
+    padding: 0 8px;
+  }
+}
+
+/* ---------- Compras del proveedor ---------- */
+/* Estado de pago de una compra: píldora pálida. Lo que se le debe a un proveedor es información
+   normal del negocio, sin Rosa Coral ni Dorado (marca.md los reserva para alertas). */
 .compra-estado {
   display: inline-flex;
   align-items: center;
-  padding: 4px 12px;
+  height: 24px;
+  padding: 0 10px;
   border-radius: var(--radius-pill);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 600;
   white-space: nowrap;
 }
 .compra-estado-pagada {
-  background: #dceee5;
-  color: #0e4b38;
+  background: var(--ok-bg);
+  color: var(--ok-ink);
 }
 .compra-estado-parcial {
-  background: #dde4f1;
-  color: #22428c;
+  background: var(--info-bg);
+  color: var(--info-ink);
 }
 .compra-estado-impaga {
-  background: #22428c;
-  color: #ffffff;
+  background: var(--info-bg);
+  color: var(--info-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--info-ink) 28%, transparent);
 }
 .compra-estado-anulada {
-  background: #e3e6e8;
-  color: #5b6664;
+  background: var(--neutral-bg);
+  color: var(--neutral-ink);
 }
 .compra-fila-anulada > td {
   color: var(--text-muted);
 }
+.compra-fila-anulada .cliente-td-nombre {
+  text-decoration: line-through;
+}
+.compra-celda-total .compra-estado {
+  margin-top: 4px;
+}
 
-/* Pagos dentro del detalle de una compra */
-.compra-pagos {
+/* Detalle de una compra (dentro del pozo .pedido-detalle): ordenado como un comprobante. */
+.compra-comprobante {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.compra-totales {
+  margin: 0 0 0 auto;
+  width: min(100%, 300px);
   display: flex;
   flex-direction: column;
   gap: 6px;
+  font-size: 14px;
+}
+.compra-totales > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.compra-totales dt {
+  color: var(--text-secondary);
+}
+.compra-totales dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.compra-totales .compra-total-final {
+  padding-top: 8px;
+  border-top: 1px solid var(--border-default);
+}
+.compra-totales .compra-total-final dt,
+.compra-totales .compra-total-final dd {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.compra-totales > .compra-total-final:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+/* Pagos de una compra: renglones con las mismas líneas finas que la tabla de productos. */
+.compra-pagos {
+  display: flex;
+  flex-direction: column;
+}
+/* Deudas cargadas a mano y boletas corregidas desde Saldos pendientes (2026-10-29). */
+.compra-tag {
+  margin-left: 8px;
+  vertical-align: 1px;
+}
+.compra-a-mano {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.compra-correccion {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-rule);
+}
+.compra-correccion-cambio {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.compra-correccion-meta {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+.compra-subtitulo {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-default);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
 }
 .compra-pago {
   display: grid;
   grid-template-columns: 96px 120px minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: baseline;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface);
-  font-size: 13.5px;
+  grid-template-areas: 'fecha medio detalle monto';
+  align-items: center;
+  gap: 2px 12px;
+  min-height: 44px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-rule);
+  font-size: 14px;
+}
+.compra-pago:last-child {
+  border-bottom: none;
+}
+.compra-pago-fecha {
+  grid-area: fecha;
+}
+.compra-pago-medio {
+  grid-area: medio;
+  font-weight: 600;
+}
+.compra-pago-detalle {
+  grid-area: detalle;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+.compra-pago-monto {
+  grid-area: monto;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .compra-pago-anulado {
   color: var(--text-muted);
+}
+.compra-pago-anulado .compra-pago-monto {
   text-decoration: line-through;
 }
 @media (max-width: 600px) {
   .compra-pago {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'medio medio monto'
+      'fecha detalle detalle';
+  }
+  .compra-pago-fecha {
+    font-size: 12.5px;
+    color: var(--text-tertiary);
+  }
+  .compra-pago-detalle {
+    overflow-wrap: anywhere;
+  }
+  .compra-totales {
+    width: 100%;
   }
 }
 
-/* Formulario de pago: medio en botones, "Sale de la caja" y anular en la tabla. */
+/* Pagos (pestaña): la confirmación de anular va en un renglón propio debajo del pago. */
+.cliente-tabla .pago-fila-confirmar > td {
+  height: auto;
+  padding: 0 0 12px;
+}
+
+/* ---------- Formulario de pago (ficha e ingreso de mercadería) ---------- */
+/* Grilla de 6 columnas para que cada fila cierre: monto, fecha y medio (2+2+2); cheque (2+2+2);
+   la casilla de la caja y el detalle a todo el ancho. En tablet el medio baja a su propia fila. */
+.pago-campos {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 16px 20px;
+  align-items: start;
+}
+.pago-campo {
+  grid-column: span 2;
+}
+.pago-campo-full {
+  grid-column: 1 / -1;
+}
+.pago-campo-medio .prov-seg {
+  align-self: flex-start;
+}
+@media (max-width: 1100px) {
+  .pago-campo {
+    grid-column: span 3;
+  }
+  .pago-campo-medio {
+    grid-column: 1 / -1;
+  }
+  .pago-campo-cheque {
+    grid-column: span 2;
+  }
+}
+@media (max-width: 600px) {
+  .pago-campo,
+  .pago-campo-cheque {
+    grid-column: 1 / -1;
+  }
+  .pago-campo-medio .prov-seg {
+    align-self: stretch;
+  }
+}
+.pago-compra-select {
+  max-width: 100%;
+}
 .pago-check {
   display: flex;
   align-items: flex-start;
   gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-rule);
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
   font-size: 14px;
   cursor: pointer;
 }
@@ -121,15 +527,59 @@
   flex-shrink: 0;
   accent-color: var(--color-primary);
 }
-.pago-confirmar {
-  display: inline-flex;
-  gap: 6px;
+.pago-check strong {
+  display: block;
+  font-weight: 600;
 }
-.pago-confirmar .btn {
-  padding: 6px 12px;
+.pago-check-ayuda {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-tertiary);
 }
 
-/* Cargar mercadería: buscador con resultados y las líneas de lo que trajo. */
+/* ---------- Ingreso de mercadería ---------- */
+.carga-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+/* Cabecera del comprobante en una fila: proveedor, fecha, vencimiento del pago, tipo y número. */
+.carga-cabecera {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(140px, 1fr) minmax(140px, 1fr) auto minmax(0, 1.3fr);
+  gap: 16px 20px;
+  align-items: start;
+}
+/* Dos renglones: proveedor y fechas arriba; tipo y número abajo. */
+@media (max-width: 1340px) {
+  .carga-cabecera {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .carga-cabecera > :first-child {
+    grid-column: span 2;
+  }
+  .carga-cabecera > :nth-child(5) {
+    grid-column: span 3;
+  }
+}
+@media (max-width: 1100px) {
+  .carga-cabecera {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .carga-cabecera > :first-child {
+    grid-column: 1 / -1;
+  }
+  .carga-cabecera > :nth-child(5) {
+    grid-column: auto;
+  }
+}
+@media (max-width: 600px) {
+  .carga-cabecera {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .carga-buscador {
   position: relative;
 }
@@ -147,138 +597,336 @@
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  box-shadow: 0 8px 24px rgba(27, 38, 34, 0.12);
+  box-shadow: var(--shadow-float);
 }
 .carga-resultado {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 10px 14px;
+  min-height: 44px;
+  padding: 8px 14px;
   border: none;
-  border-bottom: 1px solid var(--bg-app);
+  border-bottom: 1px solid var(--border-rule);
   background: transparent;
   font: inherit;
   font-size: 14px;
   text-align: left;
+  color: var(--text-primary);
   cursor: pointer;
+  transition: background 0.15s ease;
+}
+.carga-resultado:last-child {
+  border-bottom: none;
 }
 .carga-resultado:hover {
-  background: #f6f7f8;
+  background: var(--bg-hover);
+}
+.carga-resultado strong {
+  font-weight: 600;
 }
 .carga-resultado-vacio {
   padding: 12px 14px;
-  font-size: 13.5px;
+  font-size: 14px;
   color: var(--text-tertiary);
 }
 .carga-de-proveedor {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
   margin-left: 8px;
-  padding: 2px 8px;
+  padding: 0 8px;
   border-radius: var(--radius-pill);
-  background: rgba(14, 75, 56, 0.08);
+  background: var(--color-primary-soft);
   color: var(--color-primary);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
+/* Renglones de productos alineados en columnas, como un comprobante:
+   producto · cantidad con su unidad · vencimiento · costo · subtotal · quitar. */
 .carga-lineas {
   display: flex;
   flex-direction: column;
 }
 .carga-linea {
   display: grid;
-  grid-template-columns: minmax(170px, 2fr) minmax(170px, 1.5fr) minmax(140px, 1fr) minmax(120px, 1fr) minmax(90px, auto) 34px;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 248px 152px 164px 108px 36px;
+  grid-template-areas: 'prod cant vence costo sub quitar';
+  gap: 8px 12px;
   align-items: start;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--bg-app);
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-rule);
 }
 .carga-linea-cabecera {
+  align-items: end;
   padding: 0 0 8px;
   border-bottom: 1px solid var(--border-default);
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.carga-linea-cabecera > span {
+  white-space: nowrap;
 }
 .carga-linea-cabecera .num {
   text-align: right;
 }
 .carga-producto {
+  grid-area: prod;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding-top: 5px;
+  font-size: 14px;
+}
+.carga-producto-texto {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  padding-top: 10px;
-  font-size: 14px;
+}
+.carga-resultado-cabeza {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.carga-producto strong {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.carga-producto .stock-cuenta {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+.carga-producto .stock-cuenta strong {
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 .carga-campo {
   min-width: 0;
 }
+.carga-campo-cant {
+  grid-area: cant;
+}
+.carga-campo-vence {
+  grid-area: vence;
+}
+.carga-campo-costo {
+  grid-area: costo;
+}
 .carga-etiqueta {
   display: none;
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-secondary);
 }
+/* Cantidad: el número y, al lado, en qué se cuenta (selector Unidades / Caja o la medida). */
+.carga-cantidad {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.carga-pagina .carga-cantidad input {
+  flex: 1 1 auto;
+  min-width: 64px;
+}
+.carga-pagina .carga-cantidad .stock-en-packs {
+  flex: none;
+}
+/* Campo con la unidad adentro, a la derecha ("unidades", "kg", "por caja"). */
+.carga-input-unidad {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.carga-pagina .carga-input-unidad input {
+  padding-right: 78px;
+}
+.carga-input-unidad > span {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+.carga-pagina .carga-input-unidad-corta input {
+  padding-right: 40px;
+}
 .carga-subtotal {
-  padding-top: 11px;
-  font-weight: 800;
+  grid-area: sub;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: var(--control-height);
+  font-weight: 600;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.carga-subtotal-vacio {
+  color: var(--text-muted);
+  font-weight: 500;
 }
 .carga-quitar {
-  margin-top: 4px;
+  grid-area: quitar;
+  margin-top: 2px;
 }
 .carga-total {
   display: flex;
   justify-content: flex-end;
   align-items: baseline;
-  gap: 16px;
-  padding-top: 14px;
-  font-size: 15px;
-  font-weight: 700;
+  gap: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-default);
+  margin-top: -1px;
 }
-.carga-total strong {
-  font-size: 22px;
-  font-weight: 800;
+.carga-total-rotulo {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.carga-total-monto {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
-/* Sin lugar para la grilla: cada línea pasa a ser una tarjetita con sus etiquetas. */
+.carga-pie {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+@media (max-width: 600px) {
+  .carga-pie .btn {
+    flex: 1 1 0;
+    min-height: 44px;
+  }
+}
+/* Tablet: cada producto en dos filas (producto, subtotal y quitar; debajo cantidad, vencimiento
+   y costo con sus rótulos). Celular: una columna, el subtotal al pie del renglón. */
 @media (max-width: 1100px) {
   .carga-linea-cabecera {
     display: none;
   }
   .carga-linea {
-    position: relative;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) 36px;
+    grid-template-areas:
+      'prod prod sub quitar'
+      'cant vence costo .';
+    gap: 10px 16px;
+    padding: 16px 0;
   }
   .carga-producto {
-    grid-column: 1 / -1;
-    padding: 0 44px 0 0;
+    padding-top: 0;
+  }
+  .carga-subtotal {
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: flex-start;
+    min-height: 0;
+  }
+  .carga-subtotal .carga-etiqueta {
+    margin-bottom: 2px;
+  }
+  .carga-quitar {
+    margin-top: -6px;
   }
   .carga-etiqueta {
     display: block;
-  }
-  .carga-subtotal {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding-top: 0;
-    text-align: left;
-  }
-  .carga-quitar {
-    position: absolute;
-    top: 12px;
-    right: 0;
-    margin: 0;
+    margin-bottom: 6px;
   }
 }
 @media (max-width: 600px) {
   .carga-linea {
-    grid-template-columns: minmax(0, 1fr);
+    position: relative;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      'prod prod'
+      'cant cant'
+      'vence costo'
+      'sub sub';
+  }
+  .carga-producto {
+    padding-right: 44px;
+  }
+  .carga-quitar {
+    grid-area: auto;
+    position: absolute;
+    top: 10px;
+    right: 0;
+    margin: 0;
+  }
+  .carga-subtotal {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-rule);
+  }
+  .carga-subtotal .carga-etiqueta {
+    margin: 0;
+  }
+  .carga-total {
+    justify-content: space-between;
+  }
+  .carga-total-monto {
+    font-size: 22px;
+  }
+}
+
+/* Productos del proveedor en celular: el nombre (con su ícono) a todo el ancho y abajo el stock y
+   el precio, alineados con el nombre (con el ícono la columna quedaba de 70px). */
+@media (max-width: 600px) {
+  .prov-productos-tabla thead {
+    display: none;
+  }
+  .prov-productos-tabla,
+  .prov-productos-tabla tbody {
+    display: block;
+  }
+  .prov-productos-tabla tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 36px;
+    grid-template-areas:
+      'nombre nombre accion'
+      'stock precio accion';
+    align-items: center;
+    gap: 4px 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-rule);
+  }
+  .prov-productos-tabla tbody tr:last-child {
+    border-bottom: none;
+  }
+  .prov-productos-tabla tbody td {
+    display: block;
+    height: auto;
+    padding: 0;
+    border: none;
+  }
+  .prov-productos-tabla tbody td:nth-child(1) {
+    grid-area: nombre;
+  }
+  .prov-productos-tabla tbody td:nth-child(2) {
+    grid-area: stock;
+    padding-left: 44px;
+    text-align: left;
+  }
+  .prov-productos-tabla tbody td:nth-child(3) {
+    grid-area: precio;
+  }
+  .prov-productos-tabla tbody td:nth-child(4) {
+    grid-area: accion;
   }
 }

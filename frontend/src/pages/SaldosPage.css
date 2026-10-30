@@ -1,0 +1,601 @@
+/* Saldos pendientes, alta y ficha de una cuenta (2026-10-29, estilo "panel protagonista"). */
+.saldos-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.saldos-panel {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 18px;
+}
+.saldos-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 18px;
+}
+/* Buscador y "Cargar deuda" en un renglón: con wrap, el ancho del buscador (min(300px, 100%)) hacía
+   bajar el botón aunque sobrara lugar. */
+.saldos-toolbar-der {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+.saldos-buscar {
+  height: 40px;
+  width: min(300px, 100%);
+  padding: 0 12px;
+  border: 1px solid var(--border-control);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 14px;
+  background: var(--bg-surface);
+}
+.saldos-buscar:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+
+.saldos-fila {
+  display: grid;
+  /* Los botones van en una columna de ancho fijo: con "Corregir" + "Pagar" en las boletas y solo
+     "Pagar" en las cuentas, los montos quedan alineados en toda la lista. */
+  grid-template-columns: 42px minmax(0, 1fr) 210px 140px 190px;
+  align-items: center;
+  gap: 16px;
+  padding: 13px 18px;
+  border-top: 1px solid var(--border-rule);
+  cursor: pointer;
+  transition: background 0.15s ease-out;
+}
+.saldos-fila:hover {
+  background: #fafbf9;
+}
+.saldos-fila:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+.saldos-fila-info {
+  min-width: 0;
+}
+.saldos-fila-nombre {
+  font-size: 14.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.saldos-fila-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 4px;
+}
+.saldos-fila-nota {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.saldos-fila-vence {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+.saldos-fila-vence strong {
+  font-size: 13.5px;
+}
+.saldos-fila-monto {
+  text-align: right;
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.saldos-fila > :last-child {
+  justify-self: end;
+}
+.saldos-vacio {
+  padding: 36px 18px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-rule);
+}
+
+/* Boletas de proveedores (2026-10-29): "Corregir" al lado de "Pagar" y, abajo de la fila, el
+   formulario para corregirla (no es un panel al costado). */
+.saldos-fila-acciones {
+  display: flex;
+  gap: 8px;
+}
+.saldos-fila-abierta {
+  background: #f3f9f5;
+}
+.saldos-correccion {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 18px 14px 76px;
+  padding: 16px 18px;
+  border: 1px solid #cfe3d8;
+  border-radius: 14px;
+  background: #f3f9f5;
+}
+.saldos-correccion-cab strong {
+  display: block;
+  font-size: 15px;
+}
+.saldos-correccion-cab span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.saldos-correccion-campos {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(0, 1.2fr) 150px 150px 140px;
+  gap: 12px;
+  align-items: end;
+}
+/* Alto mínimo, no fijo: "Sin comprobante" puede ir en dos renglones. */
+.saldos-correccion-tipos button {
+  min-height: var(--control-height);
+  padding: 4px 6px;
+}
+.saldos-correccion-cuenta {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+.saldos-correccion-cuenta strong {
+  color: var(--text-primary);
+}
+.saldos-correccion-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* Cargar deuda (2026-10-29): arriba se elige qué se carga; abajo, el formulario de cada uno. */
+.cargar-que {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.cargar-op {
+  --c: #6b7570;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1.5px solid transparent;
+  border-radius: 14px;
+  background: #f4f6f3;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease-out, border-color 0.15s ease-out;
+}
+.cargar-op:hover {
+  background: #eef1ed;
+}
+.cargar-op:focus-visible {
+  outline: 2px solid var(--c);
+  outline-offset: 2px;
+}
+.cargar-op-icono {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--c) 14%, #ffffff);
+  color: var(--c);
+}
+.cargar-op-texto strong {
+  display: block;
+  font-size: 15px;
+}
+.cargar-op-texto span {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.cargar-op.activo {
+  border-color: var(--c);
+  background: color-mix(in srgb, var(--c) 8%, #ffffff);
+}
+.cargar-op.activo .cargar-op-icono {
+  background: var(--c);
+  color: #ffffff;
+}
+/* Deuda con un proveedor: Remito, Factura o Sin comprobante; número, fechas y monto en un renglón. */
+.cpagar-repite.deuda-tipos {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 540px;
+}
+.cpagar-fila.deuda-fila {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* Corregir una boleta, en pantallas medianas: comprobante y número arriba; fechas y total abajo. */
+@media (max-width: 1200px) {
+  .saldos-correccion-campos {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .saldos-correccion-campos > * {
+    grid-column: span 2;
+  }
+  .saldos-correccion-campos > :nth-child(-n + 2) {
+    grid-column: span 3;
+  }
+}
+/* Una deuda cargada a mano tiene tres comprobantes (con "Sin comprobante"): en computadora, siempre en
+   dos renglones, con más lugar para los botones. En celular, como las demás. */
+@media (min-width: 861px) {
+  .saldos-correccion-campos.con-sin {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .saldos-correccion-campos.con-sin > :first-child {
+    grid-column: span 4;
+  }
+  .saldos-correccion-campos.con-sin > :nth-child(n + 2) {
+    grid-column: span 2;
+  }
+}
+
+/* Hasta 1180 px (con el menú a la vista, en una fila el nombre quedaba de 30 px): la fila en dos
+   renglones. Arriba ícono, nombre y monto; abajo el vencimiento (fecha y estado en línea) y los botones. */
+@media (max-width: 1180px) {
+  .saldos-fila {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    grid-template-areas:
+      'ic info monto'
+      'ic vence btn';
+    gap: 8px 16px;
+  }
+  .saldos-fila > :first-child {
+    grid-area: ic;
+    align-self: start;
+  }
+  .saldos-fila-info {
+    grid-area: info;
+  }
+  .saldos-fila-vence {
+    grid-area: vence;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+  }
+  .saldos-fila-monto {
+    grid-area: monto;
+  }
+  .saldos-fila-btn {
+    grid-area: btn;
+  }
+}
+
+/* Celular: como en pantallas medianas, más apretado; las boletas, con los botones en su renglón. */
+@media (max-width: 860px) {
+  .saldos-fila {
+    gap: 8px 12px;
+    padding: 12px 14px;
+  }
+  /* En columna sin wrap: con wrap, el ancho salía de la fila de filtros y el botón se pasaba de la tarjeta. */
+  .saldos-toolbar,
+  .saldos-toolbar-der {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .saldos-toolbar-der {
+    padding: 0;
+  }
+  .saldos-toolbar > *,
+  .saldos-toolbar-der > * {
+    min-width: 0;
+  }
+  .saldos-toolbar .chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .saldos-buscar {
+    width: 100%;
+  }
+  /* Boleta de proveedor: "Corregir" y "Pagar" van en su propio renglón, así el nombre y lo pagado
+     tienen todo el ancho. */
+  .saldos-fila:has(.saldos-fila-acciones) {
+    grid-template-areas:
+      'ic info monto'
+      'ic vence vence'
+      'ic btn btn';
+  }
+  .saldos-fila-acciones {
+    justify-content: flex-end;
+  }
+  .saldos-correccion {
+    margin: 0 14px 12px;
+    padding: 14px;
+  }
+  .saldos-correccion-campos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* Con el mismo peso que las de pantallas medianas (:nth-child), si no, aquellas siguen mandando. */
+  .saldos-correccion-campos > :nth-child(n + 2) {
+    grid-column: auto;
+  }
+  .saldos-correccion-campos > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+/* El pago de una cuenta tiene cinco medios: van en su propio renglón. */
+.cpagar-tarjeta .pago-campo {
+  grid-column: span 3;
+}
+.cpagar-tarjeta .pago-campo-medio {
+  grid-column: 1 / -1;
+}
+@media (max-width: 600px) {
+  .cpagar-tarjeta .pago-campo {
+    grid-column: 1 / -1;
+  }
+  .cpagar-tarjeta .prov-seg {
+    flex-wrap: wrap;
+  }
+  .cpagar-tarjeta .prov-seg button {
+    flex: 1 1 30%;
+  }
+}
+
+/* Alta y ficha de una cuenta: tarjeta con cabecera verde y el formulario en una columna. */
+.cpagar-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.cpagar-tarjeta {
+  max-width: 820px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 18px;
+}
+.cpagar-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 22px;
+  color: #ffffff;
+  background: radial-gradient(120% 160% at 100% 0%, #2a9a6f 0%, rgba(42, 154, 111, 0) 60%),
+    linear-gradient(135deg, #0b3d2e, #0e4b38 60%, #13644a);
+}
+.cpagar-cabecera-icono {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: #f3c043;
+  color: #3b2b00;
+}
+.cpagar-cabecera strong {
+  display: block;
+  font-size: 16.5px;
+}
+.cpagar-cabecera span {
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.82;
+}
+.cpagar-cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px 22px 22px;
+}
+.cpagar-campos {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.cpagar-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.cpagar-tipos {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.cpagar-tipo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  background: #f4f6f3;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease-out, border-color 0.15s ease-out;
+}
+.cpagar-tipo:hover {
+  background: #eef1ed;
+}
+.cpagar-tipo-icono {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--c) 15%, #ffffff);
+  color: var(--c);
+}
+.cpagar-tipo.activo {
+  background: color-mix(in srgb, var(--c) 10%, #ffffff);
+  border-color: var(--c);
+  color: color-mix(in srgb, var(--c) 85%, #000000);
+}
+.cpagar-tipo.activo .cpagar-tipo-icono {
+  background: var(--c);
+  color: #ffffff;
+}
+.cpagar-fila {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.cpagar-repite {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+.cpagar-repite button {
+  padding: 10px 4px;
+  border: 1.5px solid #dfe4de;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cpagar-repite button.activo {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+/* Remito, Factura y Sin comprobante: en un tercio del ancho "Sin comprobante" no entra; baja a dos
+   renglones en vez de cortarse. */
+.cpagar-repite.deuda-tipos button,
+.cpagar-repite.saldos-correccion-tipos button {
+  white-space: normal;
+  line-height: 1.15;
+}
+.cpagar-aviso {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff8e1;
+  color: #6d5100;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.cpagar-aviso svg {
+  flex-shrink: 0;
+}
+.cpagar-acciones {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-rule);
+}
+
+/* Ficha: título con el ícono del tipo y la lista de pagos. */
+.cpagar-titulo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.cpagar-titulo h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+.cpagar-subtitulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.cpagar-seccion-h {
+  padding: 16px 22px;
+  font-size: 15px;
+  font-weight: 800;
+}
+.cpagar-pago {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 22px;
+  border-top: 1px solid var(--border-rule);
+  font-size: 14px;
+}
+.cpagar-pago-anulado {
+  opacity: 0.55;
+}
+.cpagar-pago-anulado .cpagar-pago-monto {
+  text-decoration: line-through;
+}
+.cpagar-pago-medio {
+  font-weight: 700;
+}
+.cpagar-pago-monto {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.cpagar-confirmar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 700px) {
+  .cpagar-tipos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cpagar-fila {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cpagar-fila.deuda-fila {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cargar-que {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cpagar-repite {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .cpagar-cuerpo {
+    padding: 18px 16px;
+  }
+  .cpagar-pago {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 12px 16px;
+  }
+  .cpagar-acciones .btn {
+    flex: 1;
+  }
+}

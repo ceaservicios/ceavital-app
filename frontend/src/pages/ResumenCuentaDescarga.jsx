@@ -24,7 +24,7 @@ export default function ResumenCuentaDescarga({ ruta, onSesionVencida }) {
     const params = new URLSearchParams();
     if (modo === 'rango') {
       if (!desde && !hasta) {
-        setError('Elegí al menos una fecha (desde o hasta).');
+        setError('Indicá al menos una fecha (desde o hasta).');
         return;
       }
       if (desde && hasta && desde > hasta) {
@@ -61,7 +61,7 @@ export default function ResumenCuentaDescarga({ ruta, onSesionVencida }) {
     <form className="card cliente-card" onSubmit={descargar}>
       <span className="cliente-seccion-titulo">Resumen de cuenta</span>
       <div className="cliente-hint">
-        Descargá un PDF con los datos del cliente, los cargos, pagos y ajustes, el saldo corrido y el saldo final.
+        PDF con los datos del cliente, los cargos, pagos y ajustes del período, el saldo de cada movimiento y el saldo final.
       </div>
 
       {error && <div className="alert alert-danger">{error}</div>}
@@ -92,7 +92,7 @@ export default function ResumenCuentaDescarga({ ruta, onSesionVencida }) {
 
       <div className="cliente-acciones">
         <button type="submit" className="btn btn-primary" disabled={descargando}>
-          {descargando ? 'Generando PDF…' : 'Descargar resumen (PDF)'}
+          {descargando ? 'Generando PDF…' : 'Descargar PDF'}
         </button>
       </div>
     </form>

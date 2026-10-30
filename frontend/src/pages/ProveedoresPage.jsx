@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client.js';
+import ConAvatar from '../components/ConAvatar.jsx';
+import Hero from '../components/Hero.jsx';
 import { formatearFecha, formatearMonto } from '../utils/format.js';
-import { IconoLapiz } from './stockComun.jsx';
-import { estadoDeuda } from './proveedoresComun.jsx';
+import { IconoLapiz, useBarraFija } from './stockComun.jsx';
 import './ClientesEmpresaPage.css';
 import './ProveedoresPage.css';
 
 // Lista de proveedores a todo el ancho (2026-10-28, pedido del usuario: "queda todo muy
-// amontonado"). El lápiz lleva al perfil (/proveedores/:id): lo que trajo, lo que se le pagó y
-// sus datos. "Cargar mercadería" suma al stock lo que trajo un proveedor.
+// amontonado"). La fila y el lápiz llevan a la ficha (/proveedores/:id): compras, pagos y datos.
+// "Ingresar mercadería" registra una compra y suma los productos al stock.
 export default function ProveedoresPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -17,6 +18,7 @@ export default function ProveedoresPage() {
   const [busqueda, setBusqueda] = useState('');
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
+  const barraRef = useBarraFija();
   const exito = location.state?.exito ?? null;
 
   useEffect(() => {
@@ -43,27 +45,22 @@ export default function ProveedoresPage() {
   );
 
   return (
-    <div className="cliente-page">
-      <div className="cliente-kpis">
-        <div className="card cliente-kpi">
-          <span className="cliente-kpi-label">Proveedores activos</span>
-          <span className="cliente-kpi-value">{kpis.activos}</span>
-        </div>
-        <div className="card cliente-kpi">
-          <span className="cliente-kpi-label">Le debés en total</span>
-          <span className="cliente-kpi-value">{formatearMonto(kpis.deuda)}</span>
-        </div>
-        <div className="card cliente-kpi">
-          <span className="cliente-kpi-label">Comprado este mes</span>
-          <span className="cliente-kpi-value">{formatearMonto(kpis.compradoMes)}</span>
-        </div>
-      </div>
+    <div className="cliente-page proveedores-lista lista-entera">
+      <Hero
+        etiqueta="Saldo a pagar"
+        valor={formatearMonto(kpis.deuda)}
+        sub="Lo que se les debe. El detalle por boleta está en Saldos pendientes."
+        minis={[
+          { etiqueta: 'Proveedores activos', valor: kpis.activos, icono: 'camion', tono: 'blanco' },
+          { etiqueta: 'Compras del mes', valor: formatearMonto(kpis.compradoMes), icono: 'carrito', tono: 'azul' },
+        ]}
+      />
 
       {error && <div className="alert alert-danger">{error}</div>}
       {exito && <div className="alert alert-exito">{exito}</div>}
 
       <div className="card cliente-card">
-        <div className="cliente-toolbar proveedores-toolbar">
+        <div className="cliente-toolbar proveedores-toolbar" ref={barraRef}>
           <input
             className="cliente-buscar"
             type="text"
@@ -72,17 +69,20 @@ export default function ProveedoresPage() {
             onChange={(e) => setBusqueda(e.target.value)}
           />
           <button type="button" className="btn" onClick={() => navigate('/proveedores/nuevo')}>
-            + Nuevo proveedor
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Agregar proveedor
           </button>
           <button type="button" className="btn btn-primary" onClick={() => navigate('/proveedores/cargar')}>
-            Cargar mercadería
+            Ingresar mercadería
           </button>
         </div>
 
         {cargando ? (
           <div className="cliente-vacio">Cargando…</div>
         ) : filtrados.length === 0 ? (
-          <div className="cliente-vacio">{proveedores.length === 0 ? 'Todavía no hay proveedores cargados.' : 'Sin resultados.'}</div>
+          <div className="cliente-vacio">{proveedores.length === 0 ? 'Todavía no hay proveedores registrados.' : 'Sin resultados para esa búsqueda.'}</div>
         ) : (
           <div className="cliente-tabla-wrap">
             <table className="cliente-tabla">
@@ -91,45 +91,43 @@ export default function ProveedoresPage() {
                   <th>Proveedor</th>
                   <th className="prov-opcional">Contacto</th>
                   <th className="prov-opcional">Última compra</th>
-                  <th className="num">Le debés</th>
+                  <th className="num">Saldo pendiente</th>
                   <th className="accion" aria-label="Acciones" />
                 </tr>
               </thead>
               <tbody>
-                {filtrados.map((p) => {
-                  const deuda = estadoDeuda(p.saldo);
-                  return (
-                    <tr key={p.id} onClick={() => navigate(`/proveedores/${p.id}`)}>
-                      <td className="cliente-td-nombre">
+                {filtrados.map((p) => (
+                  <tr key={p.id} onClick={() => navigate(`/proveedores/${p.id}`)}>
+                    <td className="cliente-td-nombre">
+                      <ConAvatar id={p.id} nombre={p.nombre}>
                         {p.nombre}
                         {p.condicion_pago && <div className="cliente-td-sub">{p.condicion_pago}</div>}
-                      </td>
-                      <td className="prov-opcional">
-                        <div>{p.telefono || '—'}</div>
-                        {p.email && <div className="cliente-td-sub celda-ellipsis">{p.email}</div>}
-                      </td>
-                      <td className="prov-opcional">{p.ultima_compra ? formatearFecha(p.ultima_compra) : '—'}</td>
-                      <td className="num">
-                        <span className={`cliente-saldo cliente-saldo-${deuda.clave}`}>{formatearMonto(p.saldo)}</span>
-                        <div className="cliente-td-sub">{deuda.texto}</div>
-                      </td>
-                      <td className="accion">
-                        <button
-                          type="button"
-                          className="boton-icono"
-                          title="Ver y editar"
-                          aria-label={`Ver y editar ${p.nombre}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/proveedores/${p.id}`);
-                          }}
-                        >
-                          <IconoLapiz />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                      </ConAvatar>
+                    </td>
+                    <td className="prov-opcional">
+                      <div>{p.telefono || <span className="dato-vacio">—</span>}</div>
+                      {p.email && <div className="cliente-td-sub celda-ellipsis">{p.email}</div>}
+                    </td>
+                    <td className="prov-opcional">{p.ultima_compra ? formatearFecha(p.ultima_compra) : <span className="dato-vacio">—</span>}</td>
+                    <td className="num">
+                      <span className={`lista-saldo${p.saldo > 0 ? '' : ' lista-saldo-cero'}`}>{formatearMonto(p.saldo)}</span>
+                    </td>
+                    <td className="accion">
+                      <button
+                        type="button"
+                        className="boton-icono"
+                        title="Ver y editar"
+                        aria-label={`Ver y editar ${p.nombre}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/proveedores/${p.id}`);
+                        }}
+                      >
+                        <IconoLapiz />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

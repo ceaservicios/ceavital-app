@@ -1,16 +1,21 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
+import Hero from '../components/Hero.jsx';
+import ConAvatar from '../components/ConAvatar.jsx';
+import Pestanas from '../components/Pestanas.jsx';
+import { COLOR } from '../utils/colores.js';
 import { formatearFechaHora, formatearMonto } from '../utils/format.js';
-import { EstadoPedido, ItemsPedido } from './pedidosComun.jsx';
+import { EstadoPedido, IconoDesplegar, ItemsPedido } from './pedidosComun.jsx';
 import './ClientesEmpresaPage.css';
 import './Pedidos.css';
+import './ProveedoresPage.css';
 
 const FILTROS = [
-  { clave: 'pendiente', texto: 'Pendientes' },
-  { clave: 'aprobado', texto: 'Aprobados' },
-  { clave: 'rechazado', texto: 'Rechazados' },
-  { clave: 'cancelado', texto: 'Cancelados' },
-  { clave: 'todos', texto: 'Todos' },
+  { clave: 'pendiente', texto: 'Pendientes', icono: 'reloj', color: COLOR.ambar },
+  { clave: 'aprobado', texto: 'Aprobados', icono: 'check', color: COLOR.verde },
+  { clave: 'rechazado', texto: 'Rechazados', icono: 'alerta', color: COLOR.rojo },
+  { clave: 'cancelado', texto: 'Cancelados', icono: 'menos', color: COLOR.gris },
+  { clave: 'todos', texto: 'Todos', icono: 'grilla', color: COLOR.azul },
 ];
 
 // Pedidos que los clientes-empresa arman desde su portal. Acá el negocio
@@ -85,7 +90,7 @@ export default function PedidosClientePage() {
     try {
       const cargado = await api.get(`/pedidos-cliente/${id}`);
       // Si mientras tanto se abrió otro pedido, esta respuesta ya no corresponde: descartarla
-      // (si no, quedaba el detalle de A bajo la fila B y "Sí, aprobar" actuaba sobre B).
+      // (si no, quedaba el detalle de A bajo la fila B y "Aprobar pedido" actuaba sobre B).
       if (abiertoRef.current === id) setDetalle(cargado);
     } catch (err) {
       if (abiertoRef.current === id) setError(err instanceof ApiError ? err.message : 'No se pudo cargar el pedido.');
@@ -98,7 +103,7 @@ export default function PedidosClientePage() {
     if (enviandoRef.current) return;
     if (tipo === 'rechazar' && !motivo.trim()) {
       setExito(null);
-      setError('Escribí el motivo del rechazo: lo ve el cliente.');
+      setError('Indicá el motivo del rechazo: el cliente lo va a ver.');
       return;
     }
     enviandoRef.current = true;
@@ -112,7 +117,7 @@ export default function PedidosClientePage() {
         setExito(`Pedido #${id} aprobado. Se generó la venta #${r.venta.id} a cuenta corriente por ${formatearMonto(r.venta.total)}.`);
       } else {
         await api.post(`/pedidos-cliente/${id}/rechazar`, { motivo: motivo.trim() });
-        setExito(`Pedido #${id} rechazado. La reserva de stock quedó liberada.`);
+        setExito(`Pedido #${id} rechazado. Se liberó el stock reservado.`);
       }
       cerrarDetalle();
     } catch (err) {
@@ -129,38 +134,25 @@ export default function PedidosClientePage() {
 
   return (
     <div className="cliente-page pedidos-page">
-      <div className="cliente-kpis">
-        <div className="card cliente-kpi">
-          <span className="cliente-kpi-label">Pedidos pendientes</span>
-          <span className="cliente-kpi-value">{kpis.pendientes}</span>
-        </div>
-        <div className="card cliente-kpi">
-          <span className="cliente-kpi-label">Monto pendiente</span>
-          <span className="cliente-kpi-value">{formatearMonto(kpis.montoPendiente)}</span>
-        </div>
-        <div className="card cliente-kpi">
-          <span className="cliente-kpi-label">Pedidos en total</span>
-          <span className="cliente-kpi-value">{kpis.total}</span>
-        </div>
-      </div>
+      <Hero
+        etiqueta="Monto pendiente"
+        valor={formatearMonto(kpis.montoPendiente)}
+        sub="Pedidos de clientes que esperan aprobación."
+        minis={[
+          { etiqueta: 'Pedidos pendientes', valor: kpis.pendientes, icono: 'reloj', tono: 'amarillo' },
+          { etiqueta: 'Total de pedidos', valor: kpis.total, icono: 'ticket', tono: 'azul' },
+        ]}
+      />
 
-      <div className="cliente-tabs" role="tablist">
-        {FILTROS.map((f) => (
-          <button
-            key={f.clave}
-            type="button"
-            role="tab"
-            aria-selected={filtro === f.clave}
-            className={`cliente-tab${filtro === f.clave ? ' cliente-tab-activa' : ''}`}
-            onClick={() => {
-              setFiltro(f.clave);
-              cerrarDetalle();
-            }}
-          >
-            {f.texto} ({conteo(f.clave)})
-          </button>
-        ))}
-      </div>
+      <Pestanas
+        items={FILTROS.map((f) => ({ ...f, n: conteo(f.clave) }))}
+        activa={filtro}
+        onCambiar={(clave) => {
+          setFiltro(clave);
+          cerrarDetalle();
+        }}
+        etiqueta="Pedidos por estado"
+      />
 
       {error && <div className="alert alert-danger">{error}</div>}
       {exito && <div className="alert alert-exito">{exito}</div>}
@@ -171,7 +163,7 @@ export default function PedidosClientePage() {
         ) : visibles.length === 0 ? (
           <div className="cliente-vacio">
             {pedidos.length === 0
-              ? 'Todavía no hay pedidos. Aparecen acá cuando un cliente arma uno desde su portal.'
+              ? 'Todavía no hay pedidos. Aparecen acá cuando un cliente los hace desde el portal.'
               : 'No hay pedidos en este estado.'}
           </div>
         ) : (
@@ -179,54 +171,121 @@ export default function PedidosClientePage() {
             <table className="cliente-tabla">
               <thead>
                 <tr>
-                  <th>N°</th>
-                  <th>Fecha</th>
+                  <th className="tabla-oculto-celu">N°</th>
+                  <th className="tabla-oculto-celu">Fecha</th>
                   <th>Cliente</th>
-                  <th className="num">Líneas</th>
+                  <th className="num tabla-oculto-celu">Productos</th>
                   <th className="num">Total</th>
-                  <th>Estado</th>
+                  <th className="tabla-oculto-celu">Estado</th>
+                  <th className="fila-desplegar" aria-label="Ver detalle" />
                 </tr>
               </thead>
               <tbody>
                 {visibles.map((p) => (
                   <Fragment key={p.id}>
                     <tr className={abierto === p.id ? 'pedido-fila-abierta' : undefined} onClick={() => abrir(p.id)}>
-                      <td>#{p.id}</td>
-                      <td>{formatearFechaHora(p.creado_en)}</td>
-                      <td className="cliente-td-nombre">{p.cliente_razon_social}</td>
-                      <td className="num">{p.cantidad_lineas}</td>
-                      <td className="num">{formatearMonto(p.total)}</td>
+                      <td className="tabla-oculto-celu">#{p.id}</td>
+                      <td className="tabla-oculto-celu">{formatearFechaHora(p.creado_en)}</td>
                       <td>
+                        <ConAvatar id={p.cliente_empresa_id} nombre={p.cliente_razon_social}>
+                          <div className="cliente-td-nombre">{p.cliente_razon_social}</div>
+                          <div className="cliente-td-sub tabla-solo-celu">
+                            Pedido #{p.id} · {formatearFechaHora(p.creado_en)}
+                          </div>
+                        </ConAvatar>
+                      </td>
+                      <td className="num tabla-oculto-celu">{p.cantidad_lineas}</td>
+                      <td className="num pedido-total-celda">
+                        {formatearMonto(p.total)}
+                        <div className="tabla-solo-celu">
+                          <EstadoPedido estado={p.estado} />
+                        </div>
+                      </td>
+                      <td className="tabla-oculto-celu">
                         <EstadoPedido estado={p.estado} />
+                      </td>
+                      <td className="fila-desplegar">
+                        <IconoDesplegar />
                       </td>
                     </tr>
                     {abierto === p.id && (
                       <tr className="pedido-fila-detalle sin-click">
-                        <td colSpan={6}>
+                        <td colSpan={7}>
                           {cargandoDetalle || !detalle ? (
                             <div className="cliente-vacio">Cargando…</div>
                           ) : (
                             <div className="pedido-detalle">
-                              <div className="pedido-detalle-meta">
-                                <span>
-                                  Cliente: <strong>{detalle.cliente_razon_social}</strong>
-                                </span>
-                                {detalle.venta_id && (
+                              <div className="pedido-detalle-cabecera">
+                                <div className="pedido-detalle-meta">
                                   <span>
-                                    Venta: <strong>#{detalle.venta_id}</strong>
-                                    {detalle.venta_estado === 'anulada' && ' (anulada)'}
+                                    Pedido <strong>#{detalle.id ?? p.id}</strong> · {formatearFechaHora(p.creado_en)}
                                   </span>
-                                )}
-                                {detalle.resuelto_por_nombre && (
-                                  <span>
-                                    Resuelto por: <strong>{detalle.resuelto_por_nombre}</strong> · {formatearFechaHora(detalle.resuelto_en)}
-                                  </span>
+                                  {detalle.venta_id && (
+                                    <span>
+                                      Venta <strong>#{detalle.venta_id}</strong>
+                                      {detalle.venta_estado === 'anulada' && ' (anulada)'}
+                                    </span>
+                                  )}
+                                  {detalle.resuelto_por_nombre && (
+                                    <span>
+                                      Resuelto por <strong>{detalle.resuelto_por_nombre}</strong> · {formatearFechaHora(detalle.resuelto_en)}
+                                    </span>
+                                  )}
+                                </div>
+                                {detalle.estado === 'pendiente' && !accion && (
+                                  <div className="pedido-acciones">
+                                    <button type="button" className="btn" onClick={() => setAccion('rechazar')}>
+                                      Rechazar pedido
+                                    </button>
+                                    <button type="button" className="btn btn-primary" onClick={() => setAccion('aprobar')}>
+                                      Aprobar pedido
+                                    </button>
+                                  </div>
                                 )}
                               </div>
 
+                              {accion === 'aprobar' && (
+                                <div className="pedido-confirmar">
+                                  <span>
+                                    <strong>¿Aprobar el pedido?</strong> Se descuenta el stock y se cargan{' '}
+                                    <strong>{formatearMonto(detalle.total)}</strong> a la cuenta corriente de{' '}
+                                    <strong>{detalle.cliente_razon_social}</strong>. Para revertirlo, hay que anular la venta desde Caja.
+                                  </span>
+                                  <div className="pedido-confirmar-botones">
+                                    <button type="button" className="btn" disabled={enviando} onClick={() => setAccion(null)}>
+                                      Cancelar
+                                    </button>
+                                    <button type="button" className="btn btn-primary" disabled={enviando} onClick={() => resolver('aprobar')}>
+                                      {enviando ? 'Aprobando…' : 'Aprobar pedido'}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {accion === 'rechazar' && (
+                                <div className="pedido-confirmar">
+                                  <label htmlFor="motivo-rechazo">Motivo del rechazo (lo va a ver el cliente)</label>
+                                  <textarea
+                                    id="motivo-rechazo"
+                                    maxLength={500}
+                                    value={motivo}
+                                    onChange={(e) => setMotivo(e.target.value)}
+                                    placeholder="Ej.: sin stock de ese producto hasta la semana próxima."
+                                  />
+                                  <div className="pedido-confirmar-botones">
+                                    <button type="button" className="btn" disabled={enviando} onClick={() => setAccion(null)}>
+                                      Cancelar
+                                    </button>
+                                    <button type="button" className="btn btn-peligro" disabled={enviando} onClick={() => resolver('rechazar')}>
+                                      {enviando ? 'Rechazando…' : 'Rechazar pedido'}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
                               {detalle.observaciones && (
                                 <div className="pedido-motivo">
-                                  <strong>Nota del cliente:</strong> {detalle.observaciones}
+                                  <strong>Observaciones del cliente:</strong> {detalle.observaciones}
                                 </div>
                               )}
                               {detalle.motivo_rechazo && (
@@ -238,56 +297,6 @@ export default function PedidosClientePage() {
                               <div className="cliente-tabla-wrap">
                                 <ItemsPedido items={detalle.items} total={detalle.total} />
                               </div>
-
-                              {detalle.estado === 'pendiente' && !accion && (
-                                <div className="pedido-acciones">
-                                  <button type="button" className="btn btn-primary" onClick={() => setAccion('aprobar')}>
-                                    Aprobar pedido
-                                  </button>
-                                  <button type="button" className="btn" onClick={() => setAccion('rechazar')}>
-                                    Rechazar
-                                  </button>
-                                </div>
-                              )}
-
-                              {accion === 'aprobar' && (
-                                <div className="pedido-confirmar">
-                                  <span>
-                                    Al aprobar se descuenta el stock y se le carga <strong>{formatearMonto(detalle.total)}</strong> a la
-                                    cuenta corriente de <strong>{detalle.cliente_razon_social}</strong> (si después hay que deshacerlo,
-                                    se anula la venta desde Caja).
-                                  </span>
-                                  <div className="pedido-confirmar-botones">
-                                    <button type="button" className="btn btn-primary" disabled={enviando} onClick={() => resolver('aprobar')}>
-                                      {enviando ? 'Aprobando…' : 'Sí, aprobar'}
-                                    </button>
-                                    <button type="button" className="btn" disabled={enviando} onClick={() => setAccion(null)}>
-                                      Volver
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-
-                              {accion === 'rechazar' && (
-                                <div className="pedido-confirmar">
-                                  <label htmlFor="motivo-rechazo">Motivo del rechazo (lo ve el cliente)</label>
-                                  <textarea
-                                    id="motivo-rechazo"
-                                    maxLength={500}
-                                    value={motivo}
-                                    onChange={(e) => setMotivo(e.target.value)}
-                                    placeholder="Ej.: no tenemos ese producto hasta la semana próxima…"
-                                  />
-                                  <div className="pedido-confirmar-botones">
-                                    <button type="button" className="btn btn-primary" disabled={enviando} onClick={() => resolver('rechazar')}>
-                                      {enviando ? 'Rechazando…' : 'Confirmar rechazo'}
-                                    </button>
-                                    <button type="button" className="btn" disabled={enviando} onClick={() => setAccion(null)}>
-                                      Volver
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
                             </div>
                           )}
                         </td>

@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
+import Hero from '../components/Hero.jsx';
+import { ConIcono } from '../components/ConAvatar.jsx';
+import { colorDe } from '../utils/colores.js';
 import { formatearMonto } from '../utils/format.js';
 import { etiquetaPack, factorMedida, sufijoPrecio, tienePack, vendeSuelto } from '../utils/presentacion.js';
+import './ClientesEmpresaPage.css';
+import './CostosPage.css';
 
 // Costo y venta de referencia de un producto (2026-10-11): suelto, por unidad/kg/litro; si se
 // vende solo por caja, los de la caja (así se compra y se vende). `base`: cuánto stock es eso.
@@ -11,8 +16,11 @@ function valores(p) {
   }
   return { costo: p.precio_costo, venta: p.precio_venta, base: factorMedida(p.medida), etiqueta: sufijoPrecio(p.medida) };
 }
-import './CostosPage.css';
 
+const porcentaje = (n) => `${n.toFixed(1).replace('.', ',')} %`;
+
+// Rediseño 2026-10-29: tabla real con las cifras alineadas a la derecha; el margen % es un número
+// y solo el margen bajo (menos de 10 %) lleva una píldora de aviso (Dorado).
 export default function CostosPage() {
   const [productos, setProductos] = useState([]);
   const [busqueda, setBusqueda] = useState('');
@@ -57,77 +65,93 @@ export default function CostosPage() {
   }, [productos]);
 
   if (cargando) {
-    return <div className="card costos-vacio">Cargando…</div>;
+    return <div className="cliente-vacio">Cargando…</div>;
   }
 
+  const unidad = (etiqueta) => etiqueta && <span className="costos-unidad">{etiqueta.startsWith('/') ? etiqueta : ` ${etiqueta}`}</span>;
+
   return (
-    <div className="costos-page">
-      <div className="costos-kpis">
-        <div className="card costos-kpi">
-          <span className="costos-kpi-label">Margen promedio</span>
-          <span className="costos-kpi-value">{kpis.margenPromedio.toFixed(1).replace('.', ',')}%</span>
-        </div>
-        <div className="card costos-kpi">
-          <span className="costos-kpi-label">Costo total de inventario</span>
-          <span className="costos-kpi-value">{formatearMonto(kpis.costoTotal)}</span>
-        </div>
-        <div className="card costos-kpi">
-          <span className="costos-kpi-label">Ganancia proyectada</span>
-          <span className="costos-kpi-value">{formatearMonto(kpis.gananciaProyectada)}</span>
-        </div>
-      </div>
+    <div className="cliente-page costos-page">
+      <Hero
+        etiqueta="Ganancia proyectada del stock"
+        valor={formatearMonto(kpis.gananciaProyectada)}
+        sub="Lo que se ganaría vendiendo todo el stock a los precios de hoy."
+        minis={[
+          { etiqueta: 'Margen promedio', valor: porcentaje(kpis.margenPromedio), icono: 'tendencia', tono: 'verde' },
+          { etiqueta: 'Costo del inventario', valor: formatearMonto(kpis.costoTotal), icono: 'billetera', tono: 'azul' },
+        ]}
+      />
 
       {error && <div className="alert alert-danger">{error}</div>}
 
-      <div className="card costos-tabla-card">
-        <input
-          type="text"
-          className="costos-search"
-          placeholder="Buscar producto…"
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-        />
-        <div className="costos-tabla">
-          <div className="costos-tabla-head">
-            <span style={{ flex: 2 }}>Producto</span>
-            <span style={{ flex: 1, textAlign: 'right' }}>Precio costo</span>
-            <span style={{ flex: 1, textAlign: 'right' }}>Precio venta</span>
-            <span style={{ flex: 1, textAlign: 'right' }}>Margen</span>
-            <span style={{ flex: 1, textAlign: 'right' }}>Margen %</span>
-          </div>
-          {filas.length === 0 && <div className="costos-vacio">No hay productos para mostrar.</div>}
-          {filas.map((p) => (
-            <div className="costos-fila" key={p.id}>
-              <span style={{ flex: 2 }} className="costos-fila-nombre">
-                {p.nombre}
-                {/* Venta por pack (2026-10-11): el costo es por unidad, el del pack es costo × unidades. */}
-                {tienePack(p) && vendeSuelto(p) && (
-                  <span className="costos-fila-pack">
-                    {etiquetaPack(p.pack_nombre, p.pack_unidades, p.medida)}: {formatearMonto(p.precio_pack)} · margen{' '}
-                    {formatearMonto(p.precio_pack - Math.round((p.precio_costo * p.pack_unidades) / factorMedida(p.medida)))}
-                  </span>
-                )}
-                {!vendeSuelto(p) && tienePack(p) && (
-                  <span className="costos-fila-pack">Solo por {etiquetaPack(p.pack_nombre, p.pack_unidades, p.medida)}</span>
-                )}
-              </span>
-              <span style={{ flex: 1, textAlign: 'right' }} className="costos-fila-muted">
-                {formatearMonto(p.v.costo)}
-                {p.v.etiqueta && <span className="costos-fila-pack">{p.v.etiqueta}</span>}
-              </span>
-              <span style={{ flex: 1, textAlign: 'right' }}>
-                {formatearMonto(p.v.venta)}
-                {p.v.etiqueta && <span className="costos-fila-pack">{p.v.etiqueta}</span>}
-              </span>
-              <span style={{ flex: 1, textAlign: 'right', fontWeight: 700 }}>{formatearMonto(p.margen)}</span>
-              <span style={{ flex: 1, textAlign: 'right' }}>
-                <span className={`costos-badge ${p.margenPorc >= 25 ? 'costos-badge-alto' : 'costos-badge-bajo'}`}>
-                  {p.margenPorc.toFixed(1).replace('.', ',')}%{p.margenPorc < 10 ? ' · Margen bajo' : ''}
-                </span>
-              </span>
-            </div>
-          ))}
+      <div className="card cliente-card costos-card">
+        <div className="cliente-toolbar">
+          <input
+            type="text"
+            className="cliente-buscar costos-buscar"
+            placeholder="Buscar producto…"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
         </div>
+        {filas.length === 0 ? (
+          <div className="cliente-vacio">
+            {busqueda.trim() ? 'Ningún producto coincide con la búsqueda.' : 'Todavía no hay productos con costo registrado.'}
+          </div>
+        ) : (
+          <div className="cliente-tabla-wrap">
+            <table className="cliente-tabla costos-tabla">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th className="num">Costo</th>
+                  <th className="num">Precio de venta</th>
+                  <th className="num">Margen</th>
+                  <th className="num">Margen %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filas.map((p) => (
+                  <tr key={p.id} className="sin-click">
+                    <td className="costos-td-producto">
+                      <ConIcono icono="paquete" color={colorDe(p.id)}>
+                        <div className="cliente-td-nombre">{p.nombre}</div>
+                        {/* Venta por pack (2026-10-11): el costo es por unidad, el del pack es costo × unidades. */}
+                        {tienePack(p) && vendeSuelto(p) && (
+                          <div className="cliente-td-sub">
+                            {etiquetaPack(p.pack_nombre, p.pack_unidades, p.medida)}: {formatearMonto(p.precio_pack)} · Margen{' '}
+                            {formatearMonto(p.precio_pack - Math.round((p.precio_costo * p.pack_unidades) / factorMedida(p.medida)))}
+                          </div>
+                        )}
+                        {!vendeSuelto(p) && tienePack(p) && (
+                          <div className="cliente-td-sub">Se vende solo por {etiquetaPack(p.pack_nombre, p.pack_unidades, p.medida).toLowerCase()}</div>
+                        )}
+                      </ConIcono>
+                    </td>
+                    <td className="num costos-td-costo" data-label="Costo">
+                      {formatearMonto(p.v.costo)}
+                      {unidad(p.v.etiqueta)}
+                    </td>
+                    <td className="num costos-td-venta" data-label="Precio de venta">
+                      {formatearMonto(p.v.venta)}
+                      {unidad(p.v.etiqueta)}
+                    </td>
+                    <td className="num costos-td-margen" data-label="Margen">
+                      {formatearMonto(p.margen)}
+                    </td>
+                    <td className="num costos-td-pct">
+                      {p.margenPorc < 10 ? (
+                        <span className="costos-badge-bajo">{porcentaje(p.margenPorc)} · Margen bajo</span>
+                      ) : (
+                        porcentaje(p.margenPorc)
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

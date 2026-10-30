@@ -1,0 +1,85 @@
+/* Pestañas con ícono de color (2026-10-29, opción B elegida por el usuario). Cada pestaña trae su
+   color en --c: el ícono va en un cuadrito pálido de ese color y la activa se pinta toda de su color. */
+/* Las que no entran bajan a otra fila: nunca quedan cortadas al costado. */
+.pestanas {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-self: flex-start;
+  gap: 4px;
+  max-width: 100%;
+  padding: 5px;
+  border-radius: 14px;
+  background: #e9ece8;
+  flex-shrink: 0;
+}
+.pestana {
+  --c: #6b7570;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 14px 6px 6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease-out, color 0.15s ease-out;
+}
+.pestana:hover {
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--text-primary);
+}
+.pestana:focus-visible {
+  outline: 2px solid var(--c);
+  outline-offset: 1px;
+}
+.pestana-icono {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--c) 15%, #ffffff);
+  color: var(--c);
+}
+.pestana-n {
+  font-size: 12px;
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: #dde2dc;
+  color: var(--text-secondary);
+}
+.pestana-activa,
+.pestana-activa:hover {
+  background: linear-gradient(140deg, color-mix(in srgb, var(--c) 82%, #ffffff), var(--c));
+  color: #ffffff;
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--c) 35%, transparent);
+}
+.pestana-activa .pestana-icono {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+.pestana-activa .pestana-n {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+/* Tablet y celular: cada fila de pestañas ocupa todo el ancho. */
+@media (max-width: 860px) {
+  .pestana {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+@media (max-width: 600px) {
+  .pestana {
+    gap: 7px;
+    padding-right: 12px;
+    font-size: 13.5px;
+  }
+}

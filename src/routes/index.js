@@ -6,6 +6,7 @@ import vencimientosRoutes from './vencimientos.routes.js';
 import ventasRoutes from './ventas.routes.js';
 import cajaRoutes from './caja.routes.js';
 import proveedoresRoutes from './proveedores.routes.js';
+import saldosRoutes from './saldos.routes.js';
 import usuariosRoutes from './usuarios.routes.js';
 import catalogosRoutes from './catalogos.routes.js';
 import clientesEmpresaRoutes from './clientes-empresa.routes.js';
@@ -40,6 +41,7 @@ router.use('/vencimientos', vencimientosRoutes);
 router.use('/ventas', ventasRoutes);
 router.use('/caja', cajaRoutes);
 router.use('/proveedores', proveedoresRoutes);
+router.use('/saldos', saldosRoutes);
 router.use('/usuarios', usuariosRoutes);
 router.use('/negocio', negocioRoutes);
 // Módulos apagados por el plan de la instalación: 404 antes de autenticar.

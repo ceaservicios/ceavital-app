@@ -35,7 +35,7 @@ export function textoDelDesglose(desglose) {
 export function TablaAviso({ aviso }) {
   if (!aviso) return <p className="sa-ayuda">Cargá el próximo vencimiento para ver el aviso del mes.</p>;
   if (!aviso.configurado) {
-    return <p className="sa-ayuda">Todavía no hay implementación ni abono cargados: el aviso sale sin desglose ni total.</p>;
+    return <p className="sa-ayuda">Sin implementación ni abono cargados: el aviso se envía sin desglose ni total.</p>;
   }
   const conCosto = aviso.modificaciones.con_costo;
   return (
@@ -58,13 +58,14 @@ export function TablaAviso({ aviso }) {
         {conCosto.length === 0 ? (
           <tr>
             <td>Modificaciones con costo</td>
-            <td className="sa-monto">—</td>
+            <td className="sa-monto sa-faltante">—</td>
           </tr>
         ) : (
           conCosto.map((m) => (
             <tr key={m.id}>
               <td>
-                Modificación del {formatearFecha(m.fecha)} · {m.detalle}
+                Modificación del {formatearFecha(m.fecha)}
+                <div className="sa-detalle-fila">{m.detalle}</div>
               </td>
               <td className="sa-monto">{formatearUsd(m.importe)}</td>
             </tr>
@@ -82,9 +83,9 @@ export function TablaAviso({ aviso }) {
 // Dólar blue venta y el total del aviso en pesos, debajo de la tabla del aviso (2026-10-21). Viene de
 // GET /sa/panel (`cotizacion`, con la caché de 30 minutos del servidor) o null si no hay cotización.
 export function LineaCotizacion({ cotizacion }) {
-  if (!cotizacion) return <p className="sa-ayuda">Sin cotización del dólar blue por ahora: el aviso sale solo en dólares.</p>;
+  if (!cotizacion) return <p className="sa-cotizacion">Sin cotización del dólar blue disponible: el aviso se envía solo en dólares.</p>;
   return (
-    <p className="sa-detalle sa-cotizacion">
+    <p className="sa-cotizacion">
       Dólar blue venta: <span className="sa-sin-corte">{formatearCotizacion(cotizacion.venta_cent)}</span>{' '}
       <span className="sa-sin-corte">
         ({formatearFecha(cotizacion.dia)}, {cotizacion.fuente})
@@ -133,24 +134,9 @@ export function SeccionImplementacion({ implementacion: impl, ocupado, ejecutar 
     ejecutar(() => api.put('/sa/implementacion', form), (r) => (r.cobro.implementacion ? 'Implementación guardada.' : 'Implementación quitada.'));
   }
 
-  return (
-    <section className="card sa-card">
-      <div className="sa-card-cabecera">
-        <h2 className="sa-h2">Implementación</h2>
-        <span className="sa-chip sa-chip-neutro">{impl ? `${impl.pagadas} de ${impl.cuotas} cuotas pagadas` : 'Sin cargar'}</span>
-      </div>
-      {impl && (
-        <p className="sa-detalle">
-          Total en cuotas: {formatearUsd(impl.total)} ({formatearUsd(impl.valor)} + {porcentaje(impl.recargo)}) · {impl.cuotas}{' '}
-          {impl.cuotas === 1 ? 'cuota' : 'cuotas'} de {formatearUsd(impl.importe_cuota)}
-          {impl.importe_ultima !== impl.importe_cuota ? ` (la última, de ${formatearUsd(impl.importe_ultima)})` : ''}.
-        </p>
-      )}
-      <p className="sa-ayuda">
-        Valor de la implementación en dólares y el recargo por pagarla en cuotas. Cada aviso mensual suma la cuota que vence ese mes; cuando se
-        pagan todas, el aviso sigue solo con el abono. Los cuatro campos vacíos quitan la implementación.
-      </p>
-      <form className="sa-form-cuota" onSubmit={guardar}>
+  const formulario = (
+    <form className="sa-aviso-form" onSubmit={guardar}>
+      <div className="sa-campos sa-campos-4">
         <div className="field">
           <label htmlFor="sa-impl-valor">Valor (USD)</label>
           <input id="sa-impl-valor" type="text" inputMode="decimal" maxLength={15} placeholder="Ej.: 1500" {...campo('valor')} />
@@ -167,28 +153,55 @@ export function SeccionImplementacion({ implementacion: impl, ocupado, ejecutar 
           <label htmlFor="sa-impl-primera">Primera cuota vence el</label>
           <input id="sa-impl-primera" type="date" {...campo('primera_vence')} />
         </div>
+      </div>
+      <div className="sa-form-pie">
         <button type="submit" className="btn btn-primary" disabled={ocupado}>
           Guardar implementación
         </button>
-      </form>
-      {impl && (
+      </div>
+    </form>
+  );
+
+  const comoFunciona = (
+    <details className="sa-como">
+      <summary>Cómo funciona</summary>
+      <ul>
+        <li>Cada aviso mensual incluye la cuota que vence ese mes. Con todas las cuotas pagas, el aviso sigue solo con el abono.</li>
+        <li>Con los cuatro campos vacíos se quita la implementación.</li>
+      </ul>
+    </details>
+  );
+
+  return (
+    <section className="card sa-card">
+      <div className="sa-card-cabecera">
+        <h2 className="sa-h2">Implementación</h2>
+        <span className="sa-chip sa-chip-neutro">{impl ? `${impl.pagadas} de ${impl.cuotas} cuotas pagadas` : 'Sin configurar'}</span>
+      </div>
+      {impl ? (
         <>
-          <div className="sa-cuotas-resumen">
-            <div>
-              <span className="sa-cuotas-numero">{impl.pagadas}</span>
-              <span className="sa-cuotas-rotulo">Pagadas</span>
+          <p className="sa-detalle">
+            Total en cuotas: {formatearUsd(impl.total)} ({formatearUsd(impl.valor)} + {porcentaje(impl.recargo)}) · {impl.cuotas}{' '}
+            {impl.cuotas === 1 ? 'cuota' : 'cuotas'} de {formatearUsd(impl.importe_cuota)}
+            {impl.importe_ultima !== impl.importe_cuota ? ` (la última, de ${formatearUsd(impl.importe_ultima)})` : ''}.
+          </p>
+          <div className="sa-cifras">
+            <div className="sa-cifra">
+              <span className="sa-cifra-label">Cuotas pagadas</span>
+              <span className="sa-cifra-valor">{impl.pagadas}</span>
             </div>
-            <div>
-              <span className="sa-cuotas-numero">{impl.faltan}</span>
-              <span className="sa-cuotas-rotulo">Faltan</span>
+            <div className="sa-cifra">
+              <span className="sa-cifra-label">Cuotas pendientes</span>
+              <span className="sa-cifra-valor">{impl.faltan}</span>
             </div>
-            <div>
-              <span className="sa-cuotas-numero">{formatearUsd(impl.pagado)}</span>
-              <span className="sa-cuotas-rotulo">Pagado de {formatearUsd(impl.total)}</span>
+            <div className="sa-cifra">
+              <span className="sa-cifra-label">Pagado</span>
+              <span className="sa-cifra-valor">{formatearUsd(impl.pagado)}</span>
+              <span className="sa-cifra-meta">de {formatearUsd(impl.total)}</span>
             </div>
-            <div>
-              <span className="sa-cuotas-numero">{formatearUsd(impl.resta)}</span>
-              <span className="sa-cuotas-rotulo">Resta pagar</span>
+            <div className="sa-cifra">
+              <span className="sa-cifra-label">Saldo pendiente</span>
+              <span className="sa-cifra-valor">{formatearUsd(impl.resta)}</span>
             </div>
           </div>
           <div
@@ -206,16 +219,16 @@ export function SeccionImplementacion({ implementacion: impl, ocupado, ejecutar 
               <thead>
                 <tr>
                   <th>Cuota</th>
-                  <th>Vence</th>
-                  <th>Importe</th>
+                  <th>Vencimiento</th>
+                  <th className="sa-monto">Importe</th>
                   <th>Estado</th>
                   <th>Pago</th>
                 </tr>
               </thead>
               <tbody>
                 {impl.detalle.map((c) => (
-                  <tr key={c.numero} className={c.estado === 'vencida' ? 'sa-cuota-vencida' : undefined}>
-                    <td className="sa-monto">
+                  <tr key={c.numero}>
+                    <td className="sa-fuerte">
                       {c.numero} de {impl.cuotas}
                     </td>
                     <td>{formatearFecha(c.vence)}</td>
@@ -223,12 +236,26 @@ export function SeccionImplementacion({ implementacion: impl, ocupado, ejecutar 
                     <td>
                       <span className={`sa-chip ${ESTADO_CUOTA[c.estado].clase}`}>{ESTADO_CUOTA[c.estado].texto}</span>
                     </td>
-                    <td>{c.pago ? `${formatearFecha(c.pago.fecha)} · ${NOMBRE_MEDIO[c.pago.medio_pago] ?? c.pago.medio_pago}` : '—'}</td>
+                    <td className={c.pago ? undefined : 'sa-faltante'}>
+                      {c.pago ? `${formatearFecha(c.pago.fecha)} · ${NOMBRE_MEDIO[c.pago.medio_pago] ?? c.pago.medio_pago}` : '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <div className="sa-seccion">
+            <h3 className="sa-h3">Configuración</h3>
+            <p className="sa-ayuda">Valor de la implementación en dólares y recargo por pagarla en cuotas.</p>
+            {formulario}
+            {comoFunciona}
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="sa-ayuda">Valor de la implementación en dólares y recargo por pagarla en cuotas.</p>
+          {formulario}
+          {comoFunciona}
         </>
       )}
     </section>
@@ -255,42 +282,51 @@ export function SeccionAbono({ abono, ocupado, ejecutar }) {
     <section className="card sa-card">
       <div className="sa-card-cabecera">
         <h2 className="sa-h2">Abono mensual</h2>
-        <span className="sa-chip sa-chip-neutro">{abono ? `${formatearUsd(abono.importe)} por mes` : 'Sin cargar'}</span>
+        <span className="sa-chip sa-chip-neutro">{abono ? `${formatearUsd(abono.importe)} por mes` : 'Sin configurar'}</span>
       </div>
       <p className="sa-ayuda">
-        Se cobra todos los meses, sin fin. Lo que incluye sale tal cual en el aviso por mail, en una sola línea. Los dos campos vacíos quitan el
-        abono.
+        Se cobra todos los meses, sin fecha de fin. El detalle figura tal cual en el aviso por mail, en una sola línea.
       </p>
-      <form className="sa-form-abono" onSubmit={guardar}>
-        <div className="field">
-          <label htmlFor="sa-abono-detalle">Qué incluye</label>
-          <input
-            id="sa-abono-detalle"
-            type="text"
-            maxLength={200}
-            value={detalle}
-            onChange={(e) => setDetalle(e.target.value)}
-            disabled={ocupado}
-            placeholder="Ej.: Mantenimiento de servidor / actualizaciones / copia de seguridad / soporte"
-          />
+      <form className="sa-aviso-form" onSubmit={guardar}>
+        <div className="sa-campos sa-campos-4">
+          <div className="field sa-campo-doble">
+            <label htmlFor="sa-abono-detalle">Detalle del servicio</label>
+            <input
+              id="sa-abono-detalle"
+              type="text"
+              maxLength={200}
+              value={detalle}
+              onChange={(e) => setDetalle(e.target.value)}
+              disabled={ocupado}
+              placeholder="Ej.: Mantenimiento del servidor, actualizaciones, copia de seguridad y soporte"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="sa-abono-importe">Importe mensual (USD)</label>
+            <input
+              id="sa-abono-importe"
+              type="text"
+              inputMode="decimal"
+              maxLength={15}
+              value={importe}
+              onChange={(e) => setImporte(e.target.value)}
+              disabled={ocupado}
+              placeholder="Ej.: 110"
+            />
+          </div>
         </div>
-        <div className="field">
-          <label htmlFor="sa-abono-importe">Importe por mes (USD)</label>
-          <input
-            id="sa-abono-importe"
-            type="text"
-            inputMode="decimal"
-            maxLength={15}
-            value={importe}
-            onChange={(e) => setImporte(e.target.value)}
-            disabled={ocupado}
-            placeholder="Ej.: 110"
-          />
+        <div className="sa-form-pie">
+          <button type="submit" className="btn btn-primary" disabled={ocupado}>
+            Guardar abono
+          </button>
         </div>
-        <button type="submit" className="btn btn-primary" disabled={ocupado}>
-          Guardar abono
-        </button>
       </form>
+      <details className="sa-como">
+        <summary>Cómo funciona</summary>
+        <ul>
+          <li>Con el detalle y el importe vacíos se quita el abono.</li>
+        </ul>
+      </details>
     </section>
   );
 }
@@ -329,8 +365,8 @@ export function SeccionModificaciones({ modificaciones: mods, hayVencimiento, oc
       },
       (r) =>
         r.sin_cargo
-          ? `Modificación anotada sin cargo. Sale en el aviso del ${formatearFecha(r.aviso)}.`
-          : `Modificación anotada: ${formatearUsd(r.importe)}, se cobra con el aviso del ${formatearFecha(r.aviso)}.`
+          ? `Modificación registrada sin cargo. Figura en el aviso del ${formatearFecha(r.aviso)}.`
+          : `Modificación registrada: ${formatearUsd(r.importe)}. Se cobra con el aviso del ${formatearFecha(r.aviso)}.`
     );
   }
 
@@ -348,20 +384,20 @@ export function SeccionModificaciones({ modificaciones: mods, hayVencimiento, oc
       <div className="sa-card-cabecera">
         <h2 className="sa-h2">Modificaciones solicitadas</h2>
         {mods.sin_cargo > 0 ? (
-          <span className={`sa-chip ${quedan ? 'sa-chip-ok' : 'sa-chip-aviso'}`}>
+          <span className="sa-chip sa-chip-neutro">
             Sin cargo: {mods.usadas} de {mods.sin_cargo} usadas
           </span>
         ) : (
-          <span className="sa-chip sa-chip-neutro">Sin modificaciones sin cargo</span>
+          <span className="sa-chip sa-chip-neutro">Ninguna sin cargo</span>
         )}
       </div>
       <p className="sa-ayuda">
-        Las primeras van sin cargo (son para todo el contrato, no se renuevan por mes) y salen en el aviso como &quot;Sin cargo&quot;. Cuando se
-        usan todas, cada modificación nueva se anota con su importe y se cobra una sola vez, en el aviso siguiente. El aviso siempre aclara que las modificaciones que se implementen tienen un costo
-        adicional.
+        Las modificaciones sin cargo valen para todo el contrato (no se renuevan por mes) y figuran en el aviso como «Sin cargo». Una vez usadas,
+        cada modificación nueva se cobra una sola vez, en el aviso siguiente. El aviso siempre aclara que las modificaciones implementadas tienen
+        un costo adicional.
       </p>
       <form className="sa-form-fila" onSubmit={guardarSinCargo}>
-        <div className="field sa-campo-sin-cargo">
+        <div className="field sa-campo-corto">
           <label htmlFor="sa-modif-sin-cargo">Modificaciones sin cargo</label>
           <input
             id="sa-modif-sin-cargo"
@@ -379,36 +415,45 @@ export function SeccionModificaciones({ modificaciones: mods, hayVencimiento, oc
           Guardar
         </button>
       </form>
-      {!hayVencimiento && <p className="sa-ayuda">Para anotar una modificación, cargá primero el próximo vencimiento en Aviso del mes.</p>}
-      <form className="sa-form-modif" onSubmit={anotar}>
-        <div className="field">
-          <label htmlFor="sa-modif-fecha">Fecha</label>
-          <input id="sa-modif-fecha" type="date" max={fechaHoyISO()} required {...campo('fecha')} />
-        </div>
-        <div className="field sa-modif-detalle">
-          <label htmlFor="sa-modif-detalle">Detalle (sale en el mail)</label>
-          <input id="sa-modif-detalle" type="text" maxLength={200} required placeholder="Qué se modificó" {...campo('detalle')} />
-        </div>
-        <div className="field">
-          <label htmlFor="sa-modif-importe">Importe (USD)</label>
-          <input
-            id="sa-modif-importe"
-            type="text"
-            inputMode="decimal"
-            maxLength={15}
-            required={!quedan}
-            placeholder={quedan ? 'Sin cargo' : 'Ej.: 80'}
-            {...campo('importe')}
-            value={quedan ? '' : nueva.importe}
-            disabled={ocupado || quedan}
-          />
-        </div>
-        <button type="submit" className="btn btn-primary" disabled={ocupado || !hayVencimiento}>
-          Anotar modificación
-        </button>
-      </form>
+
+      <div className="sa-seccion">
+        <h3 className="sa-h3">Registrar modificación</h3>
+        {!hayVencimiento && <p className="sa-ayuda">Para registrar una modificación, cargá primero el próximo vencimiento (en Aviso del mes).</p>}
+        <form className="sa-aviso-form" onSubmit={anotar}>
+          <div className="sa-campos sa-campos-4">
+            <div className="field">
+              <label htmlFor="sa-modif-fecha">Fecha</label>
+              <input id="sa-modif-fecha" type="date" max={fechaHoyISO()} required {...campo('fecha')} />
+            </div>
+            <div className="field">
+              <label htmlFor="sa-modif-importe">Importe (USD)</label>
+              <input
+                id="sa-modif-importe"
+                type="text"
+                inputMode="decimal"
+                maxLength={15}
+                required={!quedan}
+                placeholder={quedan ? 'Sin cargo' : 'Ej.: 80'}
+                {...campo('importe')}
+                value={quedan ? '' : nueva.importe}
+                disabled={ocupado || quedan}
+              />
+            </div>
+            <div className="field sa-campo-doble">
+              <label htmlFor="sa-modif-detalle">Detalle (figura en el aviso)</label>
+              <input id="sa-modif-detalle" type="text" maxLength={200} required placeholder="Descripción de la modificación" {...campo('detalle')} />
+            </div>
+          </div>
+          <div className="sa-form-pie">
+            <button type="submit" className="btn btn-primary" disabled={ocupado || !hayVencimiento}>
+              Registrar modificación
+            </button>
+          </div>
+        </form>
+      </div>
+
       {mods.lista.length === 0 ? (
-        <p className="sa-ayuda">Todavía no hay modificaciones anotadas.</p>
+        <p className="sa-vacio">Todavía no hay modificaciones registradas.</p>
       ) : (
         <div className="sa-tabla-scroll">
           <table className="sa-tabla sa-tabla-modif">
@@ -416,22 +461,20 @@ export function SeccionModificaciones({ modificaciones: mods, hayVencimiento, oc
               <tr>
                 <th>Fecha</th>
                 <th>Detalle</th>
-                <th>Importe</th>
+                <th className="sa-monto">Importe</th>
                 <th>Aviso</th>
-                <th aria-label="Acciones" />
+                <th className="sa-accion" aria-label="Acciones" />
               </tr>
             </thead>
             <tbody>
               {mods.lista.map((m) => (
-                <tr key={m.id} className={m.estado === 'anulada' ? 'sa-pago-anulado' : undefined}>
+                <tr key={m.id} className={m.estado === 'anulada' ? 'sa-anulado' : undefined}>
                   <td>{formatearFecha(m.fecha)}</td>
                   <td className="sa-modif-texto">{m.detalle}</td>
-                  <td className="sa-monto">
-                    {m.sin_cargo ? <span className="sa-chip sa-chip-ok">Sin cargo</span> : formatearUsd(m.importe)}
-                  </td>
+                  <td className="sa-monto">{m.sin_cargo ? <span className="sa-chip sa-chip-ok">Sin cargo</span> : formatearUsd(m.importe)}</td>
                   <td className="sa-una-linea">
                     {m.estado === 'a_cobrar' ? (
-                      <span className="sa-chip sa-chip-aviso">A cobrar el {formatearFecha(m.aviso)}</span>
+                      <span className="sa-chip sa-chip-info">A cobrar el {formatearFecha(m.aviso)}</span>
                     ) : (
                       <>
                         {formatearFecha(m.aviso)}
@@ -439,12 +482,12 @@ export function SeccionModificaciones({ modificaciones: mods, hayVencimiento, oc
                       </>
                     )}
                   </td>
-                  <td className="sa-pago-accion">
+                  <td className="sa-accion">
                     {m.estado === 'anulada' ? (
-                      <>
+                      <div className="sa-celda-estado">
                         <span className="sa-chip sa-chip-neutro">Anulada</span>
-                        <div className="sa-detalle-fila">{m.anulada_motivo}</div>
-                      </>
+                        <span className="sa-detalle-fila">{m.anulada_motivo}</span>
+                      </div>
                     ) : anulando === m.id ? (
                       <div className="sa-confirmar">
                         <input
@@ -453,10 +496,10 @@ export function SeccionModificaciones({ modificaciones: mods, hayVencimiento, oc
                           value={motivo}
                           onChange={(e) => setMotivo(e.target.value)}
                           disabled={ocupado}
-                          placeholder="Motivo"
+                          placeholder="Motivo de la anulación"
                           aria-label="Motivo de la anulación"
                         />
-                        <button type="button" className="btn sa-btn-peligro" disabled={ocupado || !motivo.trim()} onClick={() => anular(m.id)}>
+                        <button type="button" className="btn btn-peligro" disabled={ocupado || !motivo.trim()} onClick={() => anular(m.id)}>
                           Anular
                         </button>
                         <button
@@ -474,7 +517,7 @@ export function SeccionModificaciones({ modificaciones: mods, hayVencimiento, oc
                     ) : (
                       <button
                         type="button"
-                        className="btn"
+                        className="btn sa-btn-fantasma"
                         disabled={ocupado || m.estado === 'cobrada'}
                         title={m.estado === 'cobrada' ? 'Ya se cobró: para anularla, anulá primero ese pago' : undefined}
                         onClick={() => {

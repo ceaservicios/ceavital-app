@@ -46,6 +46,18 @@ export async function anularCompraController(req, res) {
   res.json(await proveedoresService.anularCompra(id, compraId, quien(req)));
 }
 
+// A mano, desde Saldos pendientes (2026-10-29): una deuda sin mercadería y la corrección de una boleta.
+export async function crearDeudaManualController(req, res) {
+  const id = parsearId(req.params.id, 'proveedor_id');
+  res.status(201).json(await proveedoresService.crearDeudaManual(id, req.body || {}, quien(req)));
+}
+
+export async function corregirCompraController(req, res) {
+  const id = parsearId(req.params.id, 'proveedor_id');
+  const compraId = parsearId(req.params.compraId, 'compra_id');
+  res.json(await proveedoresService.corregirCompra(id, compraId, req.body || {}, quien(req)));
+}
+
 export async function registrarPagoController(req, res) {
   const id = parsearId(req.params.id, 'proveedor_id');
   res.status(201).json(await proveedoresService.registrarPago(id, req.body || {}, quien(req)));

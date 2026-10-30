@@ -1,381 +1,799 @@
+/* Caja (punto de venta). Rediseño 2026-10-30 (pedido del usuario): abajo del panel verde, una
+   franja con los medios de cobro en una fila y "Cobrar venta" al lado; abajo, el carrito a todo el
+   ancho, con el buscador (lector de códigos) y los filtros por categoría y proveedor. Sin altura
+   fija (usuario, 2026-10-29): el carrito crece con lo cargado y baja la página entera, sin scroll
+   adentro; al bajar, la franja, el buscador y los títulos del carrito quedan fijos arriba. Caja es
+   solo para cobrar (2026-10-16): los números del turno están en "Ventas". */
+
 .caja-page {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  height: 100%;
-  min-height: 0;
-}
-
-.caja-body {
-  flex: 1;
-  display: flex;
   gap: 16px;
-  /* sin min-height: 0: si el contenido es más alto que la ventana, la página crece y scrollea en vez de pisar lo que sigue */
-}
-/* Pantallas anchas: carrito a la izquierda y cobro a la derecha, los dos a toda la altura.
-   Desde 2026-10-16 Caja es solo para cobrar: las tarjetas del turno y los gastos están en
-   "Ventas diarias", así que el carrito ya no comparte la columna. */
-@media (min-width: 1201px) {
-  .caja-page {
-    display: grid;
-    grid-template-columns: 1.6fr 1fr;
-    grid-template-rows: minmax(0, 1fr);
-    gap: 16px;
-  }
-  .caja-body {
-    display: contents;
-  }
-  .caja-carrito {
-    grid-column: 1;
-    grid-row: 1;
-  }
-  .caja-cobro {
-    grid-column: 2;
-    grid-row: 1;
-    /* Si igual no entra, scrollea dentro de la tarjeta en vez de salirse de ella. */
-    overflow-y: auto;
-  }
 }
 
-/* Con el menú lateral (240px) los dos paneles ya no entran lado a lado por
-   debajo de ~1200px de ventana: se apilan y la página crece con su contenido
-   (sin altura fija, que era lo que hacía que los bloques se pisaran). */
-@media (max-width: 1200px) {
-  .caja-page {
-    height: auto;
-  }
-  .caja-body {
-    flex-direction: column;
-  }
-  .caja-body > * {
-    flex: none;
-    min-width: 0;
-    max-width: 100%;
-  }
-}
-
-.caja-carrito {
-  flex: 1.6;
-  padding: 20px;
+.caja-carrito,
+.caja-cobro {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  min-height: 0;
+}
+.caja-carrito {
+  --pad-y: 20px;
+  --pad-x: 24px;
+  padding: var(--pad-y) var(--pad-x);
+  gap: 16px;
+}
+.caja-cobro {
+  padding: 14px 20px;
+  gap: 10px;
 }
 
-.caja-search {
+/* Escritorio: la franja queda fija arriba al bajar (el -16px es el margen de arriba del contenido,
+   que Chrome descuenta), y debajo el buscador y los títulos del carrito. Los altos los mide
+   CajaPage (--alto-cobro, --alto-barra). */
+@media (min-width: 1201px) {
+  .caja-cobro {
+    position: sticky;
+    top: -16px;
+    z-index: 5;
+    box-shadow: 0 6px 18px rgba(16, 32, 26, 0.07);
+  }
+  .caja-barra {
+    position: sticky;
+    top: calc(var(--alto-cobro, 0px) - 16px);
+    z-index: 4;
+    margin: calc(var(--pad-y) * -1) calc(var(--pad-x) * -1) -16px;
+    padding: var(--pad-y) var(--pad-x) 16px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+  }
+  .caja-carrito .caja-cart-head {
+    top: calc(var(--alto-cobro, 0px) + var(--alto-barra, 0px) - 16px);
+  }
+}
+
+/* Con el menú lateral, por debajo de ~1200px la franja no entra en una fila: el cobro va debajo
+   del carrito, como antes, con los medios en tarjetas y "Cobrar venta" a todo el ancho. */
+@media (max-width: 1200px) {
+  .caja-carrito {
+    order: 1;
+  }
+  .caja-cobro {
+    order: 2;
+    padding: 20px 24px;
+    gap: 14px;
+  }
+}
+
+/* ---------- Buscador: el protagonista, con los filtros al lado ---------- */
+/* La lista de productos se abre a todo el ancho de la fila, encima del carrito. */
+.caja-barra-fila {
   position: relative;
   display: flex;
   align-items: center;
+  gap: 8px;
+}
+.caja-barra-fila .stock-filtro {
+  height: 48px;
+}
+.caja-barra-fila .stock-filtro-limpiar {
+  height: 48px;
+}
+.caja-search {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
   gap: 10px;
-  background: var(--bg-muted);
-  border: 1px solid var(--border-default);
+  height: 48px;
+  padding: 0 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
-  padding: 11px 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.caja-search:hover {
+  border-color: #b9c1ba;
+}
+.caja-search:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+.caja-search-icono {
+  flex: none;
+  color: var(--text-muted);
 }
 .caja-search input {
   flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
   border: none;
   background: transparent;
   font: inherit;
-  font-size: 14px;
-  outline: none;
+  font-size: 16px;
+  font-weight: 500;
   color: var(--text-primary);
+  outline: none;
 }
+.caja-search input::placeholder {
+  color: #7d8682;
+}
+
 .caja-search-dropdown {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
   right: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  max-height: min(360px, 60vh);
+  overflow: auto;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-  z-index: 10;
-  max-height: 260px;
-  overflow: auto;
+  box-shadow: var(--shadow-float);
+}
+/* Con un filtro: qué se está viendo, arriba de la lista. */
+.caja-search-cab {
+  grid-column: 1 / -1;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  background: var(--bg-muted);
+  border-bottom: 1px solid var(--border-default);
+}
+.caja-search-cab strong {
+  color: var(--color-primary);
 }
 .caja-search-item {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 16px;
   width: 100%;
-  padding: 10px 14px;
+  min-height: 56px;
+  padding: 8px 16px;
   border: none;
+  border-bottom: 1px solid var(--border-rule);
   background: transparent;
-  border-bottom: 1px solid var(--bg-muted);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
+  color: var(--text-primary);
   text-align: left;
   cursor: pointer;
+  transition: background 0.15s ease;
 }
-.caja-search-item:hover {
-  background: var(--bg-muted);
+.caja-search-item:last-child {
+  border-bottom: none;
+}
+button.caja-search-item:hover {
+  background: var(--bg-hover);
+}
+.caja-search-cabeza {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.caja-search-nombre {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+.caja-search-stock {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-tertiary);
 }
 .caja-search-item-precio {
-  color: var(--text-tertiary);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
   font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.caja-search-item-pack-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-tertiary);
 }
 .caja-search-empty {
-  padding: 12px 14px;
-  font-size: 13.5px;
+  grid-column: 1 / -1;
+  padding: 14px 16px;
+  font-size: 14px;
   color: var(--text-tertiary);
 }
+/* Un producto que se vende suelto y por pack: dos botones, cada uno con su precio. */
+.caja-search-item-pack {
+  flex-wrap: wrap;
+  cursor: default;
+}
+.caja-search-opciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.caja-search-opciones button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.caja-search-opciones button:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+.caja-search-opciones strong {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
 
+/* ---------- Carrito ---------- */
 .caja-cart-list {
-  flex: 1;
-  overflow: auto;
   display: flex;
   flex-direction: column;
 }
 .caja-cart-empty {
-  padding: 32px 12px;
-  text-align: center;
-  color: var(--text-tertiary);
-  font-size: 14px;
-}
-.caja-cart-head {
-  display: flex;
-  padding: 8px 10px;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--bg-app);
-}
-.caja-cart-row {
-  display: flex;
-  align-items: center;
-  padding: 12px 10px;
-  border-bottom: 1px solid var(--bg-app);
-}
-.caja-cart-row:hover {
-  background: #f6f7f8;
-}
-.caja-cart-nombre {
-  font-size: 14.5px;
-  font-weight: 600;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 160px;
+  padding: 32px 16px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-tertiary);
+  background: color-mix(in srgb, var(--color-primary) 4%, #ffffff);
+  border: 1.5px dashed color-mix(in srgb, var(--color-primary) 28%, #ffffff);
+  border-radius: var(--radius-card);
 }
-.caja-cart-warning {
-  font-size: 11.5px;
+.caja-cart-empty strong {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+/* Carrito vacío con el ícono en el verde del panel (estilo del 2026-10-29). */
+.caja-cart-empty-icono {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 6px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  background: linear-gradient(140deg, #2a9a6f, #0e4b38);
+  box-shadow: 0 6px 16px rgba(14, 75, 56, 0.25);
+}
+.caja-cart-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 36px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
+  font-size: 12.5px;
   font-weight: 600;
-  color: var(--color-danger);
+  color: var(--text-tertiary);
 }
+.caja-cart-row {
+  flex: none;
+  display: flex;
+  align-items: center;
+  min-height: 60px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-rule);
+}
+.caja-cart-nombre {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.caja-cart-nombre-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+.caja-cart-nombre-texto {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+.caja-cart-descuenta,
+.caja-cart-promo-hint {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+.caja-cart-promo {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ok-ink);
+}
+/* Falta el peso o no alcanza el stock: es una alerta real. */
+.caja-cart-warning {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--danger-ink);
+}
+
+/* Unidad / Caja en la línea: selector segmentado chico. */
+.caja-cart-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+}
+.caja-cart-switch button {
+  height: 26px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.caja-cart-switch button:hover {
+  color: var(--text-primary);
+}
+.caja-cart-switch button.activo {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(16, 32, 26, 0.12);
+}
+
+/* Cantidad: un solo control [− n +] con botones de 34px (sirven en tablet). */
 .caja-cart-cantidad {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
 }
-.caja-cart-cantidad button {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  border: 1px solid var(--border-default);
+.caja-cart-stepper {
+  display: inline-flex;
+  align-items: stretch;
+  height: 34px;
   background: var(--bg-surface);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.caja-cart-stepper button {
+  width: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  cursor: pointer;
   padding: 0;
-}
-.caja-cart-cantidad span {
-  font-size: 14px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  min-width: 16px;
-  text-align: center;
-}
-.caja-cart-remove {
   border: none;
   background: transparent;
-  color: #b0453b;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
   cursor: pointer;
-  padding: 4px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.caja-cart-stepper button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.caja-cart-stepper button:active {
+  background: var(--neutral-bg);
+}
+.caja-cart-stepper > span {
+  min-width: 38px;
   display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border-left: 1px solid var(--border-rule);
+  border-right: 1px solid var(--border-rule);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* Peso de una línea por kg o litro. */
+.caja-cart-peso {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.caja-cart-peso input {
+  width: 88px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.caja-cart-peso input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+.caja-cart-precio {
+  font-size: 14px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.caja-cart-subtotal {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.caja-cart-remove {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.caja-cart-remove:hover {
+  background: var(--danger-bg);
+  color: var(--danger-ink);
 }
 
-.caja-cobro {
-  flex: 1;
-  min-width: 320px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.caja-section-label {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-secondary);
-  display: block;
-  margin-bottom: 10px;
-}
-.caja-medios-grid {
+/* ---------- Cobro ---------- */
+/* El total a cobrar está en el panel verde de arriba (2026-10-29). Arriba de la franja, el rótulo
+   y, a la derecha, lo que se le puede hacer al último ticket. */
+.caja-cobro-cabeza {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+  min-height: 22px;
+}
+.caja-section-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.caja-cobro-fila {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  min-width: 0;
+}
+/* Medios de cobro: una fila de opciones grandes; la elegida, con borde y fondo de su color. Cada
+   una mide lo de su texto y reparten el resto. */
+.caja-medios-grid {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+}
+/* Seis medios (Plan Empresa, con Cuenta corriente) o ventana de menos de 1280: en dos filas. */
+.caja-medios-grid.caja-medios-dos-filas {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .caja-medio-btn {
-  width: calc(50% - 5px);
+  flex: 1 1 auto;
   display: flex;
-  flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 12px 8px;
+  min-height: 56px;
+  padding: 8px 6px;
+  white-space: nowrap;
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
-  border: 1.5px solid var(--border-default);
-  color: var(--text-secondary);
   background: var(--bg-surface);
-  font-size: 12.5px;
-  font-weight: 700;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
   cursor: pointer;
-  font-family: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
-.caja-medio-btn-active {
-  border: 2px solid var(--color-primary);
-  background: var(--color-primary);
+.caja-medio-btn svg {
+  flex: none;
+  color: var(--text-muted);
+  transition: color 0.15s ease;
+}
+.caja-medio-btn span {
+  min-width: 0;
+}
+.caja-medio-btn:hover {
+  border-color: #b9c1ba;
+  background: var(--bg-hover);
+}
+.caja-medio-btn.caja-medio-btn-active {
+  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 0.5px var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+.caja-medio-btn-active svg {
+  color: var(--color-primary);
+}
+
+/* Estilo "panel protagonista" (elegido por el usuario el 2026-10-29): cada medio de cobro con su
+   color (--c). */
+.caja-medio-btn {
+  --c: var(--color-primary);
+  border-radius: 12px;
+  font-weight: 700;
+}
+.caja-medio-btn svg {
+  box-sizing: content-box;
+  padding: 7px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--c) 14%, #ffffff);
+  color: var(--c);
+}
+.caja-medio-btn.caja-medio-btn-active {
+  border-color: var(--c);
+  box-shadow: inset 0 0 0 1px var(--c);
+  background: color-mix(in srgb, var(--c) 8%, #ffffff);
+  color: color-mix(in srgb, var(--c) 80%, #000000);
+}
+.caja-medio-btn.caja-medio-btn-active svg {
+  background: var(--c);
   color: #ffffff;
 }
 
-.caja-cliente {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px;
-  background: var(--bg-muted);
-  border-radius: var(--radius-sm);
-}
-.caja-cliente label {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-secondary);
-}
-.caja-cliente select {
-  width: 100%;
-  padding: 9px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border-default);
-  background: var(--bg-surface);
-  font: inherit;
-  font-size: 13.5px;
-}
 .caja-cliente-vacio {
   font-size: 13px;
-  color: var(--text-tertiary);
-  line-height: 1.4;
-}
-
-.caja-total-block {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-/* Total a cobrar en un recuadro propio (2026-10-11, "está muy pegado a la tarjeta"):
-   fondo verde suave, aire alrededor y el monto en el verde de marca. */
-.caja-total-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin: 2px 0 12px;
-  padding: 13px 18px;
-  border-radius: var(--radius-card);
-  background: linear-gradient(135deg, rgba(14, 75, 56, 0.09) 0%, rgba(14, 75, 56, 0.04) 100%);
-  border: 1px solid rgba(14, 75, 56, 0.16);
-}
-.caja-total-label {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-primary);
-}
-.caja-total-detalle {
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
+  line-height: 1.45;
   color: var(--text-tertiary);
 }
-.caja-total-value {
-  font-size: 34px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.02em;
-  color: var(--color-primary);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+
+/* Cobrar: el botón inconfundible. Deshabilitado queda gris (no un verde lavado). */
+.btn.caja-cobrar {
+  flex: 0 0 clamp(170px, 19%, 280px);
+  min-height: 56px;
+  font-size: 16px;
+}
+.btn.caja-cobrar:disabled,
+.btn.caja-cobrar:disabled:hover {
+  opacity: 1;
+  background: var(--neutral-bg);
+  border-color: var(--border-default);
+  color: var(--text-muted);
 }
 
-.caja-anular {
-  margin-top: 12px;
-  text-align: center;
-}
-.caja-anular-link {
-  background: none;
-  border: none;
-  color: var(--color-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-}
-.caja-anular-link:hover {
-  color: #16306b;
-}
-.caja-anular-confirm {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-.caja-anular-confirm .btn {
-  padding: 6px 14px;
-  font-size: 12.5px;
-}
+/* Último ticket: cambiar el medio o anularlo, a la derecha del rótulo. */
 .caja-anular-links {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+}
+.caja-anular-link {
+  min-height: 28px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-secondary);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.caja-anular-link:hover {
+  text-decoration: underline;
+}
+.caja-anular-link-peligro {
+  color: var(--danger-ink);
+}
+/* Confirmar la anulación: debajo de la fila, el texto a la izquierda y los botones a la derecha. */
+.caja-anular-confirm {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 10px 16px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.caja-anular-confirm-botones {
+  display: flex;
+  gap: 8px;
+}
+.caja-anular-confirm-botones .btn {
+  flex: 1;
 }
 /* Cambiar el medio de pago del último ticket (2026-10-16). */
-.caja-medio-cambio {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  text-align: left;
-}
-.caja-medio-cambio label {
-  font-weight: 600;
-}
 .caja-medio-cambio-fila {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 .caja-medio-cambio-fila select {
-  flex: 1 1 160px;
+  flex: 0 1 320px;
   min-width: 0;
 }
 .caja-medio-cambio-fila .btn {
-  padding: 6px 14px;
-  font-size: 12.5px;
+  flex: none;
 }
+.caja-cliente select {
+  max-width: 480px;
+}
+
+/* Menos de 1280 de ancho: los cinco medios no entran en una fila y van en dos. */
+@media (max-width: 1279px) {
+  .caja-medios-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Debajo del carrito (ver arriba): los medios en tarjetas, con el ícono arriba, y "Cobrar venta" a
+   todo el ancho debajo. */
+@media (max-width: 1200px) {
+  .caja-cobro-fila {
+    flex-direction: column;
+  }
+  .caja-medio-btn {
+    flex-direction: column;
+    gap: 6px;
+    min-height: 68px;
+    padding: 10px 8px;
+    white-space: normal;
+  }
+  .btn.caja-cobrar {
+    flex: none;
+    width: 100%;
+    min-height: 52px;
+  }
+  .caja-anular-confirm {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Buscador en pantallas angostas: el buscador arriba y los dos filtros lado a lado debajo; en
+   celular, la lista en una columna. */
+@media (max-width: 1200px) {
+  .caja-barra-fila {
+    flex-wrap: wrap;
+  }
+  .caja-search {
+    flex-basis: 100%;
+  }
+  .caja-barra-fila .stock-filtro {
+    flex: 1 1 calc(50% - 4px);
+  }
+}
+@media (max-width: 860px) {
+  .caja-search-dropdown {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Celular: cada línea del carrito en dos renglones (producto arriba; cantidad, precio y
+   subtotal abajo), sin la tabla de 520px que scrolleaba de costado. */
 @media (max-width: 600px) {
+  .caja-carrito {
+    --pad-y: 16px;
+    --pad-x: 16px;
+  }
+  .caja-cobro {
+    padding: 16px;
+  }
+  .caja-medios-grid,
+  .caja-medios-grid.caja-medios-dos-filas {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .caja-carrito .caja-cart-list > * {
+    min-width: 0;
+  }
+  .caja-cart-empty {
+    min-height: 0;
+    padding: 28px 16px;
+  }
+  .caja-cart-head {
+    display: none;
+  }
+  .caja-cart-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'nombre nombre quitar'
+      'cantidad precio subtotal';
+    align-items: center;
+    gap: 10px 12px;
+    padding: 12px 0;
+  }
+  .caja-cart-row > span {
+    padding-right: 0;
+  }
+  .caja-cart-row:last-child {
+    border-bottom: none;
+  }
+  .caja-cart-nombre {
+    grid-area: nombre;
+  }
+  .caja-cart-quitar {
+    grid-area: quitar;
+    align-self: start;
+  }
+  .caja-cart-cantidad {
+    grid-area: cantidad;
+    justify-content: flex-start;
+  }
+  .caja-cart-precio {
+    grid-area: precio;
+    font-size: 13px;
+  }
+  .caja-cart-precio::before {
+    content: '× ';
+    color: var(--text-muted);
+  }
+  .caja-cart-subtotal {
+    grid-area: subtotal;
+    min-width: 72px;
+  }
+  .caja-cart-stepper {
+    height: 40px;
+  }
+  .caja-cart-stepper button {
+    width: 40px;
+  }
+  .caja-cart-peso input {
+    height: 40px;
+  }
   .caja-medio-cambio-fila select {
     flex-basis: 100%;
   }
@@ -384,131 +802,11 @@
   }
 }
 
-/* Celular: el mensaje de carrito vacío no lleva el ancho mínimo de las filas del
-   carrito (esa regla global lo dejaba cortado, con scroll de costado). */
-.caja-cart-list > .caja-cart-empty {
-  min-width: 0;
-}
-
-/* Venta por pack y precio por cantidad (2026-10-11). Un producto con pack muestra en la
-   búsqueda dos botones, Unidad y Pack, cada uno con su precio. */
-.caja-search-item-pack {
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  cursor: default;
-}
-.caja-search-opciones {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.caja-search-opciones button {
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-pill);
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: 13px;
-  padding: 5px 12px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.caja-search-opciones button:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-.caja-search-opciones strong {
-  color: var(--text-primary);
-}
-/* Unidad / Caja en la línea del carrito y cuánto descuenta (2026-10-11). */
-.caja-cart-switch {
-  align-self: flex-start;
-  display: inline-flex;
-  margin-top: 3px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-pill);
-  overflow: hidden;
-}
-.caja-cart-switch button {
-  border: none;
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: 11.5px;
-  font-weight: 700;
-  padding: 3px 10px;
-  cursor: pointer;
-}
-.caja-cart-switch button.activo {
-  background: var(--color-primary);
-  color: #ffffff;
-}
-/* Peso de una línea por kg o litro (2026-10-11). */
-.caja-cart-peso {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-secondary);
-}
-.caja-cart-peso input {
-  width: 78px;
-  padding: 6px 8px;
-  border: 1.5px solid var(--color-primary);
-  border-radius: var(--radius-sm);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 700;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.caja-cart-descuenta {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--color-primary);
-}
-.caja-search-nombre {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  text-align: left;
-}
-.caja-search-stock {
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--text-tertiary);
-}
-.caja-cart-promo {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--color-primary);
-}
-.caja-cart-promo-hint {
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--text-tertiary);
-}
-
-/* Ventanas bajas (notebook con la barra de Chrome): el cobro se compacta para que el
-   total y "Confirmar y Cobrar" entren en la tarjeta (2026-10-11). Va al final para
-   pisar los estilos base de arriba. */
+/* Ventanas bajas (notebook con la barra de Chrome): el carrito más compacto, para que se vean más
+   productos. Va al final para pisar lo de arriba. */
 @media (min-width: 1201px) and (max-height: 800px) {
-  .caja-cobro {
-    padding: 16px 20px;
-    gap: 10px;
-  }
-  .caja-total-row {
-    margin-bottom: 10px;
-  }
-  .caja-medio-btn {
-    flex-direction: row;
-    justify-content: center;
-    gap: 8px;
-    padding: 8px;
-  }
-  .caja-total-value {
-    font-size: 30px;
+  .caja-carrito {
+    --pad-y: 16px;
+    --pad-x: 20px;
   }
 }

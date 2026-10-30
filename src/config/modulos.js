@@ -15,6 +15,7 @@ export const MODULOS = {
       'Caja y punto de venta con lector de código de barras: efectivo, tarjeta, transferencia o QR, Mercado Pago y pago pendiente',
       'Stock con lotes, vencimientos y aviso de stock bajo',
       'Proveedores y pedidos a proveedores',
+      'Saldos pendientes: lo que se debe a proveedores e impuestos y servicios con vencimiento y repetición',
       'Cierre de caja con fondo, gastos y diferencia',
       'Costos y márgenes',
       'Usuarios por rol: Administrador, Encargado y Cajero',

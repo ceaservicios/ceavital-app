@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client.js';
 import { aPayloadProveedor, CamposProveedor, PROVEEDOR_VACIO } from './proveedoresComun.jsx';
 import './ClientesEmpresaPage.css';
 import './ProveedoresPage.css';
 
 // Alta de proveedor en una página propia (2026-10-28; antes un panel al costado de la lista).
+// Volver a la lista está en la barra superior.
 export default function ProveedorNuevoPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState(PROVEEDOR_VACIO);
@@ -33,13 +34,10 @@ export default function ProveedorNuevoPage() {
   return (
     <div className="cliente-page">
       <div className="cliente-encabezado">
-        <Link to="/proveedores" className="cliente-volver">
-          ← Volver a proveedores
-        </Link>
         <h1 className="cliente-h1">Nuevo proveedor</h1>
       </div>
 
-      <form className="card cliente-card cliente-form-card" onSubmit={crear}>
+      <form className="card cliente-card cliente-form-card form-angosto" onSubmit={crear}>
         {error && <div className="alert alert-danger">{error}</div>}
         <span className="cliente-seccion-titulo">Datos del proveedor</span>
         <CamposProveedor form={form} setForm={setForm} />

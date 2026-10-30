@@ -1,35 +1,36 @@
-/* Pedidos de clientes-empresa (B2B Fase 2): pantalla interna del negocio y
-   pestañas "Comprar" / "Mis pedidos" del portal. Reutiliza las clases
-   cliente-* (tarjetas, KPIs, tablas, pestañas) y solo suma lo propio. */
+/* Pedidos de clientes-empresa (B2B Fase 2): pantalla interna del negocio y pestañas "Comprar" /
+   "Mis pedidos" del portal. También lo usan Ventas (detalle desplegado de una venta y estados) y
+   la ficha del proveedor (detalle de una compra). Reutiliza las clases cliente-* y solo suma lo
+   propio. Rediseño 2026-10-29: píldoras pálidas, detalle como un pozo con borde fino ordenado como
+   un comprobante, sin pesos 800. No renombrar clases pedido-*: las usan Ventas y el Portal. */
 
-/* Estado del pedido (misma paleta que el resto: sin Rosa Coral ni Dorado,
-   que marca.md reserva para alertas urgentes). */
+/* Estado del pedido (sin Rosa Coral ni Dorado, que marca.md reserva para alertas). */
 .pedido-estado {
   display: inline-flex;
   align-items: center;
-  padding: 4px 12px;
+  height: 24px;
+  padding: 0 10px;
   border-radius: var(--radius-pill);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 600;
   white-space: nowrap;
 }
 .pedido-estado-pendiente {
-  background: #dde4f1;
-  color: #22428c;
+  background: var(--info-bg);
+  color: var(--info-ink);
 }
 .pedido-estado-aprobado {
-  background: #dceee5;
-  color: #0e4b38;
+  background: var(--ok-bg);
+  color: var(--ok-ink);
 }
 .pedido-estado-rechazado,
 .pedido-estado-cancelado {
-  background: #e3e6e8;
-  color: #5b6664;
+  background: var(--neutral-bg);
+  color: var(--neutral-ink);
 }
 
-/* La lista de pedidos crece con su detalle desplegado: scrollea la página
-   entera, no una tarjeta con altura fija (con avisos arriba el detalle
-   quedaba en un recuadro chico y los botones cortados). */
+/* La lista de pedidos crece con su detalle desplegado: scrollea la página entera, no una
+   tarjeta con altura fija. */
 .cliente-page.pedidos-page {
   height: auto;
 }
@@ -45,106 +46,194 @@
   position: static;
 }
 
-/* Detalle desplegado de un pedido */
+/* Fila que se despliega: flecha a la derecha que gira al abrir. */
+.cliente-tabla .fila-desplegar {
+  width: 1%;
+  padding-left: 4px;
+  text-align: right;
+  color: var(--text-tertiary);
+}
+.fila-desplegar svg {
+  display: block;
+  margin-left: auto;
+  transition: transform 0.15s ease;
+}
+.pedido-fila-abierta .fila-desplegar svg {
+  transform: rotate(180deg);
+}
+.cliente-tabla .pedido-fila-abierta > td {
+  border-bottom: none;
+}
+.cliente-tabla .pedido-fila-abierta .cliente-td-nombre {
+  color: var(--text-primary);
+}
+
+/* Detalle desplegado (pedido, venta, compra): un pozo con borde fino debajo de la fila. */
+.cliente-tabla .pedido-fila-detalle > td {
+  height: auto;
+  padding: 0 0 16px;
+  background: transparent;
+  cursor: default;
+}
+.pedido-fila-detalle:hover {
+  background: transparent;
+}
 .pedido-detalle {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   padding: 16px 20px;
   background: var(--bg-muted);
+  border: 1px solid var(--border-rule);
   border-radius: var(--radius-sm);
 }
 .pedido-detalle-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 24px;
-  font-size: 13.5px;
-  color: var(--text-secondary);
+  gap: 4px 24px;
+  font-size: 13px;
+  color: var(--text-tertiary);
 }
 .pedido-detalle-meta strong {
+  font-weight: 600;
   color: var(--text-primary);
 }
+/* Cabecera del detalle: datos a la izquierda, acciones a la derecha. */
+.pedido-detalle-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+.pedido-detalle-cabecera .pedido-acciones {
+  margin-left: auto;
+}
+
+/* Tabla de productos dentro del detalle. Los selectores llevan .pedido-detalle o table para
+   ganarle a .cliente-tabla th/td (la tabla de afuera). */
 .pedido-items {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13.5px;
+  font-size: 14px;
 }
-.pedido-items th {
+.pedido-detalle table.pedido-items th,
+table.pedido-items th {
   position: static;
+  height: auto;
+  padding: 0 12px 8px;
   background: transparent;
   text-align: left;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--text-tertiary);
-  padding: 6px 10px;
   border-bottom: 1px solid var(--border-default);
+  white-space: nowrap;
 }
-.pedido-items td {
+.pedido-detalle table.pedido-items td,
+table.pedido-items td {
+  height: 44px;
+  padding: 8px 12px;
   vertical-align: middle;
-  padding: 10px;
-  border-bottom: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-rule);
 }
-.pedido-items .num {
+.pedido-detalle table.pedido-items th:first-child,
+.pedido-detalle table.pedido-items td:first-child,
+table.pedido-items th:first-child,
+table.pedido-items td:first-child {
+  padding-left: 0;
+}
+.pedido-detalle table.pedido-items th:last-child,
+.pedido-detalle table.pedido-items td:last-child,
+table.pedido-items th:last-child,
+table.pedido-items td:last-child {
+  padding-right: 0;
+}
+.pedido-detalle table.pedido-items tbody tr,
+.pedido-detalle table.pedido-items tbody tr:hover {
+  background: transparent;
+  cursor: default;
+}
+table.pedido-items .num,
+table.pedido-items th.num,
+.pedido-detalle table.pedido-items th.num {
   text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.pedido-items tfoot td {
+.pedido-detalle table.pedido-items tfoot td,
+table.pedido-items tfoot td {
+  height: auto;
+  padding-top: 12px;
   border-bottom: none;
-  font-weight: 800;
+  font-weight: 700;
 }
+
 .pedido-acciones {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
 }
+/* Confirmación en dos pasos: pregunta + consecuencia, y "Cancelar" / acción a la derecha. */
 .pedido-confirmar {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  width: 100%;
   padding: 14px 16px;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  width: 100%;
-  font-size: 13.5px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.pedido-confirmar strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.pedido-confirmar label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 .pedido-confirmar textarea {
   width: 100%;
-  min-height: 64px;
+  min-height: 80px;
   resize: vertical;
   font: inherit;
   font-size: 14px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  background: var(--bg-muted);
+  border: 1px solid var(--border-control);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.pedido-confirmar textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
 }
 .pedido-confirmar-botones {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  justify-content: flex-end;
+  gap: 8px;
 }
 .pedido-motivo {
   padding: 10px 14px;
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  font-size: 13.5px;
+  border: 1px solid var(--border-rule);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
 }
-.pedido-fila-abierta > td {
-  border-bottom: none;
-}
-.pedido-fila-detalle > td {
-  padding: 0 12px 14px;
-  background: transparent;
-}
-.pedido-fila-detalle:hover {
-  background: transparent;
-}
-.pedido-fila-detalle > td {
-  cursor: default;
+.pedido-motivo strong {
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 /* ---------- Portal: comprar ---------- */
@@ -165,7 +254,7 @@
   align-items: center;
   gap: 16px;
   padding: 12px 0;
-  border-bottom: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-rule);
 }
 .pedido-prod:last-child {
   border-bottom: none;
@@ -178,8 +267,8 @@
   gap: 2px;
 }
 .pedido-prod-nombre {
-  font-size: 14.5px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 .pedido-prod-meta {
@@ -200,7 +289,7 @@
 }
 .pedido-sin-stock {
   color: var(--text-muted);
-  font-weight: 700;
+  font-weight: 600;
 }
 /* Cantidad con decimales en productos por kg o litro (2026-10-11). */
 .pedido-peso {
@@ -208,14 +297,14 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-secondary);
 }
 .pedido-peso input {
   width: 84px;
-  height: 34px;
+  height: 36px;
   padding: 0 8px;
-  border: 1.5px solid var(--border-default);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
   font: inherit;
   text-align: right;
@@ -228,17 +317,20 @@
   flex-shrink: 0;
 }
 .pedido-stepper button {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-sm);
-  border: 1.5px solid var(--border-default);
+  border: 1px solid var(--border-control);
   background: var(--bg-surface);
+  color: var(--text-primary);
   font-size: 18px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 .pedido-stepper button:hover:not(:disabled) {
+  background: var(--bg-hover);
   border-color: var(--color-primary);
 }
 .pedido-stepper button:disabled {
@@ -247,22 +339,23 @@
 }
 .pedido-stepper input {
   width: 64px;
-  height: 34px;
+  height: 36px;
   text-align: center;
   font: inherit;
-  font-size: 14.5px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  background: var(--bg-muted);
+  border: 1px solid var(--border-control);
+  background: var(--bg-surface);
 }
 .pedido-stepper input:focus {
   outline: none;
   border-color: var(--color-primary);
-  background: var(--bg-surface);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
 }
 
-/* Barra de resumen: queda a la vista mientras se recorre el catálogo. */
+/* Barra de resumen: queda a la vista mientras se recorre el catálogo (flota: lleva sombra). */
 .pedido-resumen {
   position: sticky;
   bottom: 0;
@@ -274,8 +367,8 @@
   padding: 14px 20px;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-float);
 }
 .pedido-resumen-total {
   display: flex;
@@ -284,28 +377,30 @@
   min-width: 120px;
 }
 .pedido-resumen-total span:first-child {
-  font-size: 12.5px;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-tertiary);
 }
 .pedido-resumen-total span:last-child {
   font-size: 22px;
-  font-weight: 800;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .pedido-resumen input {
   flex: 1;
   min-width: 180px;
+  min-height: var(--control-height);
   font: inherit;
   font-size: 14px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  background: var(--bg-muted);
+  border: 1px solid var(--border-control);
+  background: var(--bg-surface);
 }
 .pedido-resumen input:focus {
   outline: none;
   border-color: var(--color-primary);
-  background: var(--bg-surface);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
 }
 
 /* ---------- Portal: mis pedidos ---------- */
@@ -339,7 +434,7 @@
 }
 .pedido-tarjeta-titulo {
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 700;
 }
 .pedido-tarjeta-fecha {
   flex: 1;
@@ -348,7 +443,7 @@
   color: var(--text-tertiary);
 }
 .pedido-tarjeta-total {
-  font-weight: 800;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -380,50 +475,40 @@
   .pedido-detalle {
     padding: 14px;
   }
-}
-
-/* Celular: la lista del negocio muestra solo N°, cliente, total y estado (fecha y
-   cantidad de líneas se ven al abrir el pedido), así la tabla y su detalle entran
-   en pantalla sin scroll lateral. */
-@media (max-width: 700px) {
-  .pedidos-page .cliente-tabla > thead th:nth-child(2),
-  .pedidos-page .cliente-tabla > thead th:nth-child(4),
-  .pedidos-page .cliente-tabla > tbody > tr:not(.pedido-fila-detalle) > td:nth-child(2),
-  .pedidos-page .cliente-tabla > tbody > tr:not(.pedido-fila-detalle) > td:nth-child(4) {
-    display: none;
-  }
-  .pedidos-page .cliente-card {
-    padding: 14px;
-  }
-  .pedidos-page .cliente-tabla > thead th,
-  .pedidos-page .cliente-tabla > tbody > tr:not(.pedido-fila-detalle) > td {
-    padding-left: 6px;
-    padding-right: 6px;
-  }
-  .pedidos-page .pedido-fila-detalle > td {
-    padding: 0 0 12px;
-  }
-  .pedidos-page .pedido-items th,
-  .pedidos-page .pedido-items td {
-    padding-left: 6px;
-    padding-right: 6px;
+  .pedido-confirmar-botones .btn {
+    flex: 1 1 0;
+    min-height: 44px;
   }
 }
 
-/* Celular: las 3 pestañas del portal entran en el ancho sin cortarse. */
-@media (max-width: 700px) {
-  .portal-tabs .cliente-tab {
-    flex: 1;
-    padding: 11px 6px;
-    font-size: 13px;
-    text-align: center;
+/* Celular: la lista del negocio va en renglones de dos líneas (cliente con N° y fecha;
+   total con su estado), así la tabla y su detalle entran sin scroll lateral. */
+@media (max-width: 600px) {
+  .pedidos-page .cliente-tabla .pedido-total-celda .pedido-estado {
+    margin-top: 4px;
+  }
+  .cliente-tabla .pedido-fila-detalle > td {
+    padding-bottom: 12px;
+  }
+  .pedido-detalle table.pedido-items th,
+  .pedido-detalle table.pedido-items td {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+  .pedido-detalle-cabecera .pedido-acciones {
+    width: 100%;
+    margin-left: 0;
+  }
+  .pedido-detalle-cabecera .pedido-acciones .btn {
+    flex: 1 1 0;
+    min-height: 44px;
   }
 }
 
 /* Venta por pack y precio por cantidad (2026-10-11): un producto con pack muestra una fila
    por presentación (unidad y pack), cada una con su precio y su cantidad. */
 .pedido-prod-promo {
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--color-primary);
 }
@@ -451,7 +536,7 @@
 }
 .pedido-cantidad-pack {
   display: block;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text-tertiary);
 }
 

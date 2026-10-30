@@ -1,104 +1,117 @@
-.costos-page {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  height: 100%;
-  min-height: 0;
-}
-.costos-kpis {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
+/* Costos y márgenes (rediseño 2026-10-29). Usa las piezas cliente-* (tarjeta, buscador, tabla,
+   vacío); la franja de cifras la arma global.css ([class$='-kpis']). */
+
+/* La tarjeta mide lo que su tabla y, si no entra, scrollea por dentro. */
+.cliente-page.costos-page > .cliente-card:last-child {
+  flex: 0 1 auto;
 }
 .costos-kpi {
-  flex: 1;
-  min-width: 200px;
-  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  min-width: 0;
 }
-.costos-kpi-label {
+.cliente-toolbar .costos-buscar {
+  flex: 0 1 360px;
+}
+
+@media (min-width: 601px) {
+  .costos-tabla td.num,
+  .costos-tabla th.num {
+    width: 15%;
+  }
+}
+.costos-td-margen,
+.costos-td-pct {
+  font-weight: 600;
+}
+.costos-unidad {
   font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-tertiary);
-}
-.costos-kpi-value {
-  font-size: 26px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.costos-tabla-card {
-  flex: 1;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
-  overflow: auto;
-}
-.costos-search {
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  background: var(--bg-muted);
-  font: inherit;
-  font-size: 14px;
-  max-width: 320px;
-}
-.costos-vacio {
-  padding: 32px;
-  text-align: center;
-  color: var(--text-tertiary);
-  font-size: 14px;
-}
-.costos-tabla-head {
-  display: flex;
-  padding: 8px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--bg-app);
-}
-.costos-fila {
-  display: flex;
-  align-items: center;
-  padding: 12px 10px;
-  border-bottom: 1px solid var(--bg-app);
-}
-.costos-fila:hover {
-  background: #f6f7f8;
-}
-.costos-fila-nombre {
-  font-size: 14px;
-  font-weight: 600;
-}
-.costos-fila-muted {
-  color: var(--text-secondary);
-}
-.costos-badge {
-  display: inline-flex;
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  font-size: 12px;
-  font-weight: 700;
-}
-.costos-badge-alto {
-  background: #dceee5;
-  color: #0e4b38;
-}
-.costos-badge-bajo {
-  background: #dde4f1;
-  color: #22428c;
-}
-
-/* Venta por pack (2026-10-11): precio y margen del pack debajo del nombre. */
-.costos-fila-pack {
-  display: block;
-  font-size: 12px;
   font-weight: 500;
   color: var(--text-tertiary);
+}
+/* Margen bajo (menos de 10 %): aviso en Dorado. */
+.costos-badge-bajo {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Celular: cada producto en dos renglones (nombre y margen % arriba; costo, precio y margen
+   abajo, con su rótulo). */
+@media (max-width: 600px) {
+  .costos-page .costos-kpis > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  .cliente-toolbar .costos-buscar {
+    flex: 1 1 100%;
+  }
+  .costos-tabla thead {
+    display: none;
+  }
+  .costos-tabla,
+  .costos-tabla tbody {
+    display: block;
+  }
+  /* global.css le da 520px de mínimo a .costos-tabla > * (era para la tabla vieja con scroll
+     de costado); acá los renglones ya entran en el ancho del celular. */
+  .costos-page .costos-tabla > * {
+    min-width: 0;
+  }
+  .costos-tabla tbody tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-areas:
+      'producto producto pct'
+      'costo venta margen';
+    gap: 8px 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-rule);
+  }
+  .costos-tabla tbody tr:last-child {
+    border-bottom: none;
+  }
+  .costos-tabla tbody td {
+    display: block;
+    width: auto;
+    height: auto;
+    padding: 0;
+    border: none;
+  }
+  .costos-tabla td.costos-td-producto {
+    grid-area: producto;
+  }
+  .costos-tabla td.costos-td-pct {
+    grid-area: pct;
+    text-align: right;
+  }
+  .costos-tabla td.costos-td-costo {
+    grid-area: costo;
+  }
+  .costos-tabla td.costos-td-venta {
+    grid-area: venta;
+  }
+  .costos-tabla td.costos-td-margen {
+    grid-area: margen;
+  }
+  .costos-tabla td.costos-td-costo,
+  .costos-tabla td.costos-td-venta,
+  .costos-tabla td.costos-td-margen {
+    text-align: left;
+    font-size: 13.5px;
+  }
+  .costos-tabla td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+  }
 }

@@ -1,96 +1,175 @@
-/* Portal del cliente-empresa: página propia, sin el menú lateral del sistema.
-   La página entera scrollea (no hay altura fija), en cualquier tamaño de pantalla. */
+/* Portal del cliente-empresa: página propia, sin el menú lateral del sistema. La página entera
+   scrollea (no hay altura fija), en cualquier tamaño de pantalla.
+   Rediseño 2026-10-29: encabezado, contenido y pie alineados en un mismo ancho (1080px). Las
+   pestañas Comprar y Mis pedidos tienen sus clases propias (portal-*) y se estilan acá; de
+   Pedidos.css se usan solo las piezas compartidas con la pantalla interna (estado, detalle). */
 .portal-page {
   height: 100%;
   overflow-y: auto;
+  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-app);
 }
 
+/* ---------- Encabezado: en el verde de marca, como el menú lateral del sistema ---------- */
 .portal-header {
   position: sticky;
   top: 0;
   z-index: 10;
+  flex-shrink: 0;
+  background: var(--sidebar-bg);
+  border-bottom: 1px solid var(--sidebar-border);
+  color: var(--sidebar-text-strong);
+}
+.portal-header-inner {
+  max-width: 1080px;
+  height: 64px;
+  margin: 0 auto;
+  padding: 0 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 32px;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border-default);
+  gap: 16px;
 }
 .portal-marca {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
+  min-width: 0;
   flex-shrink: 0;
 }
-/* Logo del negocio (apaisado), 2026-10-14. */
+/* Logo del negocio (apaisado, a color, 2026-10-14) sobre una placa blanca para que se lea sobre
+   el verde. */
 .portal-logo-negocio {
-  height: 40px;
+  box-sizing: content-box;
+  height: 34px;
   width: auto;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: #ffffff;
   display: block;
+  flex-shrink: 0;
 }
-/* Pie: contacto del negocio y que el sistema es CEAVital, de CEA Servicios. */
-.portal-pie {
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 18px 32px 28px;
-  border-top: 1px solid var(--border-default);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-tertiary);
+.portal-marca-separador {
+  width: 1px;
+  height: 24px;
+  background: var(--sidebar-line);
 }
-.portal-pie-negocio {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  align-items: baseline;
-}
-.portal-pie-negocio strong {
-  color: var(--text-primary);
-}
-.portal-pie-negocio a {
-  color: inherit;
+.portal-marca-texto {
+  margin: 0;
+  font-size: 14px;
   font-weight: 600;
-}
-.portal-pie-cea {
-  font-size: 12px;
+  letter-spacing: 0;
+  color: var(--sidebar-text);
+  white-space: nowrap;
 }
 .portal-usuario {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   min-width: 0;
+}
+.portal-cliente {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.portal-avatar {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 700;
 }
 .portal-razon {
   min-width: 0;
   font-size: 14px;
-  font-weight: 700;
-  color: var(--text-secondary);
+  font-weight: 600;
+  color: var(--sidebar-text-strong);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.portal-usuario .btn {
-  padding: 8px 16px;
+/* Salir sobre el verde: blanco translúcido. */
+.btn.portal-salir {
   flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: var(--sidebar-text-strong);
+}
+.btn.portal-salir:hover {
+  background: var(--sidebar-item-hover-bg);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: var(--sidebar-text-strong);
+}
+.portal-salir svg {
+  color: var(--sidebar-icon);
 }
 
+/* ---------- Contenido ---------- */
 .portal-contenido {
-  max-width: 1000px;
+  flex: 1 0 auto;
+  width: 100%;
+  max-width: 1080px;
   margin: 0 auto;
   padding: 24px 32px 48px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
-.portal-titulo {
+.portal-page .portal-tabs {
+  margin-bottom: 0;
+}
+
+/* Cifras de la cuenta: una franja dividida por líneas, como en el sistema. */
+.portal-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+.portal-kpi {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 20px;
+  box-shadow: -1px 0 0 var(--border-rule);
+}
+.portal-kpi-label {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
+  min-height: 24px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.portal-kpi-value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.portal-contador {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+.portal-td-fecha {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Lista de movimientos para celular (en escritorio se ve la tabla). */
@@ -101,8 +180,15 @@
   padding: 0;
 }
 .portal-mov {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 12px 0;
-  border-bottom: 1px solid var(--bg-app);
+  border-bottom: 1px solid var(--border-rule);
+}
+.portal-mov-texto {
+  flex: 1;
+  min-width: 0;
 }
 .portal-mov:last-child {
   border-bottom: none;
@@ -121,7 +207,7 @@
 }
 .portal-mov-fila .cliente-mov-monto {
   flex-shrink: 0;
-  font-weight: 800;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .portal-mov-meta {
@@ -133,26 +219,521 @@
   color: var(--text-tertiary);
 }
 
+/* ---------- Comprar: catálogo ---------- */
+.portal-comprar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.portal-catalogo-card {
+  gap: 12px;
+}
+/* El buscador común lleva flex: 1 (para la barra de herramientas); en esta tarjeta en columna
+   eso lo aplastaba: acá mide lo que mide un control. */
+.portal-catalogo-card .cliente-buscar {
+  flex: none;
+}
+.portal-catalogo {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+/* Columnas fijas: producto | presentación | precio | cantidad. Un producto con una sola forma
+   de venta deja vacía la columna de presentación; así precio y cantidad quedan alineados. */
+.portal-prod {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px 110px 128px;
+  column-gap: 16px;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-rule);
+}
+.portal-prod:last-child {
+  border-bottom: none;
+}
+.portal-prod-pack {
+  align-items: start;
+}
+/* Ícono de color del producto a la izquierda del nombre (estilo del 2026-10-29). */
+.portal-prod-cabeza {
+  grid-column: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.portal-prod-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.portal-prod-pack .portal-prod-info {
+  padding-top: 2px;
+}
+.portal-prod-nombre {
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.portal-prod-meta {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+.portal-sin-stock {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+/* Precio diferencial por cantidad: en una línea gris debajo. */
+.portal-prod-promo {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.portal-prod-precio {
+  text-align: right;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.portal-prod > .portal-prod-precio {
+  grid-column: 3;
+}
+.portal-prod > .portal-stepper,
+.portal-prod > .portal-peso {
+  grid-column: 4;
+  justify-self: end;
+}
+.portal-opciones {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: 150px 110px 128px;
+  column-gap: 16px;
+  row-gap: 8px;
+  align-items: center;
+}
+.portal-opcion {
+  display: contents;
+}
+.portal-opcion > .portal-stepper,
+.portal-opcion > .portal-peso {
+  justify-self: end;
+}
+.portal-opcion-nombre {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Cantidad: un solo control de 40px con − y + a los lados. */
+.portal-stepper,
+.portal-peso {
+  display: inline-flex;
+  align-items: stretch;
+  height: var(--control-height);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.portal-stepper:focus-within,
+.portal-peso:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+.portal-stepper button {
+  width: 36px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.portal-stepper button:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.portal-stepper button:disabled {
+  color: var(--text-muted);
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.portal-stepper input,
+.portal-peso input {
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.portal-stepper input {
+  width: 52px;
+  padding: 0;
+  border-left: 1px solid var(--border-rule);
+  border-right: 1px solid var(--border-rule);
+  text-align: center;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.portal-stepper input::-webkit-outer-spin-button,
+.portal-stepper input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.portal-stepper input:focus,
+.portal-peso input:focus {
+  outline: none;
+}
+.portal-stepper input::placeholder,
+.portal-peso input::placeholder {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.portal-stepper input:disabled,
+.portal-peso input:disabled {
+  background: var(--bg-muted);
+}
+/* Por kg o litro: cantidad con decimales y la unidad pegada a la derecha. */
+.portal-peso input {
+  width: 86px;
+  padding: 0 10px;
+  text-align: right;
+}
+.portal-peso span {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-left: 1px solid var(--border-rule);
+  background: var(--bg-muted);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+/* Barra del pedido: flota al pie mientras se recorre el catálogo. */
+.portal-resumen {
+  position: sticky;
+  bottom: 16px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 14px 20px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-float);
+}
+.portal-resumen-total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 160px;
+}
+.portal-resumen-total span:first-child {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.portal-resumen-total span:last-child {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.portal-resumen input {
+  flex: 1;
+  min-width: 0;
+  height: var(--control-height);
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-control);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.portal-resumen input::placeholder {
+  color: #7d8682;
+}
+.portal-resumen input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+.portal-resumen .btn {
+  flex-shrink: 0;
+}
+
+/* ---------- Mis pedidos ---------- */
+.portal-pedidos {
+  padding: 8px 24px;
+}
+.portal-pedidos-head,
+.portal-pedido-cabecera {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px 140px 24px;
+  column-gap: 16px;
+  align-items: center;
+  margin: 0 -12px;
+  padding: 0 12px;
+}
+.portal-pedidos-head {
+  height: 40px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border-default);
+}
+.portal-pedidos-head .num {
+  text-align: right;
+}
+.portal-pedidos-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.portal-pedido {
+  border-bottom: 1px solid var(--border-rule);
+}
+.portal-pedido:last-child {
+  border-bottom: none;
+}
+.portal-pedido-cabecera {
+  width: calc(100% + 24px);
+  min-height: 60px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.portal-pedido-cabecera:hover {
+  background: var(--bg-hover);
+}
+.portal-pedido-cabecera:focus-visible {
+  outline-offset: -2px;
+}
+.portal-pedido-id {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.portal-pedido-id-texto {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.portal-pedido-titulo {
+  font-size: 14px;
+  font-weight: 600;
+}
+.portal-pedido-fecha {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+.portal-pedido-total {
+  text-align: right;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.portal-pedido-flecha {
+  display: flex;
+  justify-content: flex-end;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+.portal-pedido-abierto .portal-pedido-flecha {
+  transform: rotate(180deg);
+}
+.portal-pedido > .pedido-detalle,
+.portal-pedido > .cliente-vacio {
+  margin-bottom: 16px;
+}
+
+/* ---------- Pie: contacto del negocio y firma de CEAVital ---------- */
+.portal-pie {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-default);
+}
+.portal-pie-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 20px 32px 28px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.portal-pie-negocio {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+}
+.portal-pie-negocio strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.portal-pie-negocio a {
+  color: inherit;
+  font-weight: 500;
+}
+.portal-pie-negocio a:hover {
+  color: var(--color-primary);
+}
+.portal-pie-cea {
+  font-size: 12.5px;
+}
+
+/* ---------- Tablet y celular ---------- */
+@media (max-width: 700px) {
+  .portal-page .portal-tabs {
+    align-self: stretch;
+  }
+  .portal-page .portal-tabs .pestana {
+    flex: 1;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 8px 6px 6px;
+    font-size: 13px;
+  }
+
+  .portal-prod {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 12px;
+    row-gap: 10px;
+  }
+  .portal-prod-cabeza {
+    grid-column: 1 / -1;
+  }
+  .portal-prod > .portal-prod-precio {
+    grid-column: 1;
+    text-align: left;
+  }
+  .portal-prod > .portal-stepper,
+  .portal-prod > .portal-peso {
+    grid-column: 2;
+  }
+  .portal-opciones {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    column-gap: 12px;
+  }
+
+  .portal-resumen {
+    flex-wrap: wrap;
+    bottom: 8px;
+    padding: 12px 14px;
+  }
+  .portal-resumen .btn {
+    order: 1;
+    margin-left: auto;
+    min-height: 44px;
+  }
+  .portal-resumen input {
+    order: 2;
+    flex: 1 1 100%;
+  }
+
+  .portal-pedidos {
+    padding: 4px 16px;
+  }
+  .portal-pedidos-head {
+    display: none;
+  }
+  .portal-pedido-cabecera {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'id total'
+      'id estado';
+    row-gap: 6px;
+  }
+  .portal-pedido-id {
+    grid-area: id;
+  }
+  .portal-pedido-total {
+    grid-area: total;
+  }
+  .portal-pedido-estado {
+    grid-area: estado;
+    justify-self: end;
+  }
+  .portal-pedido-flecha {
+    display: none;
+  }
+}
+
 @media (max-width: 600px) {
-  .portal-page .cliente-tabla-wrap {
+  /* Solo la tabla de movimientos pasa a lista (antes se ocultaba también la de productos del
+     detalle de un pedido en Mis pedidos). */
+  .portal-page .portal-movs-tabla {
     display: none;
   }
   .portal-movs {
     display: block;
   }
-  .portal-header {
-    padding: 10px 16px;
+  .portal-header-inner {
+    height: 56px;
+    padding: 0 16px;
+    gap: 12px;
   }
   .portal-logo-negocio {
-    height: 32px;
+    height: 28px;
+    padding: 3px 8px;
+    border-radius: 8px;
   }
-  .portal-pie {
-    padding: 16px 16px 24px;
+  .portal-marca-separador,
+  .portal-marca-texto,
+  .portal-avatar {
+    display: none;
+  }
+  .portal-usuario {
+    gap: 10px;
+  }
+  .portal-razon {
+    font-size: 13px;
   }
   .portal-contenido {
     padding: 16px 16px 40px;
   }
-  .portal-contenido .cliente-h1 {
-    font-size: 21px;
+  .portal-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .portal-kpi {
+    padding: 12px 14px;
+    box-shadow: -1px 0 0 var(--border-rule), 0 -1px 0 var(--border-rule);
+  }
+  .portal-kpi:first-child {
+    grid-column: 1 / -1;
+  }
+  .portal-kpi-value {
+    font-size: 20px;
+  }
+  .portal-pie-inner {
+    padding: 16px 16px 24px;
   }
 }

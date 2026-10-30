@@ -5,6 +5,7 @@ import { formatearFechaHora } from '../utils/format.js';
 // Sección "Seguridad" del panel del superadmin: IPs bloqueadas por la defensa activa
 // (services/defensa-ip.service.js), con motivo, tiempo que les queda y botón para
 // desbloquear un falso positivo, más el bloqueo manual y los últimos eventos detectados.
+// Diseño (2026-10-29): una tarjeta por bloque (resumen, bloqueadas, bloqueo manual, ataques).
 
 const DURACIONES = [
   { minutos: 60, texto: '1 hora' },
@@ -33,7 +34,7 @@ export default function SuperadminSeguridad({ irAlLogin }) {
   const manejarError = useCallback(
     (err) => {
       if (err instanceof ApiError && err.status === 401) return irAlLogin();
-      setError(err instanceof ApiError ? err.message : 'No se pudo completar la acción. Probá de nuevo.');
+      setError(err instanceof ApiError ? err.message : 'No se pudo completar la acción. Intentá de nuevo.');
     },
     [irAlLogin]
   );
@@ -81,45 +82,92 @@ export default function SuperadminSeguridad({ irAlLogin }) {
   }
 
   return (
-    <section className="card sa-card">
-      <h2 className="sa-h2">Seguridad · defensa por IP</h2>
-      <p>
-        <span className={`sa-chip ${estado.activa ? 'sa-chip-ok' : 'sa-chip-alerta'}`}>{estado.activa ? 'Defensa activa' : 'Defensa apagada'}</span>{' '}
-        <span className="sa-chip sa-chip-neutro">{estado.bloqueadas.length} bloqueada{estado.bloqueadas.length === 1 ? '' : 's'} ahora</span>{' '}
-        <span className="sa-chip sa-chip-neutro">{estado.resumen.bloqueos_24h} bloqueo{estado.resumen.bloqueos_24h === 1 ? '' : 's'} en 24 h</span>{' '}
-        <span className="sa-chip sa-chip-neutro">{estado.resumen.eventos_24h} ataque{estado.resumen.eventos_24h === 1 ? '' : 's'} detectado{estado.resumen.eventos_24h === 1 ? '' : 's'} en 24 h</span>
-      </p>
-      <p className="sa-ayuda">
-        Se bloquea sola, en el acto, la IP que sondea archivos (.env, wp-admin…), intenta inyecciones o comandos, usa herramientas de hacking
-        o programas que copian el sitio (HTTrack, SiteSucker, wget…), mapea la API (15 rutas inexistentes en 5 min) o hace ráfagas de pedidos. Bloqueo de 1 hora; si reincide en 30 días, 24 horas y
-        después 7 días. Las contraseñas o códigos mal puestos nunca bloquean la IP: cada cuenta se bloquea a los 10 intentos (15 min; 5 para un código) y, con 20
-        intentos fallidos desde una misma IP en 15 min, esa IP espera para volver a intentar. Quien ya tiene una sesión abierta nunca queda
-        bloqueado (aunque su IP lo esté) y lo que hace nunca bloquea su IP.{' '}
-        {estado.alerta_email
-          ? estado.correo_disponible
-            ? `Cada bloqueo avisa por mail a ${estado.alerta_email}.`
-            : `Falta el correo de CEA (SA_SMTP_*) para avisar a ${estado.alerta_email}.`
-          : 'Para recibir un mail por cada bloqueo, definí DEFENSA_IP_ALERTA_EMAIL en el servidor.'}
-      </p>
+    <>
+      <section className="card sa-card">
+        <div className="sa-card-cabecera">
+          <h2 className="sa-h2">Defensa por IP</h2>
+          <span className={`sa-chip ${estado.activa ? 'sa-chip-ok' : 'sa-chip-alerta'}`}>{estado.activa ? 'Activa' : 'Apagada'}</span>
+        </div>
+        <p className="sa-ayuda">
+          La IP que muestra un ataque se bloquea en el acto: 1 hora la primera vez; si reincide en 30 días, 24 horas y después 7 días.{' '}
+          {estado.alerta_email
+            ? estado.correo_disponible
+              ? `Cada bloqueo se notifica por mail a ${estado.alerta_email}.`
+              : `Falta el correo de CEA (SA_SMTP_*) para notificar a ${estado.alerta_email}.`
+            : 'Para recibir un mail por cada bloqueo, definí DEFENSA_IP_ALERTA_EMAIL en el servidor.'}
+        </p>
+        <div className="sa-cifras">
+          <div className="sa-cifra">
+            <span className="sa-cifra-label">IPs bloqueadas ahora</span>
+            <span className="sa-cifra-valor">{estado.bloqueadas.length}</span>
+          </div>
+          <div className="sa-cifra">
+            <span className="sa-cifra-label">Bloqueos en 24 h</span>
+            <span className="sa-cifra-valor">{estado.resumen.bloqueos_24h}</span>
+          </div>
+          <div className="sa-cifra">
+            <span className="sa-cifra-label">Ataques detectados en 24 h</span>
+            <span className="sa-cifra-valor">{estado.resumen.eventos_24h}</span>
+          </div>
+        </div>
+        <details className="sa-como">
+          <summary>Qué se bloquea</summary>
+          <ul>
+            <li>
+              Sondeo de archivos (.env, wp-admin…), inyecciones o comandos, herramientas de hacking y programas que copian el sitio (HTTrack,
+              SiteSucker, wget…).
+            </li>
+            <li>Mapeo de la API (15 rutas inexistentes en 5 minutos) y ráfagas de pedidos.</li>
+            <li>
+              Las contraseñas o códigos incorrectos nunca bloquean la IP: cada cuenta se bloquea a los 10 intentos (15 minutos; 5 intentos para un
+              código) y, con 20 intentos fallidos desde una misma IP en 15 minutos, esa IP debe esperar para volver a intentar.
+            </li>
+            <li>Quien ya tiene una sesión abierta nunca queda bloqueado (aunque su IP lo esté) y lo que hace nunca bloquea su IP.</li>
+          </ul>
+        </details>
+      </section>
 
       {error && <div className="alert alert-danger">{error}</div>}
-      {aviso && <div className="alert sa-alert-ok">{aviso}</div>}
+      {aviso && <div className="alert alert-exito">{aviso}</div>}
 
-      <details className="sa-eventos">
-        <summary>IPs bloqueadas ahora ({estado.bloqueadas.length})</summary>
+      <section className="card sa-card">
+        <div className="sa-card-cabecera">
+          <h2 className="sa-h2">IPs bloqueadas</h2>
+          {estado.bloqueadas.length > 1 && !confirmarTodas && (
+            <button type="button" className="btn" disabled={ocupado} onClick={() => setConfirmarTodas(true)}>
+              Desbloquear todas
+            </button>
+          )}
+        </div>
+        {estado.bloqueadas.length > 1 && confirmarTodas && (
+          <div className="sa-confirmar">
+            <span>¿Desbloquear las {estado.bloqueadas.length} IPs? Vuelven a tener acceso de inmediato.</span>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={ocupado}
+              onClick={() => ejecutar(async () => { await api.post('/sa/defensa/desbloquear-todas', {}); setConfirmarTodas(false); }, 'Todas las IPs quedaron desbloqueadas.')}
+            >
+              Desbloquear todas
+            </button>
+            <button type="button" className="btn" onClick={() => setConfirmarTodas(false)}>
+              Cancelar
+            </button>
+          </div>
+        )}
         {estado.bloqueadas.length === 0 ? (
-          <p className="sa-detalle">No hay ninguna IP bloqueada en este momento.</p>
+          <p className="sa-vacio">No hay IPs bloqueadas en este momento.</p>
         ) : (
           <div className="sa-tabla-scroll">
-            <table className="sa-tabla sa-tabla-seg">
+            <table className="sa-tabla sa-tabla-seg sa-tabla-bloqueadas">
               <thead>
                 <tr>
                   <th>IP</th>
                   <th>Motivo</th>
                   <th>Desde</th>
-                  <th>Quedan</th>
-                  <th>Reinc.</th>
-                  <th />
+                  <th className="sa-monto">Restante</th>
+                  <th className="sa-monto">Reincidencia</th>
+                  <th className="sa-accion" aria-label="Acciones" />
                 </tr>
               </thead>
               <tbody>
@@ -130,11 +178,11 @@ export default function SuperadminSeguridad({ irAlLogin }) {
                       {estado.motivos[b.motivo] ?? b.motivo}
                       {b.detalle && <div className="sa-detalle-fila">{b.detalle}</div>}
                     </td>
-                    <td>{formatearFechaHora(b.bloqueada_en)}</td>
-                    <td>{textoRestante(b.minutos_restantes)}</td>
-                    <td>{b.reincidencia}</td>
-                    <td>
-                      <button type="button" className="btn" disabled={ocupado} onClick={() => ejecutar(() => api.post('/sa/defensa/desbloquear', { id: b.id }), `IP ${b.ip} desbloqueada.`)}>
+                    <td className="sa-una-linea">{formatearFechaHora(b.bloqueada_en)}</td>
+                    <td className="sa-monto">{textoRestante(b.minutos_restantes)}</td>
+                    <td className="sa-monto">{b.reincidencia}</td>
+                    <td className="sa-accion">
+                      <button type="button" className="btn sa-btn-fantasma" disabled={ocupado} onClick={() => ejecutar(() => api.post('/sa/defensa/desbloquear', { id: b.id }), `IP ${b.ip} desbloqueada.`)}>
                         Desbloquear
                       </button>
                     </td>
@@ -144,34 +192,12 @@ export default function SuperadminSeguridad({ irAlLogin }) {
             </table>
           </div>
         )}
+      </section>
 
-        {estado.bloqueadas.length > 1 &&
-          (confirmarTodas ? (
-            <div className="sa-confirmar">
-              <span>¿Desbloquear las {estado.bloqueadas.length} IPs?</span>
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={ocupado}
-                onClick={() => ejecutar(async () => { await api.post('/sa/defensa/desbloquear-todas', {}); setConfirmarTodas(false); }, 'Todas las IPs quedaron desbloqueadas.')}
-              >
-                Sí, desbloquear todas
-              </button>
-              <button type="button" className="btn" onClick={() => setConfirmarTodas(false)}>
-                Cancelar
-              </button>
-            </div>
-          ) : (
-            <button type="button" className="btn" disabled={ocupado} onClick={() => setConfirmarTodas(true)}>
-              Desbloquear todas
-            </button>
-          ))}
-      </details>
-
-      <details className="sa-eventos">
-        <summary>Bloquear una IP a mano</summary>
+      <section className="card sa-card">
+        <h2 className="sa-h2">Bloquear una IP</h2>
         <form
-          className="sa-form-fila"
+          className="sa-form-fila sa-form-ancha"
           onSubmit={(e) => {
             e.preventDefault();
             ejecutar(async () => {
@@ -200,22 +226,25 @@ export default function SuperadminSeguridad({ irAlLogin }) {
             <input id="sa-ip-det" value={detalle} onChange={(e) => setDetalle(e.target.value)} disabled={ocupado} maxLength={300} />
           </div>
           <button type="submit" className="btn btn-primary" disabled={ocupado || !ip.trim()}>
-            Bloquear
+            Bloquear IP
           </button>
         </form>
-      </details>
-      {estado.permitidas.length > 0 && <p className="sa-ayuda">Nunca se bloquean (DEFENSA_IP_PERMITIDAS): {estado.permitidas.join(', ')}.</p>}
+        {estado.permitidas.length > 0 && <p className="sa-ayuda">Nunca se bloquean (DEFENSA_IP_PERMITIDAS): {estado.permitidas.join(', ')}.</p>}
+      </section>
 
-      <details className="sa-eventos">
-        <summary>Últimos ataques detectados ({estado.eventos.length})</summary>
+      <section className="card sa-card">
+        <div className="sa-card-cabecera">
+          <h2 className="sa-h2">Últimos ataques detectados</h2>
+          <span className="sa-chip sa-chip-neutro">{estado.eventos.length}</span>
+        </div>
         {estado.eventos.length === 0 ? (
-          <p className="sa-detalle">Todavía no se detectó nada.</p>
+          <p className="sa-vacio">Todavía no se detectó ningún ataque.</p>
         ) : (
           <div className="sa-tabla-scroll">
-            <table className="sa-tabla sa-tabla-seg">
+            <table className="sa-tabla sa-tabla-seg sa-tabla-eventos">
               <thead>
                 <tr>
-                  <th>Hora</th>
+                  <th>Fecha</th>
                   <th>IP</th>
                   <th>Tipo</th>
                   <th>Pedido</th>
@@ -234,7 +263,7 @@ export default function SuperadminSeguridad({ irAlLogin }) {
             </table>
           </div>
         )}
-      </details>
-    </section>
+      </section>
+    </>
   );
 }

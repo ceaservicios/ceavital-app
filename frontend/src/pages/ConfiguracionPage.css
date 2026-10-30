@@ -1,227 +1,89 @@
+/* Configuración (rediseño 2026-10-29): pestañas subrayadas y, debajo, una tarjeta por sección con
+   el título y la descripción a la izquierda y los controles a la derecha. */
 .config-page {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.config-encabezado {
+/* Sección: título y descripción | controles. */
+.config-seccion {
+  display: grid;
+  grid-template-columns: minmax(200px, 300px) minmax(0, 1fr);
+  gap: 16px 40px;
+  padding: 24px;
+}
+.config-seccion-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-.config-h1 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 800;
-}
-.config-subtitulo {
-  font-size: 14px;
-  color: var(--text-tertiary);
-}
-.config-tabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--border-default);
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-.config-tab {
-  padding: 11px 18px;
-  border: none;
-  border-bottom: 3px solid transparent;
-  margin-bottom: -1px;
-  background: transparent;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.config-tab:hover {
-  color: var(--text-primary);
-}
-.config-tab-activa {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
-}
-.config-seccion-cabecera {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
 }
 .config-seccion-titulo {
-  font-size: 17px;
-  font-weight: 800;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
 }
 .config-seccion-desc {
   margin: 0;
   font-size: 13.5px;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--text-tertiary);
 }
-
-.config-catalogo {
-  min-width: 0;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.config-catalogo-titulo {
-  font-size: 14px;
-  font-weight: 700;
-}
-.config-catalogo-nuevo {
-  display: flex;
-  gap: 8px;
-}
-.config-catalogo-nuevo input {
-  flex: 1;
-  padding: 9px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--border-default);
-  font: inherit;
-  font-size: 13.5px;
-}
-.config-catalogo-lista {
-  display: flex;
-  flex-direction: column;
-}
-.config-catalogo-vacio {
-  padding: 16px 4px;
-  text-align: center;
-  color: var(--text-tertiary);
-  font-size: 13.5px;
-}
-.config-catalogo-fila {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 4px;
-  border-bottom: 1px solid var(--bg-app);
-}
-.config-catalogo-nombre {
-  flex: 1;
-  font-size: 14px;
-  font-weight: 600;
-}
-.config-catalogo-input-edicion {
-  flex: 1;
-  padding: 7px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border-default);
-  font: inherit;
-  font-size: 13.5px;
-}
-.config-catalogo-accion {
-  border: none;
-  background: transparent;
-  color: var(--text-tertiary);
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-}
-.config-catalogo-accion:hover {
-  color: var(--text-primary);
-}
-.config-catalogo-accion-danger:hover {
-  color: var(--color-danger);
-}
-
-.config-proximamente {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.config-proximamente-texto {
-  margin: 0;
-  font-size: 13.5px;
-  color: var(--text-tertiary);
-  line-height: 1.5;
-}
-
-/* La página encaja siempre en la ventana: encabezado y pestañas quedan fijos y
-   solo la lista de opciones scrollea por dentro. */
-.config-page {
-  height: 100%;
-  min-height: 0;
-}
-.config-page > .config-catalogo {
-  flex: 1;
-  min-height: 0;
-}
-.config-catalogo-lista {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-.config-page > .config-catalogo {
-  overflow: hidden;
-}
-/* Datos del negocio: dos columnas en pantallas anchas, una en el celular. */
-.config-negocio-form {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 16px;
-  max-width: 760px;
-}
-.config-negocio-acciones {
-  grid-column: 1 / -1;
-}
-.config-alert-ok {
-  background: rgba(14, 75, 56, 0.08);
-  color: #0e4b38;
-  border: 1px solid rgba(14, 75, 56, 0.25);
-}
-@media (max-width: 600px) {
-  .config-negocio-form {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* Pestaña Datos del negocio: dos tarjetas (datos y cómo se ve el stock); si no entran en la
-   ventana, scrollea la pestaña por dentro, no la página. */
-.config-negocio {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+.config-seccion-cuerpo {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-.config-negocio > .config-catalogo {
-  flex-shrink: 0;
+  min-width: 0;
+  max-width: 680px;
 }
 
-/* Cómo se ve el stock (2026-10-28): dos opciones con un ejemplo de la columna Stock. */
+/* ---------- Datos del negocio ---------- */
+.config-negocio-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+/* El nombre del negocio ocupa la fila entera; el resto va de a dos. */
+.config-negocio-form > .field:first-child {
+  grid-column: 1 / -1;
+}
+.config-negocio-acciones {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+/* ---------- Visualización del stock: dos opciones tipo tarjeta ---------- */
 .config-stock-opciones {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  max-width: 760px;
 }
 .config-stock-opcion {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   padding: 14px 16px;
-  border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
   background: var(--bg-surface);
   color: var(--text-primary);
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 .config-stock-opcion:hover {
-  border-color: var(--color-primary);
+  border-color: #b9c1ba;
+  background: var(--bg-hover);
 }
 .config-stock-opcion[aria-checked='true'] {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 1px var(--color-primary);
-  background: rgba(14, 75, 56, 0.04);
+  box-shadow: inset 0 0 0 0.5px var(--color-primary);
+  background: var(--color-primary-soft);
 }
 .config-stock-opcion:disabled {
   cursor: default;
@@ -229,39 +91,170 @@
 .config-stock-opcion-titulo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
+}
+.config-stock-opcion[aria-checked='true'] .config-stock-opcion-titulo {
+  color: var(--color-primary);
 }
 .config-stock-radio {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
   border-radius: 50%;
-  border: 2px solid var(--border-default);
+  border: 1.5px solid var(--border-control);
+  background: var(--bg-surface);
 }
 .config-stock-opcion[aria-checked='true'] .config-stock-radio {
-  border-color: var(--color-primary);
-  background: radial-gradient(circle, var(--color-primary) 0 40%, transparent 45%);
+  border: 5px solid var(--color-primary);
 }
 .config-stock-ejemplo {
   display: flex;
   flex-direction: column;
+  gap: 2px;
   padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--bg-app);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-rule);
+  background: var(--bg-surface);
 }
 .config-stock-ejemplo strong {
   font-size: 16px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .config-stock-ejemplo span {
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--text-tertiary);
 }
+.config-stock-ejemplo .config-stock-ejemplo-rotulo {
+  margin-bottom: 2px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ---------- Catálogos (categorías, condiciones de pago) ---------- */
+.config-catalogo-nuevo {
+  display: flex;
+  gap: 8px;
+}
+.config-catalogo-nuevo input,
+.config-catalogo-input-edicion {
+  flex: 1;
+  min-width: 0;
+  height: var(--control-height);
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-control);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.config-catalogo-nuevo input::placeholder {
+  color: #7d8682;
+}
+.config-catalogo-nuevo input:focus,
+.config-catalogo-input-edicion:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+.config-catalogo-nuevo .btn {
+  flex-shrink: 0;
+}
+.config-catalogo-lista {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+.config-catalogo-vacio {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+.config-catalogo-fila {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 8px 6px 16px;
+  border-bottom: 1px solid var(--border-rule);
+}
+.config-catalogo-fila:last-child {
+  border-bottom: none;
+}
+.config-catalogo-nombre {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.config-catalogo-acciones,
+.config-catalogo-botones {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.config-catalogo-botones {
+  gap: 8px;
+}
+.config-catalogo-accion {
+  height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.config-catalogo-accion:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.config-catalogo-accion-danger:hover {
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+}
+
+/* Tablet vertical y celular: la descripción va arriba de los controles. */
+@media (max-width: 900px) {
+  .config-seccion {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .config-seccion-cuerpo {
+    max-width: none;
+  }
+}
 @media (max-width: 600px) {
+  .config-seccion {
+    padding: 16px;
+  }
+  .config-negocio-form,
   .config-stock-opciones {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .config-negocio-acciones .btn {
+    flex: 1;
+    min-height: 44px;
+  }
+  .config-catalogo-fila {
+    flex-wrap: wrap;
+    padding: 8px 8px 8px 14px;
+  }
+  .config-catalogo-input-edicion {
+    flex-basis: 100%;
+  }
+  .config-catalogo-fila .config-catalogo-botones {
+    margin-left: auto;
   }
 }

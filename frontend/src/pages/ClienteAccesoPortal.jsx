@@ -20,7 +20,7 @@ async function copiarAlPortapapeles(texto) {
   }
 }
 
-// Pestaña "Acceso" de la ficha: el negocio carga el usuario y la contraseña con
+// Pestaña "Acceso al portal" de la ficha: el negocio define el usuario y la contraseña con
 // los que el cliente entra a ver su propia cuenta (portal del cliente).
 export default function ClienteAccesoPortal({ clienteId, razonSocial, email }) {
   const [acceso, setAcceso] = useState(null);
@@ -143,11 +143,9 @@ export default function ClienteAccesoPortal({ clienteId, razonSocial, email }) {
 
   if (!acceso.portal_disponible) {
     return (
-      <div className="card cliente-card">
-        <span className="cliente-seccion-titulo">Acceso del cliente</span>
-        <div className="cliente-hint">
-          El acceso de clientes no está incluido en el plan de esta instalación.
-        </div>
+      <div className="card cliente-card form-angosto">
+        <span className="cliente-seccion-titulo">Acceso al portal de clientes</span>
+        <div className="cliente-vacio">El portal de clientes no está incluido en el plan contratado.</div>
       </div>
     );
   }
@@ -162,29 +160,27 @@ export default function ClienteAccesoPortal({ clienteId, razonSocial, email }) {
 
   return (
     <>
-      <form className="card cliente-card" onSubmit={guardar}>
+      <form className="card cliente-card form-angosto" onSubmit={guardar}>
         <div className="cliente-seccion-cabecera">
-          <span className="cliente-seccion-titulo">Acceso del cliente a su cuenta</span>
+          <span className="cliente-seccion-titulo">Acceso al portal de clientes</span>
           <span className={`cliente-acceso-estado cliente-acceso-${estado.clave}`}>{estado.texto}</span>
         </div>
         <div className="cliente-hint">
-          Con este usuario y contraseña el cliente entra a ver su saldo y sus movimientos y a descargar su resumen de cuenta. Vos definís la contraseña y se la pasás al cliente.
+          Con este usuario y contraseña el cliente consulta su saldo y sus movimientos, y descarga su resumen de cuenta.
         </div>
 
         {error && <div className="alert alert-danger">{error}</div>}
         {acceso.bloqueado && (
-          <div className="alert alert-danger">
-            El acceso está bloqueado por intentos fallidos. Al definir una contraseña nueva se desbloquea.
-          </div>
+          <div className="alert alert-danger">Acceso bloqueado por intentos fallidos. Se desbloquea al definir una contraseña nueva.</div>
         )}
 
-        <div className="cliente-campos">
+        <div className="cliente-campos acceso-campos">
           <div className="field">
-            <label htmlFor="acceso-usuario">Usuario de acceso</label>
+            <label htmlFor="acceso-usuario">Usuario</label>
             <input
               id="acceso-usuario"
               autoComplete="off"
-              placeholder="Ej. el email del cliente"
+              placeholder="Ej.: email del cliente"
               value={usuario}
               onChange={(e) => setUsuario(e.target.value)}
               required
@@ -203,7 +199,7 @@ export default function ClienteAccesoPortal({ clienteId, razonSocial, email }) {
                 required={!acceso.configurado}
               />
               <button type="button" className="btn" onClick={() => setVerPassword((v) => !v)}>
-                {verPassword ? 'Ocultar' : 'Ver'}
+                {verPassword ? 'Ocultar' : 'Mostrar'}
               </button>
               <button
                 type="button"
@@ -227,9 +223,9 @@ export default function ClienteAccesoPortal({ clienteId, razonSocial, email }) {
       </form>
 
       {entregar && (
-        <div className="card cliente-card cliente-credenciales">
-          <span className="cliente-seccion-titulo">Datos para pasarle al cliente</span>
-          <div className="cliente-hint">La contraseña se muestra solo ahora: después no se puede volver a ver, solo definir una nueva.</div>
+        <div className="card cliente-card cliente-credenciales form-angosto">
+          <span className="cliente-seccion-titulo">Datos de acceso para el cliente</span>
+          <div className="cliente-hint">La contraseña solo se muestra ahora. Después no se puede consultar: solo definir una nueva.</div>
           <dl className="cliente-credenciales-lista">
             <div>
               <dt>Enlace</dt>
@@ -247,27 +243,26 @@ export default function ClienteAccesoPortal({ clienteId, razonSocial, email }) {
           {errorEnvio && <div className="alert alert-danger">{errorEnvio}</div>}
           {enviadoA && <div className="alert alert-exito">Datos enviados a {enviadoA}.</div>}
           {!acceso.email_cliente && (
-            <div className="cliente-hint">
-              Este cliente no tiene un email cargado. Cargalo en la pestaña Datos para poder enviarle los datos por mail.
-            </div>
+            <div className="cliente-hint">El cliente no tiene email registrado. Agregalo en la pestaña Datos para enviarle el acceso por correo.</div>
           )}
           {acceso.email_cliente && !acceso.correo_disponible && (
             <div className="cliente-hint">
-              Este servidor todavía no tiene configurado el envío de mails: el botón abre tu programa de correo con el mensaje listo para enviar a {acceso.email_cliente}.
+              El envío automático de correos no está configurado: el botón abre tu programa de correo con el mensaje listo para{' '}
+              {acceso.email_cliente}.
             </div>
           )}
           <div className="cliente-acciones cliente-acciones-envio">
             <button type="button" className="btn" onClick={copiarDatos}>
-              {copiado ? '¡Copiado!' : 'Copiar datos de acceso'}
+              {copiado ? 'Datos copiados' : 'Copiar datos de acceso'}
             </button>
             {acceso.email_cliente && acceso.correo_disponible && (
               <button type="button" className="btn btn-primary" disabled={enviando} onClick={enviarPorMail}>
-                {enviando ? 'Enviando…' : `Enviar por mail a ${acceso.email_cliente}`}
+                {enviando ? 'Enviando…' : `Enviar por correo a ${acceso.email_cliente}`}
               </button>
             )}
             {acceso.email_cliente && !acceso.correo_disponible && (
               <a className="btn btn-primary" href={enlaceMailto()}>
-                Abrir en mi correo
+                Abrir en el programa de correo
               </a>
             )}
           </div>
@@ -275,20 +270,28 @@ export default function ClienteAccesoPortal({ clienteId, razonSocial, email }) {
       )}
 
       {acceso.configurado && (
-        <div className="card cliente-card">
+        <div className="card cliente-card form-angosto">
           <span className="cliente-seccion-titulo">Estado del acceso</span>
-          <div className="cliente-hint">
-            Último ingreso del cliente: {acceso.ultimo_acceso ? formatearFechaHora(acceso.ultimo_acceso) : 'todavía no ingresó'}
-            {' · '}Enlace de ingreso: <strong>{enlace}</strong>
-          </div>
-          <div className="cliente-acciones">
-            <button type="button" className={acceso.habilitado ? 'btn cliente-btn-peligro' : 'btn btn-primary'} disabled={guardando} onClick={alternarHabilitado}>
+          <dl className="ficha-datos-fila">
+            <div>
+              <dt>Último ingreso del cliente</dt>
+              <dd>{acceso.ultimo_acceso ? formatearFechaHora(acceso.ultimo_acceso) : <span className="dato-vacio">Sin ingresos todavía</span>}</dd>
+            </div>
+            <div>
+              <dt>Enlace de ingreso</dt>
+              <dd>{enlace}</dd>
+            </div>
+          </dl>
+          <div className="ficha-pie">
+            <span className="cliente-hint">
+              {acceso.habilitado
+                ? 'Al deshabilitarlo, el cliente pierde el acceso de inmediato, incluso con la sesión abierta. Se puede volver a habilitar en cualquier momento.'
+                : 'El cliente no puede ingresar al portal hasta que se vuelva a habilitar el acceso.'}
+            </span>
+            <button type="button" className={acceso.habilitado ? 'btn btn-peligro' : 'btn btn-primary'} disabled={guardando} onClick={alternarHabilitado}>
               {acceso.habilitado ? 'Deshabilitar acceso' : 'Habilitar acceso'}
             </button>
           </div>
-          {acceso.habilitado && (
-            <div className="cliente-hint">Deshabilitar corta el acceso al instante, también si el cliente tiene la sesión abierta. Se puede volver a habilitar cuando quieras.</div>
-          )}
         </div>
       )}
     </>

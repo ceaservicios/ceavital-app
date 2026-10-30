@@ -1,13 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
+import { IconoFila } from '../components/ConAvatar.jsx';
+import Hero from '../components/Hero.jsx';
+import Pestanas from '../components/Pestanas.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { COLOR, colorDe } from '../utils/colores.js';
 import './ConfiguracionPage.css';
+
+// Rediseño 2026-10-29: cada sección es una tarjeta con el título y la descripción a la izquierda
+// y los controles a la derecha (en celular, uno debajo del otro). Cada sección guarda a su modo:
+// Datos del negocio con su botón, Cómo se ve el stock al elegir la opción, los catálogos por fila.
 
 // Sección genérica de catálogo (categorías / unidades de medida / condiciones
 // de pago): misma forma exacta para las 3, evita duplicar el mismo CRUD
 // (corrección pedida 2026-09-15; condiciones de pago sumada 2026-09-18). Exclusivo Admin -- esta pantalla entera ya está gateada por
 // RequireRole en App.jsx.
-function SeccionCatalogo({ titulo, endpoint, singular, descripcion }) {
+function SeccionCatalogo({ titulo, endpoint, singular, descripcion, icono, onCambio }) {
   const [items, setItems] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
@@ -50,6 +58,7 @@ function SeccionCatalogo({ titulo, endpoint, singular, descripcion }) {
       await api.post(endpoint, { nombre: nombreNuevo });
       setNombreNuevo('');
       await cargar();
+      onCambio();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : `No se pudo crear la ${singular}.`);
     } finally {
@@ -90,6 +99,7 @@ function SeccionCatalogo({ titulo, endpoint, singular, descripcion }) {
       await api.delete(`${endpoint}/${id}`);
       setConfirmandoEliminarId(null);
       await cargar();
+      onCambio();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo eliminar.');
     } finally {
@@ -99,81 +109,84 @@ function SeccionCatalogo({ titulo, endpoint, singular, descripcion }) {
   }
 
   return (
-    <div className="card config-catalogo">
-      <div className="config-seccion-cabecera">
-        <span className="config-seccion-titulo">{titulo}</span>
+    <section className="card config-seccion">
+      <div className="config-seccion-info">
+        <h2 className="config-seccion-titulo">{titulo}</h2>
         <p className="config-seccion-desc">{descripcion}</p>
       </div>
-      {error && <div className="alert alert-danger">{error}</div>}
+      <div className="config-seccion-cuerpo">
+        {error && <div className="alert alert-danger">{error}</div>}
 
-      <form className="config-catalogo-nuevo" onSubmit={crear}>
-        <input
-          required
-          placeholder={`Nueva ${singular}…`}
-          value={nombreNuevo}
-          onChange={(e) => setNombreNuevo(e.target.value)}
-        />
-        <button type="submit" className="btn btn-primary" disabled={guardando}>
-          Agregar
-        </button>
-      </form>
+        <form className="config-catalogo-nuevo" onSubmit={crear}>
+          <input
+            required
+            aria-label={`Nueva ${singular}`}
+            placeholder={`Nombre de la nueva ${singular}`}
+            value={nombreNuevo}
+            onChange={(e) => setNombreNuevo(e.target.value)}
+          />
+          <button type="submit" className="btn btn-primary" disabled={guardando}>
+            Agregar
+          </button>
+        </form>
 
-      <div className="config-catalogo-lista">
-        {cargando && <div className="config-catalogo-vacio">Cargando…</div>}
-        {!cargando && items.length === 0 && (
-          <div className="config-catalogo-vacio">Todavía no hay {titulo.toLowerCase()} cargadas.</div>
-        )}
-        {items.map((item) => (
-          <div className="config-catalogo-fila" key={item.id}>
-            {editandoId === item.id ? (
-              <>
-                <input
-                  className="config-catalogo-input-edicion"
-                  value={nombreEditado}
-                  onChange={(e) => setNombreEditado(e.target.value)}
-                />
-                <button type="button" className="btn" onClick={() => setEditandoId(null)}>
-                  Cancelar
-                </button>
-                <button type="button" className="btn btn-primary" disabled={guardando} onClick={() => guardarEdicion(item.id)}>
-                  Guardar
-                </button>
-              </>
-            ) : confirmandoEliminarId === item.id ? (
-              <>
-                <span className="config-catalogo-nombre">¿Eliminar "{item.nombre}"?</span>
-                <button type="button" className="btn" onClick={() => setConfirmandoEliminarId(null)}>
-                  No
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  style={{ borderColor: 'var(--color-danger)', color: 'var(--color-danger)' }}
-                  disabled={guardando}
-                  onClick={() => eliminar(item.id)}
-                >
-                  Sí, eliminar
-                </button>
-              </>
-            ) : (
-              <>
-                <span className="config-catalogo-nombre">{item.nombre}</span>
-                <button type="button" className="config-catalogo-accion" onClick={() => empezarEdicion(item)}>
-                  Editar
-                </button>
-                <button
-                  type="button"
-                  className="config-catalogo-accion config-catalogo-accion-danger"
-                  onClick={() => setConfirmandoEliminarId(item.id)}
-                >
-                  Eliminar
-                </button>
-              </>
-            )}
-          </div>
-        ))}
+        <div className="config-catalogo-lista">
+          {cargando && <div className="config-catalogo-vacio">Cargando…</div>}
+          {!cargando && items.length === 0 && <div className="config-catalogo-vacio">Sin {titulo.toLowerCase()} registradas.</div>}
+          {items.map((item) => (
+            <div className="config-catalogo-fila" key={item.id}>
+              {editandoId === item.id ? (
+                <>
+                  <input
+                    className="config-catalogo-input-edicion"
+                    aria-label={`Nombre de la ${singular}`}
+                    value={nombreEditado}
+                    onChange={(e) => setNombreEditado(e.target.value)}
+                  />
+                  <div className="config-catalogo-botones">
+                    <button type="button" className="btn" onClick={() => setEditandoId(null)}>
+                      Cancelar
+                    </button>
+                    <button type="button" className="btn btn-primary" disabled={guardando} onClick={() => guardarEdicion(item.id)}>
+                      Guardar
+                    </button>
+                  </div>
+                </>
+              ) : confirmandoEliminarId === item.id ? (
+                <>
+                  <span className="config-catalogo-nombre">¿Eliminar "{item.nombre}"?</span>
+                  <div className="config-catalogo-botones">
+                    <button type="button" className="btn" onClick={() => setConfirmandoEliminarId(null)}>
+                      Cancelar
+                    </button>
+                    <button type="button" className="btn btn-peligro" disabled={guardando} onClick={() => eliminar(item.id)}>
+                      Eliminar
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <IconoFila icono={icono} color={colorDe(item.id)} />
+                  <span className="config-catalogo-nombre">{item.nombre}</span>
+                  <div className="config-catalogo-acciones">
+                    <button type="button" className="config-catalogo-accion" onClick={() => empezarEdicion(item)}>
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      className="config-catalogo-accion config-catalogo-accion-danger"
+                      onClick={() => setConfirmandoEliminarId(item.id)}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -182,13 +195,13 @@ function SeccionCatalogo({ titulo, endpoint, singular, descripcion }) {
 const CAMPOS_NEGOCIO = [
   { clave: 'nombre', etiqueta: 'Nombre del negocio', max: 100, requerido: true },
   { clave: 'telefono', etiqueta: 'Teléfono', max: 40, placeholder: 'Ej. 299 412-3456', inputMode: 'tel' },
-  { clave: 'email', etiqueta: 'Mail de contacto', max: 100, placeholder: 'Ej. ventas@tunegocio.com', type: 'email' },
+  { clave: 'email', etiqueta: 'Email de contacto', max: 100, placeholder: 'Ej. ventas@tunegocio.com', type: 'email' },
   { clave: 'direccion', etiqueta: 'Dirección', max: 200, placeholder: 'Ej. Av. San Martín 1234' },
   { clave: 'instagram', etiqueta: 'Instagram', max: 60, placeholder: 'Ej. tu.negocio' },
 ];
 const VACIOS = { nombre: '', telefono: '', email: '', direccion: '', instagram: '' };
 
-function SeccionDatosNegocio() {
+function SeccionDatosNegocio({ onCambio }) {
   const [datos, setDatos] = useState(VACIOS);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -219,7 +232,8 @@ function SeccionDatosNegocio() {
     setAviso(null);
     try {
       setDatos(aFormulario(await api.put('/negocio', datos)));
-      setAviso('Datos guardados. Los próximos mails ya salen con estos datos.');
+      setAviso('Datos guardados. Se aplican a partir de los próximos envíos.');
+      onCambio();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudieron guardar los datos.');
     } finally {
@@ -229,44 +243,46 @@ function SeccionDatosNegocio() {
   }
 
   return (
-    <div className="card config-catalogo">
-      <div className="config-seccion-cabecera">
-        <span className="config-seccion-titulo">Datos del negocio</span>
+    <section className="card config-seccion">
+      <div className="config-seccion-info">
+        <h2 className="config-seccion-titulo">Datos del negocio</h2>
         <p className="config-seccion-desc">
-          Salen, junto al logo, al pie de los mails que el sistema les manda a tus usuarios (códigos de ingreso) y a los clientes del
-          portal (datos de acceso), en el resumen de cuenta en PDF y en el portal. Los que dejes vacíos no aparecen.
+          Se muestran junto al logo en los emails que envía el sistema, en el resumen de cuenta en PDF y en el portal de clientes. Los
+          campos vacíos no se muestran.
         </p>
       </div>
-      {error && <div className="alert alert-danger">{error}</div>}
-      {aviso && <div className="alert config-alert-ok">{aviso}</div>}
-      {cargando ? (
-        <div className="config-catalogo-vacio">Cargando…</div>
-      ) : (
-        <form className="config-negocio-form" onSubmit={guardar}>
-          {CAMPOS_NEGOCIO.map((c) => (
-            <div className="field" key={c.clave}>
-              <label htmlFor={`negocio-${c.clave}`}>{c.etiqueta}</label>
-              <input
-                id={`negocio-${c.clave}`}
-                value={datos[c.clave]}
-                onChange={(e) => setDatos((d) => ({ ...d, [c.clave]: e.target.value }))}
-                maxLength={c.max}
-                required={c.requerido}
-                placeholder={c.placeholder}
-                inputMode={c.inputMode}
-                type={c.type ?? 'text'}
-                disabled={guardando}
-              />
+      <div className="config-seccion-cuerpo">
+        {error && <div className="alert alert-danger">{error}</div>}
+        {aviso && <div className="alert alert-exito">{aviso}</div>}
+        {cargando ? (
+          <div className="config-catalogo-vacio">Cargando…</div>
+        ) : (
+          <form className="config-negocio-form" onSubmit={guardar}>
+            {CAMPOS_NEGOCIO.map((c) => (
+              <div className="field" key={c.clave}>
+                <label htmlFor={`negocio-${c.clave}`}>{c.etiqueta}</label>
+                <input
+                  id={`negocio-${c.clave}`}
+                  value={datos[c.clave]}
+                  onChange={(e) => setDatos((d) => ({ ...d, [c.clave]: e.target.value }))}
+                  maxLength={c.max}
+                  required={c.requerido}
+                  placeholder={c.placeholder}
+                  inputMode={c.inputMode}
+                  type={c.type ?? 'text'}
+                  disabled={guardando}
+                />
+              </div>
+            ))}
+            <div className="config-negocio-acciones">
+              <button type="submit" className="btn btn-primary" disabled={guardando}>
+                {guardando ? 'Guardando…' : 'Guardar cambios'}
+              </button>
             </div>
-          ))}
-          <div className="config-negocio-acciones">
-            <button type="submit" className="btn btn-primary" disabled={guardando}>
-              Guardar datos
-            </button>
-          </div>
-        </form>
-      )}
-    </div>
+          </form>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -289,7 +305,7 @@ function SeccionStockEn() {
     api
       .get('/negocio/stock-en')
       .then((data) => setStockEn(data.stock_en))
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar cómo se ve el stock.'));
+      .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar la preferencia de stock.'));
   }, []);
 
   async function elegir(valor) {
@@ -302,7 +318,7 @@ function SeccionStockEn() {
       const data = await api.put('/negocio/stock-en', { stock_en: valor });
       setStockEn(data.stock_en);
       setStockEnPacks(data.stock_en === 'packs');
-      setAviso(`Listo: el stock se ve en ${data.stock_en} en Stock, Caja y Vencimientos, para todos los usuarios.`);
+      setAviso(`Preferencia guardada: el stock se muestra en ${data.stock_en} para todos los usuarios.`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo guardar.');
     } finally {
@@ -312,54 +328,59 @@ function SeccionStockEn() {
   }
 
   return (
-    <div className="card config-catalogo">
-      <div className="config-seccion-cabecera">
-        <span className="config-seccion-titulo">Cómo se ve el stock</span>
+    <section className="card config-seccion">
+      <div className="config-seccion-info">
+        <h2 className="config-seccion-titulo">Visualización del stock</h2>
         <p className="config-seccion-desc">
-          Para los productos con pack o caja, en Stock, Caja y Vencimientos. Rige para todos los usuarios. Es solo cómo se ve: el
-          stock y las ventas no cambian. Los productos sin pack se ven siempre en unidades o kg.
+          Define cómo se muestra el stock de los productos con pack o caja en Stock, Caja y Vencimientos, para todos los usuarios. No
+          modifica el stock ni las ventas. Los productos sin pack se muestran siempre en unidades o kg.
         </p>
       </div>
-      {error && <div className="alert alert-danger">{error}</div>}
-      {aviso && <div className="alert config-alert-ok">{aviso}</div>}
-      {stockEn === null ? (
-        !error && <div className="config-catalogo-vacio">Cargando…</div>
-      ) : (
-        <div className="config-stock-opciones" role="radiogroup" aria-label="Cómo se ve el stock">
-          {OPCIONES_STOCK.map((o) => (
-            <button
-              key={o.valor}
-              type="button"
-              role="radio"
-              aria-checked={stockEn === o.valor}
-              className="config-stock-opcion"
-              disabled={guardando}
-              onClick={() => elegir(o.valor)}
-            >
-              <span className="config-stock-opcion-titulo">
-                <span className="config-stock-radio" />
-                {o.titulo}
-              </span>
-              <span className="config-stock-ejemplo">
-                <strong>{o.grande}</strong>
-                <span>{o.chico}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+      <div className="config-seccion-cuerpo">
+        {error && <div className="alert alert-danger">{error}</div>}
+        {aviso && <div className="alert alert-exito">{aviso}</div>}
+        {stockEn === null ? (
+          !error && <div className="config-catalogo-vacio">Cargando…</div>
+        ) : (
+          <div className="config-stock-opciones" role="radiogroup" aria-label="Visualización del stock">
+            {OPCIONES_STOCK.map((o) => (
+              <button
+                key={o.valor}
+                type="button"
+                role="radio"
+                aria-checked={stockEn === o.valor}
+                className="config-stock-opcion"
+                disabled={guardando}
+                onClick={() => elegir(o.valor)}
+              >
+                <span className="config-stock-opcion-titulo">
+                  <span className="config-stock-radio" />
+                  {o.titulo}
+                </span>
+                <span className="config-stock-ejemplo">
+                  <span className="config-stock-ejemplo-rotulo">Ejemplo</span>
+                  <strong>{o.grande}</strong>
+                  <span>{o.chico}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
 const SECCIONES = [
   // Datos del negocio: no es un catálogo, tiene su propio formulario (SeccionDatosNegocio) y, debajo,
   // cómo se ve el stock (SeccionStockEn).
-  { clave: 'negocio', texto: 'Datos del negocio' },
+  { clave: 'negocio', texto: 'Datos del negocio', icono: 'casa', color: COLOR.verde },
   {
     clave: 'categorias',
     texto: 'Categorías',
-    descripcion: 'Rubros con los que se clasifican los productos en Stock (ej. Bebidas, Lácteos). Aparecen como opciones al cargar o editar un producto.',
+    icono: 'etiqueta',
+    color: COLOR.violeta,
+    descripcion: 'Rubros para clasificar los productos (por ejemplo, Bebidas o Lácteos). Se eligen al dar de alta o editar un producto.',
     endpoint: '/categorias',
     singular: 'categoría',
   },
@@ -368,44 +389,59 @@ const SECCIONES = [
   {
     clave: 'pagos',
     texto: 'Condiciones de pago',
-    descripcion: 'Plazos que se le pueden asignar a un cliente-empresa (ej. Contado, 30 días). Aparecen como opciones en la ficha del cliente.',
+    icono: 'calendario',
+    color: COLOR.azul,
+    descripcion: 'Plazos de pago que se asignan a cada cliente (por ejemplo, Contado o 30 días). Se eligen en la ficha del cliente.',
     endpoint: '/condiciones-pago',
     singular: 'condición de pago',
   },
 ];
 
 export default function ConfiguracionPage() {
-  const { moduloActivo } = useAuth();
-  const secciones = SECCIONES.filter((s) => s.clave !== 'pagos' || moduloActivo('clientes_empresa'));
+  const { moduloActivo, stockEnPacks } = useAuth();
+  const conPagos = moduloActivo('clientes_empresa');
+  const secciones = SECCIONES.filter((s) => s.clave !== 'pagos' || conPagos);
   const [tab, setTab] = useState('negocio');
   const seccion = secciones.find((s) => s.clave === tab) ?? secciones[0];
 
+  // Panel verde (2026-10-29): el nombre del negocio y cuánto tiene cada catálogo. Se vuelve a pedir
+  // cuando una sección guarda algo; si un pedido falla, esa cifra queda en "—".
+  const [resumen, setResumen] = useState({ nombre: null, categorias: null, pagos: null });
+  const cargarResumen = useCallback(async () => {
+    const [negocio, categorias, pagos] = await Promise.all([
+      api.get('/negocio').catch(() => null),
+      api.get('/categorias').catch(() => null),
+      conPagos ? api.get('/condiciones-pago').catch(() => null) : null,
+    ]);
+    setResumen({ nombre: negocio?.nombre ?? null, categorias: categorias?.items.length ?? null, pagos: pagos?.items.length ?? null });
+  }, [conPagos]);
+
+  useEffect(() => {
+    cargarResumen();
+  }, [cargarResumen]);
+
   return (
     <div className="config-page">
-      <div className="config-encabezado">
-        <span className="config-subtitulo">Listas de opciones y ajustes generales del sistema. Solo el Administrador tiene acceso.</span>
-      </div>
+      <Hero
+        etiqueta="Tu negocio"
+        valor={resumen.nombre || '—'}
+        sub="Así figura en emails y documentos."
+        minis={[
+          { etiqueta: 'Categorías', valor: resumen.categorias ?? '—', sub: 'Para los productos', icono: 'etiqueta', tono: 'violeta' },
+          ...(conPagos
+            ? [{ etiqueta: 'Condiciones de pago', valor: resumen.pagos ?? '—', sub: 'Para los clientes', icono: 'calendario', tono: 'azul' }]
+            : []),
+          { etiqueta: 'Stock', valor: stockEnPacks ? 'En packs' : 'En unidades', sub: 'Productos con pack', icono: 'paquete', tono: 'verde' },
+        ]}
+      />
 
-      <div className="config-tabs" role="tablist">
-        {secciones.map((s) => (
-          <button
-            key={s.clave}
-            type="button"
-            role="tab"
-            aria-selected={tab === s.clave}
-            className={`config-tab${tab === s.clave ? ' config-tab-activa' : ''}`}
-            onClick={() => setTab(s.clave)}
-          >
-            {s.texto}
-          </button>
-        ))}
-      </div>
+      <Pestanas items={secciones} activa={seccion.clave} onCambiar={setTab} etiqueta="Secciones de la configuración" />
 
       {seccion.clave === 'negocio' ? (
-        <div className="config-negocio">
-          <SeccionDatosNegocio />
+        <>
+          <SeccionDatosNegocio onCambio={cargarResumen} />
           <SeccionStockEn />
-        </div>
+        </>
       ) : (
         <SeccionCatalogo
           key={seccion.clave}
@@ -413,6 +449,8 @@ export default function ConfiguracionPage() {
           descripcion={seccion.descripcion}
           endpoint={seccion.endpoint}
           singular={seccion.singular}
+          icono={seccion.icono}
+          onCambio={cargarResumen}
         />
       )}
     </div>

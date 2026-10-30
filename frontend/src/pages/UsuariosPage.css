@@ -1,279 +1,421 @@
+/* Usuarios (rediseño 2026-10-29): franja de cifras por rol, la lista a todo el ancho y el alta o
+   la ficha de un usuario en un formulario de 760px que reemplaza a la lista mientras está abierto. */
 .usuarios-page {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  height: 100%;
-  min-height: 0;
-}
-.usuarios-kpis {
-  display: flex;
   gap: 16px;
-  flex-wrap: wrap;
 }
+
+/* Cifras por rol: la franja la arma global.css ([class$='-kpis']). */
 .usuarios-kpi {
-  flex: 1;
-  min-width: 200px;
-  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
-.usuarios-kpi-label {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-tertiary);
-}
-.usuarios-kpi-value {
-  font-size: 26px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-/* Lugares libres del rol (topes que carga CEA en el superadmin). */
 .usuarios-kpi-cupo {
   font-size: 12.5px;
-  font-weight: 600;
-  color: var(--color-primary);
+  font-weight: 500;
+  color: var(--text-tertiary);
 }
-.usuarios-kpi-cupo-lleno {
+.usuarios-cargando {
+  padding: 32px;
+  text-align: center;
   color: var(--text-tertiary);
 }
 
-.usuarios-body {
-  flex: 1;
-  display: flex;
-  gap: 16px;
-  min-height: 0;
-}
-/* Con el menú lateral (240px) los dos paneles ya no entran lado a lado por
-   debajo de ~1200px de ventana: se apilan y la página crece con su contenido
-   (sin altura fija, que era lo que hacía que los bloques se pisaran). */
-@media (max-width: 1200px) {
-  .usuarios-page {
-    height: auto;
-  }
-  .usuarios-body {
-    flex-direction: column;
-  }
-  .usuarios-body > * {
-    flex: none;
-    min-width: 0;
-    max-width: 100%;
-  }
-}
-
+/* ---------- Lista ---------- */
 .usuarios-lista {
-  flex: 1.7;
-  padding: 20px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  min-height: 0;
+  gap: 16px;
 }
 .usuarios-lista-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+}
+.usuarios-lista-titulos {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 .usuarios-titulo {
-  font-size: 14px;
+  margin: 0;
+  font-size: 16px;
   font-weight: 700;
+  line-height: 1.3;
 }
-.usuarios-vacio {
-  padding: 32px;
-  text-align: center;
-  color: var(--text-tertiary);
-  font-size: 14px;
-}
-.usuarios-tabla {
-  flex: 1;
-  overflow: auto;
-}
-.usuarios-tabla-head {
-  display: flex;
-  padding: 8px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--bg-app);
-}
+.usuarios-tabla-head,
 .usuarios-fila {
   display: flex;
   align-items: center;
-  width: 100%;
-  padding: 11px 10px;
+  margin: 0 -12px;
+  padding: 0 12px;
+}
+.usuarios-tabla-head {
+  height: 40px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border-default);
+}
+.usuarios-fila {
+  width: calc(100% + 24px);
+  min-height: 64px;
+  padding-top: 10px;
+  padding-bottom: 10px;
   border: none;
-  border-bottom: 1px solid var(--bg-app);
+  border-bottom: 1px solid var(--border-rule);
   background: transparent;
   font: inherit;
+  color: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background 0.15s ease;
+}
+.usuarios-fila:last-child {
+  border-bottom: none;
 }
 .usuarios-fila:hover {
-  background: #f6f7f8;
+  background: var(--bg-hover);
+}
+.usuarios-fila:focus-visible {
+  outline-offset: -2px;
+}
+.usuarios-col-flecha {
+  width: 24px;
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  color: var(--text-muted);
+}
+.usuarios-fila-usuario {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.usuarios-avatar {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.usuarios-avatar-grande {
+  width: 48px;
+  height: 48px;
+  font-size: 15px;
+}
+.usuarios-fila-textos {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 .usuarios-fila-nombre {
   font-size: 14px;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
-.usuarios-fila-muted {
-  font-size: 13.5px;
+.usuarios-fila-sub {
+  font-size: 12.5px;
+  font-weight: 500;
   color: var(--text-tertiary);
 }
 .usuarios-badge {
   display: inline-flex;
-  padding: 4px 10px;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
   border-radius: var(--radius-pill);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 600;
 }
 .usuarios-badge-admin {
-  background: #dceee5;
-  color: #0e4b38;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
 }
 .usuarios-badge-encargado {
-  background: #dde4f1;
-  color: #22428c;
+  background: var(--info-bg);
+  color: var(--info-ink);
 }
 .usuarios-badge-cajero {
-  background: #f1f3f4;
-  color: #5b6664;
+  background: var(--neutral-bg);
+  color: var(--neutral-ink);
+}
+.usuarios-estado {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.usuarios-estado-linea {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
 }
 .usuarios-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
+  flex: none;
   border-radius: 50%;
 }
 .usuarios-dot-activo {
-  background: #3e9c6f;
+  background: var(--ok-ink);
 }
+/* Rosa Coral: alerta real (usuario bloqueado por intentos fallidos). */
 .usuarios-dot-bloqueado {
   background: var(--color-danger);
 }
 .usuarios-dot-pendiente {
-  background: var(--text-tertiary);
+  background: var(--text-muted);
 }
-.usuarios-fila-email {
-  min-width: 0;
-  padding-right: 8px;
+.usuarios-fila-fecha {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+.usuarios-sin-dato {
+  color: var(--text-tertiary);
+}
+
+/* ---------- Alta y ficha ---------- */
+.usuarios-form-card {
+  width: 100%;
+  max-width: 760px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.usuarios-form-cabecera {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.usuarios-form-titulo {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
   overflow-wrap: anywhere;
 }
-.usuarios-estado {
+.usuarios-ficha-cabecera {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: 13.5px;
+  gap: 14px;
 }
-.usuarios-2fa {
-  padding: 1px 7px;
-  border-radius: var(--radius-pill);
-  background: #dde4f1;
-  color: #22428c;
-  font-size: 11px;
-  font-weight: 700;
+.usuarios-ficha-nombre {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
+.usuarios-campos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+  align-items: start;
+}
+.usuarios-campo-full {
+  grid-column: 1 / -1;
+}
+.usuarios-hint {
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+/* Casilla con su explicación, en un pozo dentro de la tarjeta. */
 .usuarios-check {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--text-secondary);
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-rule);
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 .usuarios-check input {
-  margin-top: 2px;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
   flex: none;
   accent-color: var(--color-primary);
 }
-
-.usuarios-panel {
-  flex: 1;
-  min-width: 320px;
-  padding: 20px;
+.usuarios-check input:disabled + .usuarios-check-textos .usuarios-check-titulo {
+  color: var(--text-tertiary);
+}
+.usuarios-check-textos {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  overflow: auto;
+  gap: 2px;
 }
+.usuarios-check-titulo {
+  font-size: 14px;
+  font-weight: 600;
+}
+.usuarios-form-acciones {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+.usuarios-form-pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+.usuarios-form-pie .usuarios-hint {
+  flex: 1 1 260px;
+}
+
 /* Ficha de solo lectura de un Administrador (los gestiona CEA). */
 .usuarios-ficha {
   margin: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 8px 14px;
-  font-size: 13.5px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 24px;
 }
 .usuarios-ficha dt {
-  font-weight: 700;
-  color: var(--text-secondary);
+  margin-bottom: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
 }
 .usuarios-ficha dd {
   margin: 0;
+  font-size: 14px;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
-
-.usuarios-panel-vacio {
-  margin: auto;
-  text-align: center;
-  color: var(--text-tertiary);
-  font-size: 14px;
-  padding: 24px;
-}
-.usuarios-panel-titulo {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 15px;
-  font-weight: 700;
-}
-.usuarios-panel-cerrar {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 16px;
-  color: var(--text-tertiary);
-}
-.usuarios-form,
-.usuarios-detalle {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.usuarios-hint {
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-  font-weight: 500;
+.usuarios-nota {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-rule);
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
 }
 
+/* Eliminar: al pie, separado, en el color de peligro. */
 .usuarios-eliminar {
-  margin-top: auto;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-default);
-  text-align: center;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-rule);
 }
 .usuarios-eliminar-link {
+  padding: 0;
   border: none;
   background: transparent;
-  color: var(--color-danger);
-  font-size: 13px;
+  color: var(--danger-ink);
+  font: inherit;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
-  font-family: inherit;
+}
+.usuarios-eliminar-link:hover {
+  text-decoration: underline;
 }
 .usuarios-eliminar-confirm {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  font-size: 13px;
+  gap: 12px;
+  font-size: 13.5px;
   color: var(--text-secondary);
 }
 .usuarios-eliminar-confirm > div {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  justify-content: center;
+}
+
+/* ---------- Celular ---------- */
+@media (max-width: 600px) {
+  .usuarios-lista,
+  .usuarios-form-card {
+    padding: 16px;
+  }
+  .usuarios-lista-header .btn {
+    flex: 1 1 100%;
+    min-height: 44px;
+  }
+  /* La tabla pasa a renglones de dos líneas: identidad y rol arriba, estado e ingreso abajo. */
+  .usuarios-lista .usuarios-tabla {
+    overflow: visible;
+  }
+  .usuarios-lista .usuarios-tabla > * {
+    min-width: 0;
+  }
+  .usuarios-tabla-head {
+    display: none;
+  }
+  .usuarios-fila {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 12px;
+    row-gap: 6px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  .usuarios-fila > span {
+    padding-right: 0;
+  }
+  .usuarios-fila-usuario {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .usuarios-fila-rol {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .usuarios-estado {
+    grid-column: 1;
+    grid-row: 2;
+    padding-left: 48px;
+  }
+  .usuarios-estado-linea {
+    font-size: 13px;
+  }
+  .usuarios-fila-fecha {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+    font-size: 12.5px;
+    text-align: right;
+  }
+  .usuarios-col-flecha {
+    display: none;
+  }
+
+  .usuarios-campos,
+  .usuarios-ficha {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .usuarios-ficha-cabecera {
+    flex-wrap: wrap;
+  }
+  .usuarios-form-acciones {
+    width: 100%;
+  }
+  .usuarios-form-acciones .btn {
+    flex: 1;
+    min-height: 44px;
+  }
 }

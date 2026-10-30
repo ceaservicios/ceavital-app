@@ -40,7 +40,7 @@ export function aPayload(form) {
 // Convención de signo (Docs/Modelo-de-Datos.md): saldo positivo = el cliente
 // le debe al negocio, negativo = tiene saldo a favor.
 export function estadoSaldo(saldo) {
-  if (saldo > 0) return { clave: 'debe', texto: 'Debe' };
+  if (saldo > 0) return { clave: 'debe', texto: 'Pendiente' };
   if (saldo < 0) return { clave: 'favor', texto: 'A favor' };
   return { clave: 'aldia', texto: 'Al día' };
 }
@@ -77,14 +77,14 @@ function SelectCondicionPago({ value, onChange, condiciones, nombreActual }) {
         ))}
       </select>
       {condiciones.length === 0 && (
-        <span className="cliente-hint">Todavía no hay opciones. El Administrador las carga en Configuración → Condiciones de pago.</span>
+        <span className="cliente-hint">Sin condiciones de pago cargadas. Las define el Administrador en Configuración → Condiciones de pago.</span>
       )}
     </>
   );
 }
 
 // Formulario con TODOS los campos del cliente, compartido por el alta y la
-// edición para que se vean y se ordenen igual en las dos páginas.
+// edición para que se vean y se ordenen igual en las dos páginas (dos columnas que cierran).
 export function CamposCliente({ form, setForm, condiciones, nombreCondicionActual }) {
   const set = (campo) => (e) => setForm({ ...form, [campo]: e.target.value });
   return (
@@ -95,7 +95,7 @@ export function CamposCliente({ form, setForm, condiciones, nombreCondicionActua
       </div>
       <div className="field">
         <label>CUIT</label>
-        <input placeholder="30-12345678-9" value={form.cuit} onChange={set('cuit')} />
+        <input placeholder="Ej.: 30-12345678-9" value={form.cuit} onChange={set('cuit')} />
       </div>
       <div className="field">
         <label>Condición de pago</label>

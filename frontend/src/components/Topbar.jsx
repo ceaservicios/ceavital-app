@@ -4,46 +4,78 @@ import { etiquetaRol } from '../constants/roles.js';
 import './Topbar.css';
 
 const TITULOS = {
-  '/caja': 'Caja y Punto de Venta',
-  '/ventas-diarias': 'Ventas diarias',
-  '/stock': 'Stock y Lotes',
+  '/caja': 'Caja',
+  '/ventas-diarias': 'Ventas',
+  '/stock': 'Stock',
   '/vencimientos': 'Vencimientos',
-  '/proveedores': 'Proveedores y Pedidos',
-  '/cierre-caja': 'Cierre de Caja',
-  '/costos': 'Costos y Márgenes',
-  '/usuarios': 'Usuarios y Roles',
+  '/proveedores': 'Proveedores',
+  '/saldos': 'Saldos pendientes',
+  '/cierre-caja': 'Cierre de caja',
+  '/costos': 'Costos y márgenes',
+  '/usuarios': 'Usuarios',
   '/configuracion': 'Configuración',
-  '/clientes-empresa': 'Clientes y Cuenta Corriente',
-  '/pedidos-cliente': 'Pedidos de Clientes',
+  '/clientes-empresa': 'Clientes',
+  '/pedidos-cliente': 'Pedidos de clientes',
   '/cuenta': 'Mi cuenta',
 };
 
-function tituloDe(pathname) {
-  const ruta = Object.keys(TITULOS).find((r) => pathname === r || pathname.startsWith(`${r}/`));
-  return ruta ? TITULOS[ruta] : 'CEAVital';
+function seccionDe(pathname) {
+  return Object.keys(TITULOS).find((r) => pathname === r || pathname.startsWith(`${r}/`)) ?? null;
 }
 
+// Fichas: producto, proveedor, cliente y cuenta a pagar.
+const FICHA = /^\/(stock|proveedores|clientes-empresa)\/\d+$|^\/saldos\/cuentas\/\d+$/;
+
+// Rediseño 2026-10-29: en las pantallas de una sección (lista) el título de la barra es el h1;
+// en las de adentro (ficha, alta, cargar) la barra es la miga para volver y el h1 lo pone la
+// pantalla (el nombre del proveedor, del producto…). Así no hay dos títulos apilados.
+// Sin la fecha (usuario, 2026-10-30): en escritorio la barra no se ve en las listas (la sección ya
+// está marcada en el menú) ni en las fichas (la miga va abajo del panel, `MigaFicha`), así el panel
+// verde queda arriba de todo en todas. Solo se ve en las altas, con la miga. Ver Topbar.css.
 export default function Topbar({ onAbrirMenu }) {
   const { pathname } = useLocation();
   const { usuario } = useAuth();
-  const titulo = tituloDe(pathname);
+  const seccion = seccionDe(pathname);
+  const titulo = seccion ? TITULOS[seccion] : 'CEAVital';
+  const anidada = seccion && pathname !== seccion;
+  const escondida = !anidada || FICHA.test(pathname);
 
   return (
-    <header className="topbar">
+    <header className={`topbar${anidada ? ' topbar-anidada' : ''}${escondida ? ' topbar-escondida' : ''}`}>
       <button type="button" className="topbar-menu" onClick={onAbrirMenu} aria-label="Abrir menú">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M4 6h16M4 12h16M4 18h16" />
         </svg>
       </button>
-      <div className="topbar-title">{titulo}</div>
-      {/* El rol lleva a "Mi cuenta" (contraseña y verificación en dos pasos propias). */}
+      {anidada ? (
+        <Link to={seccion} className="topbar-volver">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          {titulo}
+        </Link>
+      ) : (
+        <h1 className="topbar-title">{titulo}</h1>
+      )}
+      {/* En celular el rol lleva a "Mi cuenta"; en escritorio eso ya está al pie del menú. */}
       <Link to="/cuenta" className="topbar-pill" title="Mi cuenta">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="8" r="4" />
-          <path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" />
-        </svg>
         {etiquetaRol(usuario?.rol)}
       </Link>
     </header>
+  );
+}
+
+// La miga de las fichas en escritorio, abajo del panel verde y arriba del nombre. En celular no se
+// ve: ahí la miga sigue en la barra de arriba.
+export function MigaFicha() {
+  const seccion = seccionDe(useLocation().pathname);
+  if (!seccion) return null;
+  return (
+    <Link to={seccion} className="miga-ficha">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M15 18l-6-6 6-6" />
+      </svg>
+      {TITULOS[seccion]}
+    </Link>
   );
 }

@@ -1,7 +1,9 @@
+/* Verificación en dos pasos (Mi cuenta y panel del superadmin). Rediseño 2026-10-29: el método
+   activo en un pozo, las opciones como tarjetas, los pasos numerados y acciones a la derecha. */
 .dosfa {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   min-width: 0;
 }
 .dosfa p {
@@ -13,47 +15,84 @@
   color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
-.dosfa-aviso {
-  background: rgba(14, 75, 56, 0.08);
-  color: var(--color-primary);
-  border: 1px solid rgba(14, 75, 56, 0.25);
+.dosfa-ayuda strong {
+  color: var(--text-primary);
+  font-weight: 600;
 }
-.dosfa-estado {
+.dosfa-icono {
+  width: 36px;
+  height: 36px;
+  flex: none;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 14.5px;
-  font-weight: 700;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-tertiary);
+}
+
+/* Método activo */
+.dosfa-resumen {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-rule);
+  border-radius: var(--radius-sm);
+}
+.dosfa-resumen-textos {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dosfa-resumen-titulo {
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.dosfa-resumen .dosfa-ayuda {
+  font-size: 13px;
+  color: var(--text-tertiary);
 }
 .dosfa-chip {
-  display: inline-block;
-  padding: 3px 12px;
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  flex: none;
   border-radius: var(--radius-pill);
-  background: rgba(14, 75, 56, 0.1);
-  color: var(--color-primary);
+  background: var(--ok-bg);
+  color: var(--ok-ink);
   font-size: 12.5px;
-  font-weight: 800;
+  font-weight: 600;
+  white-space: nowrap;
 }
 .dosfa-acciones {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
+}
+.dosfa-acciones-pie {
+  justify-content: flex-end;
 }
 
 /* Elección del método: dos tarjetas que se tocan enteras. */
 .dosfa-opciones {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 12px;
 }
 .dosfa-opcion {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 14px 16px;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
   text-align: left;
-  border: 1.5px solid var(--border-default);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
   color: var(--text-primary);
@@ -63,15 +102,42 @@
 }
 .dosfa-opcion:hover:not(:disabled) {
   border-color: var(--color-primary);
-  background: rgba(14, 75, 56, 0.04);
+  background: var(--color-primary-soft);
+}
+.dosfa-opcion:hover:not(:disabled) .dosfa-icono {
+  color: var(--color-primary);
 }
 .dosfa-opcion:disabled {
-  opacity: 0.6;
   cursor: not-allowed;
+  background: var(--bg-muted);
+}
+.dosfa-opcion:disabled .dosfa-opcion-titulo {
+  color: var(--text-tertiary);
+}
+.dosfa-opcion-textos {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 .dosfa-opcion-titulo {
-  font-size: 14.5px;
-  font-weight: 800;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.dosfa-recomendado {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 600;
 }
 .dosfa-opcion-texto {
   font-size: 13px;
@@ -79,91 +145,157 @@
   color: var(--text-tertiary);
 }
 
+/* Pasos numerados (app autenticadora). */
 .dosfa-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  max-width: 600px;
-}
-.dosfa-pasos {
-  margin: 0;
-  padding-left: 20px;
-  font-size: 13.5px;
-  line-height: 1.6;
-  color: var(--text-secondary);
-}
-.dosfa-qr {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
   gap: 20px;
 }
-.dosfa-qr-espera {
-  width: 180px;
-  height: 180px;
+.dosfa-paso {
+  display: flex;
+  gap: 14px;
+}
+.dosfa-paso-num {
+  width: 26px;
+  height: 26px;
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px dashed var(--border-default);
-  border-radius: var(--radius-sm);
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
   font-size: 13px;
-  color: var(--text-tertiary);
+  font-weight: 700;
 }
-.dosfa-qr-lado {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  flex: 1 1 240px;
+.dosfa-paso-cuerpo {
+  flex: 1;
   min-width: 0;
-}
-.dosfa-qr img {
-  display: block;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  background: #ffffff;
-  max-width: 100%;
-  height: auto;
-}
-.dosfa-qr-clave {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  padding-top: 3px;
+}
+.dosfa-paso-titulo {
+  font-size: 14px;
+  font-weight: 600;
+}
+.dosfa-qr {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  margin-top: 12px;
+}
+.dosfa-qr img,
+.dosfa-qr-espera {
+  display: block;
+  width: 168px;
+  height: 168px;
+  flex: none;
+  padding: 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+}
+.dosfa-qr-espera {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.dosfa-qr-clave {
+  flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 14px 16px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-rule);
+  border-radius: var(--radius-sm);
+}
+.dosfa-qr-clave-rotulo {
+  font-size: 13px;
+  font-weight: 600;
+}
+.dosfa-qr-clave .dosfa-ayuda {
+  font-size: 13px;
+  color: var(--text-tertiary);
 }
 .dosfa-qr-clave code {
-  font-family: Consolas, 'Courier New', monospace;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xs);
+  background: var(--bg-surface);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 1px;
   overflow-wrap: anywhere;
+  user-select: all;
 }
-.dosfa-codigo-input {
-  max-width: 220px;
-  font-size: 20px !important;
+.dosfa-campos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+  max-width: 480px;
+  margin-top: 12px;
+}
+.dosfa-form > .dosfa-campos {
+  margin-top: 0;
+}
+.field .dosfa-codigo-input {
+  font-size: 18px;
+  font-weight: 600;
   letter-spacing: 6px;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
-/* Códigos de recuperación: dos columnas, monoespaciados. */
+/* Códigos de recuperación: dos columnas, monoespaciados, en un pozo. */
 .dosfa-codigos {
   margin: 0;
-  padding: 14px 16px;
+  padding: 16px 20px;
   list-style: none;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 24px;
-  background: var(--bg-muted);
-  border-radius: var(--radius-sm);
-  font-family: Consolas, 'Courier New', monospace;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 1px;
+  gap: 10px 32px;
   max-width: 420px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-rule);
+  border-radius: var(--radius-sm);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 1px;
 }
 
+@media (max-width: 600px) {
+  .dosfa-qr {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .dosfa-qr-clave {
+    width: 100%;
+  }
+  .dosfa-campos {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: none;
+  }
+  .dosfa-acciones-pie .btn {
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+}
 @media (max-width: 480px) {
   .dosfa-codigos {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dosfa-paso {
+    gap: 10px;
   }
 }

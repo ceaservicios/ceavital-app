@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { fechaHoyISO } from '../utils/format.js';
-import { esFraccionable, etiquetaPack, simboloMedida, tienePack } from '../utils/presentacion.js';
-import FormasDeVenta, { faltaEnFormas, FORMAS_VACIAS, formasParaApi } from '../components/FormasDeVenta.jsx';
+import { esFraccionable, etiquetaPack, plural, simboloMedida, tienePack } from '../utils/presentacion.js';
+import FormasDeVenta, { ConUnidad, faltaEnFormas, FORMAS_VACIAS, formasParaApi } from '../components/FormasDeVenta.jsx';
 import {
   cantidadParaApi,
   CuentaIngreso,
@@ -21,6 +21,8 @@ import './StockPage.css';
 
 // Alta de producto en una página propia, con todos los campos a la vista (2026-10-28; antes era
 // un panel angosto al costado de la lista). Solo Admin y Encargado (la ruta lo controla).
+// Rediseño 2026-10-29: una sola hoja (datos, medida y formas de venta, stock inicial) con las
+// acciones al pie y el error junto a ellas.
 export default function ProductoNuevoPage() {
   const { usuario } = useAuth();
   // El Cajero no crea productos: vuelve a la lista (el servidor tampoco lo deja).
@@ -43,6 +45,7 @@ function FormularioProductoNuevo() {
   const productoForm = productoDelFormulario(formas);
   const conPack = tienePack(productoForm);
   const enPacks = conPack && lote.en_packs;
+  const nombrePack = formas.pack.nombre.trim() || 'Pack';
 
   async function crear(e) {
     e.preventDefault();
@@ -56,7 +59,7 @@ function FormularioProductoNuevo() {
       (stockMinimo === null
         ? 'El stock mínimo no es un número válido.'
         : hayLote && !cantidadLote
-          ? `La cantidad del lote inicial no es válida${enPacks ? ' (en packs va un número entero)' : ''}.`
+          ? `La cantidad del stock inicial no es válida${enPacks ? ': por caja o pack se ingresa un número entero' : ''}.`
           : null);
     if (falta) {
       setError(falta);
@@ -95,54 +98,47 @@ function FormularioProductoNuevo() {
   return (
     <div className="cliente-page producto-pagina">
       <div className="cliente-encabezado">
-        <Link to="/stock" className="cliente-volver">
-          ← Volver a stock
-        </Link>
         <h1 className="cliente-h1">Nuevo producto</h1>
       </div>
 
-      <form className="producto-form" onSubmit={crear}>
-        {error && <div className="alert alert-danger">{error}</div>}
-        {/* Uno debajo del otro: datos, cómo se vende y el stock inicial (que depende del pack). */}
-        <div className="producto-columnas">
-          <div className="card cliente-card">
-            <span className="cliente-seccion-titulo">Datos del producto</span>
-            <div className="cliente-campos">
-              <div className="field cliente-campo-full">
-                <label>Nombre *</label>
-                <input required value={producto.nombre} onChange={set('nombre')} />
-              </div>
-              <div className="field">
-                <label>Categoría</label>
-                <select value={producto.categoria_id} onChange={set('categoria_id')}>
-                  <option value="">Sin categoría</option>
-                  {categorias.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre}
-                    </option>
-                  ))}
-                </select>
-                {categorias.length === 0 && <span className="stock-hint">Las categorías se crean en Configuración.</span>}
-              </div>
-              <div className="field">
-                <label>Código de barras</label>
-                <input value={producto.codigo_barras} onChange={set('codigo_barras')} />
-              </div>
-              <div className="field">
-                <label>Proveedor</label>
-                <select value={producto.proveedor_id} onChange={set('proveedor_id')}>
-                  <option value="">Sin proveedor</option>
-                  {proveedores.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label>
-                  Stock mínimo <span className="stock-label-unidad">en {simboloMedida(formas.medida)}</span>
-                </label>
+      <form className="card producto-hoja producto-hoja-alta" onSubmit={crear}>
+        <section className="producto-seccion">
+          <h2 className="producto-seccion-titulo">Datos del producto</h2>
+          <div className="producto-datos">
+            <div className="field producto-campo-nombre">
+              <label>Nombre</label>
+              <input required value={producto.nombre} onChange={set('nombre')} />
+            </div>
+            <div className="field producto-campo-codigo">
+              <label>Código de barras</label>
+              <input placeholder="Opcional" value={producto.codigo_barras} onChange={set('codigo_barras')} />
+            </div>
+            <div className="field producto-campo-categoria">
+              <label>Categoría</label>
+              <select value={producto.categoria_id} onChange={set('categoria_id')}>
+                <option value="">Sin categoría</option>
+                {categorias.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+              {categorias.length === 0 && <span className="stock-hint">Las categorías se crean en Configuración.</span>}
+            </div>
+            <div className="field producto-campo-proveedor">
+              <label>Proveedor</label>
+              <select value={producto.proveedor_id} onChange={set('proveedor_id')}>
+                <option value="">Sin proveedor</option>
+                {proveedores.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field producto-campo-minimo">
+              <label>Stock mínimo</label>
+              <ConUnidad sufijo={simboloMedida(formas.medida)}>
                 <input
                   type="text"
                   inputMode={esFraccionable(formas.medida) ? 'decimal' : 'numeric'}
@@ -150,65 +146,80 @@ function FormularioProductoNuevo() {
                   value={producto.stock_minimo}
                   onChange={set('stock_minimo')}
                 />
-              </div>
-              <div className="field">
-                <label>Días de aviso de vencimiento</label>
-                <input type="number" min="0" value={producto.dias_aviso_vencimiento} onChange={set('dias_aviso_vencimiento')} />
-              </div>
+              </ConUnidad>
+            </div>
+            <div className="field producto-campo-aviso">
+              <label>Aviso de vencimiento</label>
+              <ConUnidad sufijo="días antes">
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="Sin aviso"
+                  value={producto.dias_aviso_vencimiento}
+                  onChange={set('dias_aviso_vencimiento')}
+                />
+              </ConUnidad>
             </div>
           </div>
+        </section>
 
-          <div className="card cliente-card producto-columna">
-            <span className="cliente-seccion-titulo">Cómo se mide y cómo se vende</span>
-            <FormasDeVenta valor={formas} onChange={setFormas} editablePrecios verCosto />
+        <section className="producto-seccion">
+          <h2 className="producto-seccion-titulo">Medida y formas de venta</h2>
+          <FormasDeVenta valor={formas} onChange={setFormas} editablePrecios verCosto />
+        </section>
+
+        {/* El stock inicial va último: depende de la caja o pack elegido arriba. */}
+        <section className="producto-seccion">
+          <div className="producto-seccion-cabecera">
+            <h2 className="producto-seccion-titulo">
+              Stock inicial <span className="producto-opcional">(opcional)</span>
+            </h2>
+            <p className="producto-seccion-ayuda">
+              Si ya hay mercadería en el depósito. Las compras a proveedores se registran en Proveedores → Ingresar mercadería.
+            </p>
           </div>
-
-          <div className="card cliente-card">
-            <span className="cliente-seccion-titulo">Stock inicial (opcional)</span>
-            <span className="cliente-hint">
-              Si ya tenés mercadería de este producto. La que trae un proveedor se carga desde Proveedores → Cargar mercadería.
-            </span>
+          <div className="producto-campos-ingreso">
             {conPack && (
-              <SelectorEnPacks
-                enPacks={lote.en_packs}
-                packNombre={formas.pack.nombre.trim()}
-                medida={formas.medida}
-                onChange={(v) => setLote({ ...lote, en_packs: v })}
-              />
+              <div className="field producto-cargar-en">
+                <label>Cargar en</label>
+                <SelectorEnPacks
+                  enPacks={lote.en_packs}
+                  packNombre={etiquetaPack(nombrePack, productoForm.pack_unidades, formas.medida)}
+                  medida={formas.medida}
+                  onChange={(v) => setLote({ ...lote, en_packs: v })}
+                />
+              </div>
             )}
-            <div className="cliente-campos">
-              <div className="field">
-                <label>
-                  {enPacks
-                    ? `Cantidad (en ${etiquetaPack(formas.pack.nombre.trim() || 'Pack', productoForm.pack_unidades, formas.medida)})`
-                    : `Cantidad (en ${simboloMedida(formas.medida)})`}
-                </label>
+            <div className="field">
+              <label>Cantidad</label>
+              <ConUnidad sufijo={enPacks ? plural(nombrePack, 2) : simboloMedida(formas.medida)}>
                 <input
                   type="text"
                   inputMode={esFraccionable(formas.medida) && !enPacks ? 'decimal' : 'numeric'}
-                  placeholder="Vacío si todavía no hay stock"
+                  placeholder="Sin stock inicial"
                   value={lote.cantidad}
                   onChange={(e) => setLote({ ...lote, cantidad: e.target.value })}
                 />
-                <CuentaIngreso cantidad={lote.cantidad} enPacks={lote.en_packs} producto={productoForm} textoFinal={null} />
-              </div>
-              <div className="field">
-                <label>Fecha de ingreso</label>
-                <input type="date" value={lote.fecha_ingreso} onChange={(e) => setLote({ ...lote, fecha_ingreso: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>Vencimiento (opcional)</label>
-                <input
-                  type="date"
-                  value={lote.fecha_vencimiento}
-                  onChange={(e) => setLote({ ...lote, fecha_vencimiento: e.target.value })}
-                />
-              </div>
+              </ConUnidad>
+            </div>
+            <div className="field">
+              <label>Fecha de ingreso</label>
+              <input type="date" value={lote.fecha_ingreso} onChange={(e) => setLote({ ...lote, fecha_ingreso: e.target.value })} />
+            </div>
+            <div className="field">
+              <label>Vencimiento (opcional)</label>
+              <input
+                type="date"
+                value={lote.fecha_vencimiento}
+                onChange={(e) => setLote({ ...lote, fecha_vencimiento: e.target.value })}
+              />
             </div>
           </div>
-        </div>
+          <CuentaIngreso cantidad={lote.cantidad} enPacks={lote.en_packs} producto={productoForm} textoFinal={null} />
+        </section>
 
-        <div className="cliente-acciones">
+        <div className="producto-pie">
+          {error && <div className="alert alert-danger producto-pie-error">{error}</div>}
           <button type="button" className="btn" onClick={() => navigate('/stock')}>
             Cancelar
           </button>

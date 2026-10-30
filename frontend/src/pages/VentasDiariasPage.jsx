@@ -1,7 +1,12 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { cuandoFueElCierre, fechaHoyISO, formatearFecha, formatearFechaHora, formatearMonto } from '../utils/format.js';
+import Hero from '../components/Hero.jsx';
+import Icono from '../components/Icono.jsx';
+import { ConIcono } from '../components/ConAvatar.jsx';
+import Pestanas from '../components/Pestanas.jsx';
+import { COLOR, COLOR_MEDIO, ICONO_MEDIO } from '../utils/colores.js';
+import { cuandoFueElCierreCorto, fechaHoyISO, formatearFecha, formatearFechaHora, formatearMonto } from '../utils/format.js';
 import { ItemsPedido } from './pedidosComun.jsx';
 import './ClientesEmpresaPage.css';
 import './Pedidos.css';
@@ -19,7 +24,7 @@ const MEDIOS = [
   { valor: 'transferencia_qr', label: 'Transferencia / QR' },
   { valor: 'mercado_pago', label: 'Mercado Pago' },
   { valor: 'fiado', label: 'Pago pendiente' },
-  { valor: 'cta_cte', label: 'Cuenta Corriente' },
+  { valor: 'cta_cte', label: 'Cuenta corriente' },
 ];
 const etiquetaMedio = (valor) => MEDIOS.find((m) => m.valor === valor)?.label ?? valor;
 
@@ -204,12 +209,12 @@ export default function VentasDiariasPage() {
       setMostrarFormGasto(false);
       setExito(
         hoy >= desde && hoy <= hasta
-          ? 'Gasto anotado.'
-          : `Gasto anotado con fecha de hoy (${formatearFecha(hoy)}). No aparece en la lista porque estás mirando otras fechas.`
+          ? 'Gasto registrado.'
+          : `Gasto registrado con fecha de hoy (${formatearFecha(hoy)}). No aparece en la lista porque el período elegido es otro.`
       );
       await cargar();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo anotar el gasto.');
+      setError(err instanceof ApiError ? err.message : 'No se pudo registrar el gasto.');
     } finally {
       registrandoGastoRef.current = false;
       setRegistrandoGasto(false);
@@ -249,154 +254,156 @@ export default function VentasDiariasPage() {
 
   return (
     <div className="cliente-page vd-page">
-      <div className="card vd-filtros">
-        <div className="vd-rapidos" role="group" aria-label="Período">
-          {rangosRapidos(hoy).map((r) => (
-            <button
-              key={r.clave}
-              type="button"
-              className={`vd-rapido${rapido === r.clave ? ' vd-rapido-activo' : ''}`}
-              aria-pressed={rapido === r.clave}
-              onClick={() => {
-                setDesde(r.desde);
-                setHasta(r.hasta);
-              }}
-            >
-              {r.texto}
-            </button>
-          ))}
-        </div>
-        <div className="vd-campos">
-          <label className="vd-campo">
-            <span>Desde</span>
-            <input type="date" value={desde} max={hoy} onChange={(e) => cambiarDesde(e.target.value)} />
-          </label>
-          <label className="vd-campo">
-            <span>Hasta</span>
-            <input type="date" value={hasta} max={hoy} onChange={(e) => cambiarHasta(e.target.value)} />
-          </label>
-          {pestana === 'ventas' && (
-            <>
-              <label className="vd-campo">
-                <span>Medio de pago</span>
-                <select value={medio} onChange={(e) => setMedio(e.target.value)}>
-                  <option value="">Todos</option>
-                  {mediosDelFiltro.map((m) => (
-                    <option key={m.valor} value={m.valor}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="vd-campo">
-                <span>Cobró</span>
-                <select value={vendedor} onChange={(e) => setVendedor(e.target.value)}>
-                  <option value="">Todos</option>
-                  {(datos?.vendedores ?? []).map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.nombre}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {conClientes && (
-                <label className="vd-campo">
-                  <span>Cliente (cuenta corriente)</span>
-                  <select value={cliente} onChange={(e) => setCliente(e.target.value)}>
-                    <option value="">Todos</option>
-                    {clientes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.razon_social}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              <label className="vd-campo">
-                <span>Estado</span>
-                <select value={estado} onChange={(e) => setEstado(e.target.value)}>
-                  {ESTADOS.map((s) => (
-                    <option key={s.valor} value={s.valor}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </>
-          )}
-        </div>
-      </div>
+      {/* Panel verde arriba de todo, como en las demás secciones, y compacto (opción B elegida por el
+          usuario el 2026-10-29): las ventas y las cifras del efectivo (fondo + efectivo − gastos). Sin la
+          barra por medio de pago: el desglose está en la tarjeta "Por medio de pago". */}
+      <Hero
+        etiqueta="Ventas"
+        valor={formatearMonto(totales?.total ?? 0)}
+        sub={`${textoPeriodo(desde, hasta)} · ${tickets === 1 ? '1 ticket' : `${tickets} tickets`} · promedio ${formatearMonto(
+          tickets > 0 ? Math.round(totales.total / tickets) : 0
+        )}`}
+        minis={[
+          {
+            etiqueta: 'Fondo',
+            valor: esHoy ? formatearMonto(caja?.fondo ?? 0) : '—',
+            sub: !esHoy ? 'Solo para hoy' : caja?.fondo_desde ? `Cierre ${cuandoFueElCierreCorto(caja.fondo_desde)}` : 'Sin cierres anteriores',
+            icono: 'caja',
+            tono: 'azul',
+          },
+          { etiqueta: 'Gastos y pagos', valor: formatearMonto(totalGastos), sub: textoPeriodo(desde, hasta), icono: 'billetera', tono: 'amarillo' },
+          {
+            etiqueta: 'Efectivo en caja',
+            valor: esHoy ? formatearMonto(caja?.efectivo_en_caja ?? 0) : '—',
+            sub: esHoy ? 'Fondo + efectivo − gastos' : 'Solo para hoy',
+            icono: 'billete',
+            // Un efectivo negativo no puede existir en el cajón: es la única cifra que se marca como alerta.
+            tono: esHoy && (caja?.efectivo_en_caja ?? 0) < 0 ? 'rojo' : 'verde',
+          },
+        ]}
+      />
 
-      <div className="cliente-kpis vd-kpis">
-        <div className="card cliente-kpi">
-          <span className="cliente-kpi-label">Fondo</span>
-          <span className="cliente-kpi-value">{esHoy ? formatearMonto(caja?.fondo ?? 0) : '—'}</span>
-          <span className="vd-kpi-nota">
-            {!esHoy ? 'Solo para hoy' : caja?.fondo_desde ? `Dejado en el cierre ${cuandoFueElCierre(caja.fondo_desde)}` : 'Sin cierres anteriores'}
-          </span>
+      {/* Filtros en una grilla de 4 columnas: período (2) + fechas; debajo, los de la lista. */}
+      <div className="card vd-filtros">
+        <div className="vd-campo vd-campo-periodo">
+          <span>Período</span>
+          <div className="vd-rapidos" role="group" aria-label="Período">
+            {rangosRapidos(hoy).map((r) => (
+              <button
+                key={r.clave}
+                type="button"
+                className={`vd-rapido${rapido === r.clave ? ' vd-rapido-activo' : ''}`}
+                aria-pressed={rapido === r.clave}
+                onClick={() => {
+                  setDesde(r.desde);
+                  setHasta(r.hasta);
+                }}
+              >
+                {r.texto}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="card cliente-kpi">
-          <span className="cliente-kpi-label">Ventas</span>
-          <span className="cliente-kpi-value">{formatearMonto(totales?.total ?? 0)}</span>
-          <span className="vd-kpi-nota">{textoPeriodo(desde, hasta)}</span>
-        </div>
-        <div className="card cliente-kpi">
-          <span className="cliente-kpi-label">Tickets</span>
-          <span className="cliente-kpi-value">{tickets}</span>
-        </div>
-        <div className="card cliente-kpi">
-          <span className="cliente-kpi-label">Ticket promedio</span>
-          <span className="cliente-kpi-value">{formatearMonto(tickets > 0 ? Math.round(totales.total / tickets) : 0)}</span>
-        </div>
-        <div className="card cliente-kpi">
-          <span className="cliente-kpi-label">Gastos y pagos</span>
-          <span className="cliente-kpi-value" style={{ color: totalGastos > 0 ? 'var(--color-danger)' : undefined }}>
-            {formatearMonto(totalGastos)}
-          </span>
-        </div>
-        <div className="card cliente-kpi vd-kpi-caja">
-          <span className="cliente-kpi-label">Efectivo en caja</span>
-          <span className="cliente-kpi-value">{esHoy ? formatearMonto(caja?.efectivo_en_caja ?? 0) : '—'}</span>
-          <span className="vd-kpi-nota">{esHoy ? 'Turno abierto: fondo + ventas en efectivo − gastos' : 'Solo para hoy'}</span>
-        </div>
+        <label className="vd-campo">
+          <span>Desde</span>
+          <input type="date" value={desde} max={hoy} onChange={(e) => cambiarDesde(e.target.value)} />
+        </label>
+        <label className="vd-campo">
+          <span>Hasta</span>
+          <input type="date" value={hasta} max={hoy} onChange={(e) => cambiarHasta(e.target.value)} />
+        </label>
+        {pestana === 'ventas' && (
+          <>
+            <label className="vd-campo">
+              <span>Medio de pago</span>
+              <select value={medio} onChange={(e) => setMedio(e.target.value)}>
+                <option value="">Todos</option>
+                {mediosDelFiltro.map((m) => (
+                  <option key={m.valor} value={m.valor}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="vd-campo">
+              <span>Cobrado por</span>
+              <select value={vendedor} onChange={(e) => setVendedor(e.target.value)}>
+                <option value="">Todos</option>
+                {(datos?.vendedores ?? []).map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nombre}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {conClientes && (
+              <label className="vd-campo">
+                <span>Cliente</span>
+                <select value={cliente} onChange={(e) => setCliente(e.target.value)}>
+                  <option value="">Todos</option>
+                  {clientes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.razon_social}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label className="vd-campo">
+              <span>Estado</span>
+              <select value={estado} onChange={(e) => setEstado(e.target.value)}>
+                {ESTADOS.map((s) => (
+                  <option key={s.valor} value={s.valor}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
+        )}
       </div>
 
       {(mediosConVentas.length > 0 || totales?.anuladas > 0) && (
-        <div className="vd-medios">
-          {mediosConVentas.map((m) => (
-            <span key={m.valor} className="vd-medio">
-              {m.label} <strong>{formatearMonto(totales.por_medio[m.valor].total)}</strong>
-            </span>
-          ))}
-          {totales?.anuladas > 0 && (
-            <span className="vd-medio vd-medio-anuladas">
-              {totales.anuladas === 1 ? '1 venta anulada' : `${totales.anuladas} ventas anuladas`} (no suman)
-            </span>
+        <div className="card vd-medios">
+          <div className="vd-medios-cab">
+            <span className="cliente-seccion-titulo">Por medio de pago</span>
+            {totales?.anuladas > 0 && (
+              <span className="vd-medios-anuladas">
+                {totales.anuladas === 1 ? '1 venta anulada' : `${totales.anuladas} ventas anuladas`} (no suman)
+              </span>
+            )}
+          </div>
+          {mediosConVentas.length > 0 && (
+            <ul className="vd-medios-lista">
+              {mediosConVentas.map((m) => {
+                const cantidad = totales.por_medio[m.valor].cantidad ?? 0;
+                return (
+                  <li key={m.valor} className="vd-medio">
+                    <span className="vd-medio-nombre">
+                      <span className="icono-cat icono-cat-chico" style={{ '--c': COLOR_MEDIO[m.valor] }}>
+                        <Icono nombre={ICONO_MEDIO[m.valor]} />
+                      </span>
+                      {m.label}
+                    </span>
+                    <span className="vd-medio-tickets">{cantidad === 1 ? '1 ticket' : `${cantidad} tickets`}</span>
+                    <span className="vd-medio-total">{formatearMonto(totales.por_medio[m.valor].total)}</span>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
       )}
 
-      <div className="cliente-tabs" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={pestana === 'ventas'}
-          className={`cliente-tab${pestana === 'ventas' ? ' cliente-tab-activa' : ''}`}
-          onClick={() => setPestana('ventas')}
-        >
-          Ventas ({ventas.length}
-          {datos?.hay_mas ? '+' : ''})
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={pestana === 'gastos'}
-          className={`cliente-tab${pestana === 'gastos' ? ' cliente-tab-activa' : ''}`}
-          onClick={() => setPestana('gastos')}
-        >
-          Gastos y pagos a proveedores ({gastos.length})
-        </button>
-      </div>
+      <Pestanas
+        items={[
+          { clave: 'ventas', texto: 'Ventas', n: `${ventas.length}${datos?.hay_mas ? '+' : ''}`, icono: 'ticket', color: COLOR.verde },
+          { clave: 'gastos', texto: 'Gastos y pagos a proveedores', n: gastos.length, icono: 'billetera', color: COLOR.naranja },
+        ]}
+        activa={pestana}
+        onCambiar={setPestana}
+        etiqueta="Ventas o gastos"
+      />
 
       {error && <div className="alert alert-danger">{error}</div>}
       {exito && <div className="alert alert-exito">{exito}</div>}
@@ -405,21 +412,21 @@ export default function VentasDiariasPage() {
         <div className="card cliente-card">
           {datos?.hay_mas && (
             <div className="alert alert-aviso">
-              Se muestran las 1.000 ventas más recientes. Los totales de arriba son de todas. Acotá las fechas para ver el resto.
+              Se muestran las 1.000 ventas más recientes; los totales de arriba incluyen todas. Acotá el período para ver el resto.
             </div>
           )}
           {cargando && !datos ? (
             <div className="cliente-vacio">Cargando…</div>
           ) : ventas.length === 0 ? (
-            <div className="cliente-vacio">No hay ventas con estos filtros.</div>
+            <div className="cliente-vacio">Sin ventas para estos filtros.</div>
           ) : (
             <div className="cliente-tabla-wrap">
-              <table className="cliente-tabla vd-tabla">
+              <table className="cliente-tabla vd-tabla vd-tabla-ventas">
                 <thead>
                   <tr>
                     <th>N°</th>
                     <th>Fecha y hora</th>
-                    <th className="vd-opcional">Cobró</th>
+                    <th className="vd-opcional">Cobrado por</th>
                     <th>Medio de pago</th>
                     {conClientes && <th>Cliente</th>}
                     <th className="num vd-opcional">Productos</th>
@@ -434,15 +441,32 @@ export default function VentasDiariasPage() {
                         className={`${abierta === v.id ? 'pedido-fila-abierta' : ''}${v.estado === 'anulada' ? ' vd-fila-anulada' : ''}`}
                         onClick={() => abrirVenta(v.id)}
                       >
-                        <td>#{v.id}</td>
-                        <td>{formatearFechaHora(v.creado_en)}</td>
+                        <td className="vd-c-num">#{v.id}</td>
+                        <td className="vd-c-fecha">{formatearFechaHora(v.creado_en)}</td>
                         <td className="vd-opcional">{v.usuario_nombre}</td>
-                        <td>{etiquetaMedio(v.medio_pago)}</td>
-                        {conClientes && <td className="cliente-td-nombre">{v.cliente_razon_social ?? '—'}</td>}
+                        <td className="vd-c-medio">
+                          <ConIcono
+                            icono={v.estado === 'anulada' ? 'menos' : ICONO_MEDIO[v.medio_pago] ?? 'ticket'}
+                            color={v.estado === 'anulada' ? COLOR.gris : COLOR_MEDIO[v.medio_pago] ?? COLOR.gris}
+                          >
+                            {etiquetaMedio(v.medio_pago)}
+                          </ConIcono>
+                        </td>
+                        {conClientes && (
+                          <td className={`vd-c-cliente${v.cliente_razon_social ? ' cliente-td-nombre' : ' vd-sin-dato'}`}>
+                            {v.cliente_razon_social ?? '—'}
+                          </td>
+                        )}
                         <td className="num vd-opcional">{v.cantidad_productos}</td>
-                        <td className="num vd-total">{formatearMonto(v.total)}</td>
+                        <td className="num vd-total vd-c-total">{formatearMonto(v.total)}</td>
                         {estado !== 'registrada' && (
-                          <td>{v.estado === 'anulada' ? <span className="pedido-estado pedido-estado-cancelado">Anulada</span> : <span className="pedido-estado pedido-estado-aprobado">Cobrada</span>}</td>
+                          <td className="vd-c-estado">
+                            {v.estado === 'anulada' ? (
+                              <span className="cliente-badge vd-badge-anulada">Anulada</span>
+                            ) : (
+                              <span className="cliente-badge vd-badge-cobrada">Cobrada</span>
+                            )}
+                          </td>
                         )}
                       </tr>
                       {abierta === v.id && (
@@ -456,7 +480,7 @@ export default function VentasDiariasPage() {
                               <div className="pedido-detalle">
                                 <div className="pedido-detalle-meta">
                                   <span>
-                                    Cobró: <strong>{v.usuario_nombre}</strong>
+                                    Cobrado por: <strong>{v.usuario_nombre}</strong>
                                   </span>
                                   <span>
                                     Medio de pago: <strong>{etiquetaMedio(v.medio_pago)}</strong>
@@ -493,67 +517,80 @@ export default function VentasDiariasPage() {
             <span className="cliente-seccion-titulo">Gastos y pagos a proveedores · {textoPeriodo(desde, hasta)}</span>
             {!mostrarFormGasto && (
               <button type="button" className="btn" onClick={() => setMostrarFormGasto(true)}>
-                + Anotar gasto
+                Registrar gasto
               </button>
             )}
           </div>
 
           {mostrarFormGasto && (
             <form className="vd-gasto-form" onSubmit={registrarGasto}>
-              <input
-                required
-                maxLength={200}
-                placeholder="Concepto (ej. flete, limpieza…)"
-                aria-label="Concepto"
-                value={nuevoGasto.concepto}
-                onChange={(e) => setNuevoGasto({ ...nuevoGasto, concepto: e.target.value })}
-              />
-              <input
-                required
-                type="number"
-                min="1"
-                placeholder="Monto"
-                aria-label="Monto"
-                value={nuevoGasto.monto}
-                onChange={(e) => setNuevoGasto({ ...nuevoGasto, monto: e.target.value })}
-              />
+              <label className="vd-campo vd-gasto-concepto">
+                <span>Concepto</span>
+                <input
+                  required
+                  maxLength={200}
+                  placeholder="Ej.: flete, limpieza"
+                  aria-label="Concepto"
+                  value={nuevoGasto.concepto}
+                  onChange={(e) => setNuevoGasto({ ...nuevoGasto, concepto: e.target.value })}
+                />
+              </label>
+              <label className="vd-campo">
+                <span>Monto</span>
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  placeholder="0"
+                  aria-label="Monto"
+                  value={nuevoGasto.monto}
+                  onChange={(e) => setNuevoGasto({ ...nuevoGasto, monto: e.target.value })}
+                />
+              </label>
               {proveedores.length > 0 && (
-                <select
-                  aria-label="Proveedor"
-                  value={nuevoGasto.proveedor_id}
-                  onChange={(e) => setNuevoGasto({ ...nuevoGasto, proveedor_id: e.target.value })}
-                >
-                  <option value="">Sin proveedor asociado</option>
-                  {proveedores.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre}
-                    </option>
-                  ))}
-                </select>
+                <label className="vd-campo">
+                  <span>Proveedor</span>
+                  <select
+                    aria-label="Proveedor"
+                    value={nuevoGasto.proveedor_id}
+                    onChange={(e) => setNuevoGasto({ ...nuevoGasto, proveedor_id: e.target.value })}
+                  >
+                    <option value="">Sin proveedor asociado</option>
+                    {proveedores.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               )}
-              <button type="submit" className="btn btn-primary" disabled={registrandoGasto}>
-                {registrandoGasto ? 'Guardando…' : 'Guardar'}
-              </button>
-              <button type="button" className="btn" onClick={() => setMostrarFormGasto(false)}>
-                Cancelar
-              </button>
-              <span className="vd-gasto-nota">Se anota con la fecha y hora de ahora, siempre en efectivo (sale de la caja).</span>
+              <div className="vd-gasto-pie">
+                <span className="vd-gasto-nota">Se registra con la fecha y hora actuales y se descuenta del efectivo de la caja.</span>
+                <div className="vd-gasto-botones">
+                  <button type="button" className="btn" onClick={() => setMostrarFormGasto(false)}>
+                    Cancelar
+                  </button>
+                  <button type="submit" className="btn btn-primary" disabled={registrandoGasto}>
+                    {registrandoGasto ? 'Guardando…' : 'Registrar gasto'}
+                  </button>
+                </div>
+              </div>
             </form>
           )}
 
           {cargando && !datos ? (
             <div className="cliente-vacio">Cargando…</div>
           ) : gastos.length === 0 ? (
-            <div className="cliente-vacio">No hay gastos en estas fechas.</div>
+            <div className="cliente-vacio">Sin gastos registrados en el período.</div>
           ) : (
             <div className="cliente-tabla-wrap">
-              <table className="cliente-tabla vd-tabla">
+              <table className="cliente-tabla vd-tabla vd-tabla-gastos">
                 <thead>
                   <tr>
                     <th>Fecha y hora</th>
                     <th>Concepto</th>
                     <th className="vd-opcional">Proveedor</th>
-                    <th className="vd-opcional">Anotó</th>
+                    <th className="vd-opcional">Registrado por</th>
                     <th className="num">Monto</th>
                     {puedeEliminarGasto && <th aria-label="Acciones" />}
                   </tr>
@@ -561,27 +598,32 @@ export default function VentasDiariasPage() {
                 <tbody>
                   {gastos.map((g) => (
                     <tr key={g.id} className="sin-click">
-                      <td>{formatearFechaHora(g.creado_en)}</td>
-                      <td className="cliente-td-nombre">{g.concepto}</td>
-                      <td className="vd-opcional">{g.proveedor_nombre ?? '—'}</td>
+                      <td className="vd-g-fecha">{formatearFechaHora(g.creado_en)}</td>
+                      <td className="cliente-td-nombre vd-g-concepto">
+                        <ConIcono icono={g.proveedor_nombre ? 'camion' : 'billetera'} color={g.proveedor_nombre ? COLOR.naranja : COLOR.violeta}>
+                          {g.concepto}
+                        </ConIcono>
+                      </td>
+                      <td className={`vd-opcional${g.proveedor_nombre ? '' : ' vd-sin-dato'}`}>{g.proveedor_nombre ?? '—'}</td>
                       <td className="vd-opcional">{g.usuario_nombre}</td>
                       <td className="num vd-gasto-monto">{formatearMonto(g.monto)}</td>
                       {puedeEliminarGasto && (
                         <td className="vd-gasto-acciones">
-                          {/* Un pago a un proveedor se anula desde su perfil (2026-10-28), no acá. */}
-                          {g.pago_proveedor_id ? null : confirmandoBaja === g.id ? (
+                          {/* Un pago a un proveedor se anula desde su perfil (2026-10-28), y el de una
+                              cuenta de Saldos pendientes desde su ficha (2026-10-29), no acá. */}
+                          {g.pago_proveedor_id || g.pago_cuenta_id ? null : confirmandoBaja === g.id ? (
                             <span className="vd-confirmar">
-                              ¿Eliminar?
-                              <button type="button" className="vd-link vd-link-peligro" onClick={() => eliminarGasto(g.id)}>
-                                Sí
-                              </button>
+                              ¿Eliminar el gasto?
                               <button type="button" className="vd-link" onClick={() => setConfirmandoBaja(null)}>
-                                No
+                                Cancelar
+                              </button>
+                              <button type="button" className="vd-link vd-link-peligro" onClick={() => eliminarGasto(g.id)}>
+                                Eliminar
                               </button>
                             </span>
                           ) : (
                             <button type="button" className="vd-eliminar" title="Eliminar gasto" onClick={() => setConfirmandoBaja(g.id)}>
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                 <path d="M3 6h18" />
                                 <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                                 <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
@@ -598,7 +640,7 @@ export default function VentasDiariasPage() {
                     <td colSpan={2}>Total</td>
                     <td className="vd-opcional" />
                     <td className="vd-opcional" />
-                    <td className="num vd-gasto-monto">{formatearMonto(totalGastos)}</td>
+                    <td className="num vd-gasto-total">{formatearMonto(totalGastos)}</td>
                     {puedeEliminarGasto && <td />}
                   </tr>
                 </tfoot>

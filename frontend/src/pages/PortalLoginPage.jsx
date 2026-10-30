@@ -7,10 +7,12 @@ import './LoginPage.css';
 
 // Al entrar un tercer equipo con el mismo usuario (hasta 2 a la vez, decisión del usuario del
 // 2026-10-16), el que entra lo ve en el portal.
-const AVISO_CERRO_OTRO = 'Este usuario ya estaba abierto en 2 equipos: se cerró el más viejo.';
+const AVISO_CERRO_OTRO = 'Este usuario ya tenía una sesión abierta en 2 equipos: se cerró la más antigua.';
 
 // Ingreso del cliente-empresa a su propia cuenta. Sesión aparte de la de los
 // usuarios del negocio (ver src/services/clientes-portal.service.js).
+// Rediseño 2026-10-29: la marca es la del negocio (sus clientes no conocen CEAVital), en una
+// tarjeta centrada; CEAVital queda como firma al pie.
 export default function PortalLoginPage() {
   const navigate = useNavigate();
   const { cargandoSesion, moduloActivo } = useAuth();
@@ -39,7 +41,7 @@ export default function PortalLoginPage() {
       const resultado = await api.post('/portal/login', { usuario: usuario.trim(), password });
       navigate('/portal', { replace: true, state: resultado?.sesion_cerrada_otro_equipo ? { aviso: AVISO_CERRO_OTRO } : null });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo conectar con el servidor. Probá de nuevo.');
+      setError(err instanceof ApiError ? err.message : 'No se pudo conectar con el servidor. Intentá nuevamente.');
     } finally {
       enviandoRef.current = false;
       setEnviando(false);
@@ -51,30 +53,27 @@ export default function PortalLoginPage() {
   // Plan sin el módulo de portal: no hay ingreso de clientes en esta instalación.
   if (!moduloActivo('portal')) {
     return (
-      <div className="login-page">
-        <div className="login-card card">
-          <div className="login-brand">
-            <img src="/logo-negocio.png" alt="Logo del negocio" className="login-logo-negocio" />
-            <div className="login-brand-text">
-              <span className="login-brand-title">Portal no disponible</span>
-              <span className="login-brand-subtitle">Este negocio no tiene habilitado el acceso de clientes.</span>
-            </div>
+      <div className="login-portal">
+        <div className="login-portal-card">
+          <img src="/logo-negocio.png" alt="Logo del negocio" className="login-portal-logo" />
+          <div className="login-encabezado login-encabezado-centro">
+            <h1 className="login-h1">Portal no disponible</h1>
+            <p className="login-sub">El acceso de clientes no está habilitado para este negocio.</p>
           </div>
         </div>
+        <p className="login-portal-pie">Con CEAVital, un producto de CEA Servicios</p>
       </div>
     );
   }
 
   return (
-    <div className="login-page">
-      <div className="login-card card">
-        <div className="login-brand">
-          {/* Portal del cliente del negocio: con el logo del negocio (2026-10-14). */}
-          <img src="/logo-negocio.png" alt="Logo del negocio" className="login-logo-negocio" />
-          <div className="login-brand-text">
-            <span className="login-brand-title">Tu cuenta corriente</span>
-            <span className="login-brand-subtitle">Ingresá con el usuario y la contraseña que te dio el negocio</span>
-          </div>
+    <div className="login-portal">
+      <div className="login-portal-card">
+        {/* Portal del cliente del negocio: con el logo del negocio (2026-10-14). */}
+        <img src="/logo-negocio.png" alt="Logo del negocio" className="login-portal-logo" />
+        <div className="login-encabezado login-encabezado-centro">
+          <h1 className="login-h1">Portal de clientes</h1>
+          <p className="login-sub">Ingresá con el usuario y la contraseña que te asignó el negocio.</p>
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>
@@ -112,8 +111,8 @@ export default function PortalLoginPage() {
             {enviando ? 'Ingresando…' : 'Ingresar'}
           </button>
         </form>
-        <p className="login-pie">Con CEAVital, un producto de CEA Servicios</p>
       </div>
+      <p className="login-portal-pie">Con CEAVital, un producto de CEA Servicios</p>
       {aviso && (
         <AvisoEmergente titulo="Se cerró tu sesión" onCerrar={() => setAviso(null)}>
           {aviso}

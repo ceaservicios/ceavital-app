@@ -1,63 +1,205 @@
+/* Mi cuenta (rediseño 2026-10-29): encabezado con la persona y una tarjeta por tema, con el título a
+   la izquierda y el formulario a la derecha, como en Configuración. */
 .cuenta-page {
-  max-width: 1100px;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
-.cuenta-card {
-  padding: 20px 22px;
+.cuenta-cargando {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-tertiary);
+}
+
+/* Encabezado: iniciales, nombre, email y rol. */
+.cuenta-perfil {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+}
+.cuenta-avatar {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 15px;
+  font-weight: 700;
+}
+.cuenta-perfil-textos {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-}
-.cuenta-datos {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
+  gap: 2px;
 }
 .cuenta-nombre {
-  font-size: 17px;
-  font-weight: 800;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
   overflow-wrap: anywhere;
 }
 .cuenta-detalle {
-  margin-top: 2px;
   font-size: 13.5px;
   color: var(--text-tertiary);
   overflow-wrap: anywhere;
 }
+.cuenta-rol {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Sección: título y explicación | formulario. */
+.cuenta-seccion {
+  display: grid;
+  grid-template-columns: minmax(200px, 300px) minmax(0, 1fr);
+  gap: 16px 40px;
+  padding: 24px;
+}
+.cuenta-seccion-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
 .cuenta-h2 {
   margin: 0;
   font-size: 16px;
-  font-weight: 800;
+  font-weight: 700;
+  line-height: 1.3;
 }
 .cuenta-ayuda {
   margin: 0;
   font-size: 13.5px;
-  line-height: 1.5;
-  color: var(--text-secondary);
+  line-height: 1.55;
+  color: var(--text-tertiary);
 }
-.cuenta-aviso {
-  background: rgba(14, 75, 56, 0.08);
-  color: var(--color-primary);
-  border: 1px solid rgba(14, 75, 56, 0.25);
-}
-.cuenta-grilla {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
-  gap: 16px;
-  align-items: start;
-}
-@media (max-width: 480px) {
-  .cuenta-grilla {
-    grid-template-columns: 1fr;
-  }
+.cuenta-seccion-cuerpo {
+  min-width: 0;
+  max-width: 680px;
 }
 .cuenta-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+  align-items: start;
+  max-width: 680px;
+}
+.cuenta-campo-full {
+  grid-column: 1 / -1;
+}
+.cuenta-acciones {
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-  max-width: 420px;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+/* Verificación desactivada por CEA: estado en una fila. */
+.cuenta-estado {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 14px 16px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-rule);
+  border-radius: var(--radius-sm);
+}
+.cuenta-estado-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-bg);
+  color: var(--neutral-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cuenta-estado-texto {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 900px) {
+  .cuenta-seccion {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cuenta-seccion-cuerpo,
+  .cuenta-form {
+    max-width: none;
+  }
+}
+@media (max-width: 600px) {
+  .cuenta-perfil {
+    flex-wrap: wrap;
+    padding: 16px;
+    gap: 12px 14px;
+  }
+  .cuenta-perfil-textos {
+    flex-basis: calc(100% - 62px);
+  }
+  .cuenta-rol {
+    margin-left: 62px;
+  }
+  .cuenta-ir {
+    margin-left: auto;
+  }
+  .cuenta-seccion {
+    padding: 16px;
+  }
+  .cuenta-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cuenta-acciones .btn {
+    flex: 1;
+    min-height: 44px;
+  }
+}
+
+/* Perfil sobre el verde de marca (estilo "panel protagonista", elegido el 2026-10-29). */
+.card.cuenta-perfil {
+  border: 0;
+  color: #ffffff;
+  background: radial-gradient(120% 160% at 100% 0%, #2a9a6f 0%, rgba(42, 154, 111, 0) 60%),
+    linear-gradient(135deg, #0b3d2e, #0e4b38 60%, #13644a);
+}
+.cuenta-perfil .cuenta-nombre {
+  color: #ffffff;
+}
+.cuenta-perfil .cuenta-detalle {
+  color: rgba(255, 255, 255, 0.75);
+}
+.cuenta-perfil .cuenta-avatar {
+  background: rgba(255, 255, 255, 0.92);
+  color: #0e4b38;
+}
+.cuenta-perfil .cuenta-rol {
+  background: #f3c043;
+  color: #3b2b00;
+}
+/* Verde oscuro, como los cuadritos del panel verde (opción B, usuario, 2026-10-29: "en todos los
+   paneles"). */
+.cuenta-perfil .btn {
+  background: rgba(3, 28, 20, 0.62);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+.cuenta-perfil .btn:hover {
+  background: rgba(3, 28, 20, 0.8);
 }

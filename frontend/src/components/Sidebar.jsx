@@ -35,6 +35,13 @@ const ICONOS = {
       <circle cx="17.5" cy="18.5" r="1.8" />
     </svg>
   ),
+  // Saldos pendientes (2026-10-29): una boleta con renglones.
+  saldos: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z" />
+      <path d="M9 8h6M9 12h6" />
+    </svg>
+  ),
   'clientes-empresa': (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="4" y="3" width="16" height="18" rx="2" />
@@ -93,23 +100,24 @@ const CANDADO = (
 
 const SECCIONES = [
   {
-    titulo: 'OPERACIÓN',
+    titulo: 'Operación',
     items: [
-      { modulo: 'caja', to: '/caja', label: 'Caja y Punto de Venta' },
-      { modulo: 'ventas-diarias', to: '/ventas-diarias', label: 'Ventas diarias' },
-      { modulo: 'stock', to: '/stock', label: 'Stock y Lotes' },
+      { modulo: 'caja', to: '/caja', label: 'Caja' },
+      { modulo: 'ventas-diarias', to: '/ventas-diarias', label: 'Ventas' },
+      { modulo: 'stock', to: '/stock', label: 'Stock' },
       { modulo: 'vencimientos', to: '/vencimientos', label: 'Vencimientos' },
-      { modulo: 'proveedores', to: '/proveedores', label: 'Proveedores y Pedidos' },
-      { modulo: 'clientes-empresa', to: '/clientes-empresa', label: 'Clientes y Cta. Cte.' },
-      { modulo: 'pedidos-cliente', to: '/pedidos-cliente', label: 'Pedidos de Clientes' },
-      { modulo: 'cierre', to: '/cierre-caja', label: 'Cierre de Caja' },
+      { modulo: 'proveedores', to: '/proveedores', label: 'Proveedores' },
+      { modulo: 'saldos', to: '/saldos', label: 'Saldos pendientes' },
+      { modulo: 'clientes-empresa', to: '/clientes-empresa', label: 'Clientes' },
+      { modulo: 'pedidos-cliente', to: '/pedidos-cliente', label: 'Pedidos de clientes' },
+      { modulo: 'cierre', to: '/cierre-caja', label: 'Cierre de caja' },
     ],
   },
   {
-    titulo: 'ADMINISTRACIÓN',
+    titulo: 'Administración',
     items: [
-      { modulo: 'costos', to: '/costos', label: 'Costos y Márgenes' },
-      { modulo: 'usuarios', to: '/usuarios', label: 'Usuarios y Roles' },
+      { modulo: 'costos', to: '/costos', label: 'Costos y márgenes' },
+      { modulo: 'usuarios', to: '/usuarios', label: 'Usuarios' },
       { modulo: 'configuracion', to: '/configuracion', label: 'Configuración' },
     ],
   },
@@ -136,16 +144,56 @@ function useLotesVencidos(pathname) {
   return cantidad;
 }
 
+// Deudas de Saldos pendientes vencidas sin pagar, cuentas y boletas de proveedores (2026-10-29),
+// solo para quien puede verlas. Se vuelve a pedir al cambiar de pantalla y cuando Saldos avisa con
+// el evento "saldos-cambiaron" (corregir una boleta le cambia el vencimiento sin salir de la lista).
+function useDeudasVencidas(pathname, habilitado) {
+  const [cantidad, setCantidad] = useState(0);
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    const recargar = () => setVersion((v) => v + 1);
+    window.addEventListener('saldos-cambiaron', recargar);
+    return () => window.removeEventListener('saldos-cambiaron', recargar);
+  }, []);
+  useEffect(() => {
+    if (!habilitado) return undefined;
+    let vigente = true;
+    api
+      .get('/saldos/aviso')
+      .then((data) => {
+        if (vigente) setCantidad(Number.isInteger(data?.vencidas) ? data.vencidas : 0);
+      })
+      .catch(() => {
+        if (vigente) setCantidad(0);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [pathname, habilitado, version]);
+  return habilitado ? cantidad : 0;
+}
+
+function Contador({ cantidad, uno, varios }) {
+  const texto = cantidad === 1 ? uno : `${cantidad} ${varios}`;
+  return (
+    <span className="sidebar-badge" title={texto}>
+      <span aria-hidden="true">{cantidad > 99 ? '99+' : cantidad}</span>
+      <span className="sidebar-sr">{texto}</span>
+    </span>
+  );
+}
+
 export default function Sidebar({ abierto = false }) {
   const { usuario, logout, modulos } = useAuth();
   const rol = usuario?.rol;
   const { pathname } = useLocation();
   const vencidos = useLotesVencidos(pathname);
+  const deudasVencidas = useDeudasVencidas(pathname, puedeVerModulo('saldos', rol));
 
   return (
     <aside className={`sidebar${abierto ? ' sidebar-abierto' : ''}`}>
       <div className="sidebar-brand">
-        <img className="sidebar-brand-logo" src="/logo-isotipo.png" alt="" width="46" height="33" />
+        <img className="sidebar-brand-logo" src="/logo-isotipo.png" alt="" width="40" height="40" />
         <div className="sidebar-brand-text">
           <div className="sidebar-brand-title">
             <span className="sidebar-brand-cea">CEA</span>
@@ -178,11 +226,9 @@ export default function Sidebar({ abierto = false }) {
                 >
                   <span className="sidebar-item-icon">{ICONOS[item.modulo]}</span>
                   <span className="sidebar-item-label">{item.label}</span>
-                  {item.modulo === 'vencimientos' && vencidos > 0 && (
-                    <span className="sidebar-badge" title={vencidos === 1 ? '1 lote vencido' : `${vencidos} lotes vencidos`}>
-                      <span aria-hidden="true">{vencidos > 99 ? '99+' : vencidos}</span>
-                      <span className="sidebar-sr">{vencidos === 1 ? '1 lote vencido' : `${vencidos} lotes vencidos`}</span>
-                    </span>
+                  {item.modulo === 'vencimientos' && vencidos > 0 && <Contador cantidad={vencidos} uno="1 lote vencido" varios="lotes vencidos" />}
+                  {item.modulo === 'saldos' && deudasVencidas > 0 && (
+                    <Contador cantidad={deudasVencidas} uno="1 deuda vencida" varios="deudas vencidas" />
                   )}
                 </NavLink>
               );

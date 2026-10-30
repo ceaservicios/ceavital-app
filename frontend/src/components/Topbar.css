@@ -1,85 +1,175 @@
-/* Escritorio: sin franja; el título queda sobre el gris, al lado del menú flotante.
-   En celular vuelve a ser una barra blanca (ver abajo). */
+/* Escritorio: sin franja; el título de la sección sobre el fondo, alineado con el contenido.
+   En celular es una barra blanca con el botón del menú (ver abajo). */
 .topbar {
-  height: 64px;
   flex-shrink: 0;
-  background: transparent;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 28px 0 12px;
+  min-height: 72px;
+  padding: 20px 32px 12px;
+  width: 100%;
+  max-width: 1384px;
+  margin: 0 auto;
 }
 .topbar-title {
   flex: 1;
   min-width: 0;
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.topbar-pill {
-  flex-shrink: 0;
+/* En las pantallas de adentro la barra es la miga para volver a la sección. */
+.topbar-volver,
+.topbar-volver:hover {
+  color: var(--text-tertiary);
+}
+.topbar-volver {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 14px;
+  gap: 4px;
+  align-self: flex-end;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.topbar-volver:hover {
+  color: var(--color-primary);
+}
+.topbar-volver svg {
+  margin-left: -4px;
+}
+.topbar-anidada {
+  min-height: 52px;
+  padding-bottom: 4px;
+}
+.topbar-pill {
+  display: none;
+  flex-shrink: 0;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
   border-radius: var(--radius-pill);
-  background: var(--bg-surface);
+  background: var(--bg-muted);
   border: 1px solid var(--border-default);
   font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
-  transition: border-color 0.15s ease;
 }
-/* Es un enlace a "Mi cuenta": conserva sus colores (la regla de los links lo pasaba a azul). */
 a.topbar-pill:hover {
-  color: var(--text-secondary);
-  border-color: var(--color-primary);
+  color: var(--text-primary);
+  border-color: var(--border-control);
 }
+/* Escritorio, sin la fecha (usuario, 2026-10-30): en las listas y en las fichas la barra no se ve
+   y el panel verde queda arriba de todo, a la misma altura en todas las pantallas (usuario,
+   2026-10-29: "misma ubicación"). El título queda para los lectores de pantalla; la sección ya está
+   marcada en el menú. En las altas la barra lleva solo la miga para volver. En celular se ve
+   siempre, porque ahí el menú está escondido. */
+@media (min-width: 861px) {
+  .topbar {
+    min-height: 0;
+    height: 45px;
+    padding-top: 12px;
+    padding-bottom: 6px;
+  }
+  .topbar-volver {
+    align-self: center;
+  }
+  .topbar-title,
+  .topbar-escondida {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .topbar-escondida ~ .app-layout-content {
+    padding-top: 16px;
+  }
+}
+
+/* Miga de las fichas (`MigaFicha`), abajo del panel verde y pegada al nombre. */
+.miga-ficha,
+.miga-ficha:hover {
+  color: var(--text-tertiary);
+}
+.miga-ficha {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: -4px 0 -6px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.miga-ficha:hover {
+  color: var(--color-primary);
+}
+.miga-ficha svg {
+  margin-left: -4px;
+}
+@media (max-width: 860px) {
+  .miga-ficha {
+    display: none;
+  }
+}
+
 /* Botón del menú: solo existe en pantallas angostas. */
 .topbar-menu {
   display: none;
   flex-shrink: 0;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
+  margin-left: -6px;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border-default);
+  border: none;
   border-radius: var(--radius-sm);
-  background: var(--bg-surface);
+  background: transparent;
   color: var(--text-primary);
   cursor: pointer;
 }
+.topbar-menu:hover {
+  background: var(--bg-hover);
+}
 
 @media (max-width: 860px) {
-  .topbar {
-    height: 64px;
-    padding: 0 16px;
+  .topbar,
+  .topbar-anidada {
+    min-height: 56px;
+    max-width: none;
+    padding: 8px 16px;
+    gap: 8px;
     background: var(--bg-surface);
     border-bottom: 1px solid var(--border-default);
   }
+  .topbar-menu,
   .topbar-pill {
-    background: var(--bg-muted);
-  }
-  .topbar-menu {
     display: flex;
   }
-  .topbar-title {
-    font-size: 17px;
+  .topbar-title,
+  .topbar-volver {
+    font-size: 16px;
     font-weight: 700;
-    letter-spacing: 0;
+    align-self: center;
+  }
+  .topbar-volver,
+  .topbar-volver:hover {
+    color: var(--text-primary);
   }
 }
 @media (max-width: 480px) {
-  .topbar {
-    padding: 0 12px;
-  }
-  .topbar-pill svg {
-    display: none;
-  }
-  .topbar-pill {
-    padding: 6px 12px;
+  .topbar,
+  .topbar-anidada {
+    padding: 8px 12px;
   }
 }

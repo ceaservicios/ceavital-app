@@ -14,6 +14,9 @@ import ProveedoresPage from './pages/ProveedoresPage.jsx';
 import ProveedorNuevoPage from './pages/ProveedorNuevoPage.jsx';
 import ProveedorDetallePage from './pages/ProveedorDetallePage.jsx';
 import CargarMercaderiaPage from './pages/CargarMercaderiaPage.jsx';
+import SaldosPage from './pages/SaldosPage.jsx';
+import CargarDeudaPage from './pages/CargarDeudaPage.jsx';
+import CuentaPagarDetallePage from './pages/CuentaPagarDetallePage.jsx';
 import ClientesEmpresaPage from './pages/ClientesEmpresaPage.jsx';
 import ClienteEmpresaNuevoPage from './pages/ClienteEmpresaNuevoPage.jsx';
 import ClienteEmpresaDetallePage from './pages/ClienteEmpresaDetallePage.jsx';
@@ -66,6 +69,11 @@ export default function App() {
             <Route path="nuevo" element={<ProveedorNuevoPage />} />
             <Route path="cargar" element={<CargarMercaderiaPage />} />
             <Route path=":id" element={<ProveedorDetallePage />} />
+          </Route>
+          <Route path="saldos" element={<RequireRole modulo="saldos" />}>
+            <Route index element={<SaldosPage />} />
+            <Route path="nueva" element={<CargarDeudaPage />} />
+            <Route path="cuentas/:id" element={<CuentaPagarDetallePage />} />
           </Route>
           <Route path="clientes-empresa" element={<RequireRole modulo="clientes-empresa" />}>
             <Route index element={<ClientesEmpresaPage />} />

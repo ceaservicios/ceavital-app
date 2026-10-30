@@ -1,94 +1,146 @@
+/* Ingreso al sistema (rediseño 2026-10-29). Escritorio: panel de marca en verde macizo a la
+   izquierda (sin degradé ni sombra) y el formulario sobre blanco a la derecha. Celular: el panel
+   queda como una franja con la marca y el formulario debajo. Lo comparten el sistema y el
+   superadmin (/login); el portal de clientes usa la variante .login-portal (más abajo). */
 .login-page {
   min-height: 100%;
+  display: grid;
+  grid-template-columns: minmax(380px, 42%) minmax(0, 1fr);
+  background: var(--bg-surface);
+}
+
+.login-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 40px;
+  padding: 40px 56px;
+  background: var(--color-primary);
+  color: #ffffff;
+}
+.login-panel-marca {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.login-panel-logo {
+  width: 44px;
+  height: 44px;
+  padding: 6px 5px;
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #ffffff;
+}
+.login-panel-nombre {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.login-panel-cuerpo {
+  max-width: 420px;
+}
+.login-panel-titulo {
+  margin: 0 0 24px;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+.login-panel-lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+.login-panel-lista li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.88);
+}
+.login-panel-lista li::before {
+  content: '';
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.72)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E")
+    no-repeat center;
+}
+.login-panel-pie {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.login-main {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 48px 32px;
+  min-width: 0;
 }
-
-.login-card {
+.login-contenido {
   width: 100%;
   max-width: 380px;
-  padding: 36px 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-}
-
-.login-brand {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  text-align: center;
-}
-.login-logo {
-  width: 64px;
-  height: 64px;
-  object-fit: contain;
-}
-/* Portal del cliente: logo del negocio, apaisado. */
-.login-logo-negocio {
-  width: 220px;
-  max-width: 100%;
-  height: auto;
-}
-.login-pie {
-  margin: -12px 0 0;
-  text-align: center;
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-.login-brand-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.login-brand-title {
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--color-primary);
-}
-.login-brand-subtitle {
-  font-size: 13px;
-  color: var(--text-tertiary);
 }
 
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
-
-.login-submit {
-  margin-top: 6px;
-  width: 100%;
-  padding: 13px 20px;
+.login-encabezado {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
 }
-
-/* Paso del código por mail (verificación del email / 2FA). */
-.login-codigo-texto {
+.login-encabezado-centro {
+  text-align: center;
+  margin-bottom: 0;
+}
+.login-h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+.login-sub {
   margin: 0;
   font-size: 14px;
   line-height: 1.5;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   overflow-wrap: anywhere;
 }
-.login-codigo-input {
+.login-sub strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.login-submit {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 4px;
+}
+
+/* Paso del código (verificación en dos pasos): números grandes y centrados. */
+.field .login-codigo-input {
+  min-height: 52px;
   font-size: 22px;
-  letter-spacing: 8px;
+  font-weight: 600;
+  letter-spacing: 10px;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
-/* Código de recuperación (XXXXX-XXXXX): más largo, entra en la tarjeta con menos espacio. */
-.login-codigo-recuperacion {
+/* Código de recuperación (XXXXX-XXXXX): más largo, con menos espacio entre caracteres. */
+.field .login-codigo-recuperacion {
   font-size: 19px;
   letter-spacing: 3px;
-}
-.login-aviso {
-  background: rgba(14, 75, 56, 0.08);
-  color: var(--color-primary);
-  border: 1px solid rgba(14, 75, 56, 0.25);
 }
 .login-codigo-acciones {
   display: flex;
@@ -103,10 +155,91 @@
   font: inherit;
   font-size: 13.5px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-secondary);
   cursor: pointer;
 }
-.login-link:disabled {
+.login-link:hover {
+  text-decoration: underline;
+}
+.login-link-gris {
   color: var(--text-tertiary);
+}
+.login-link:disabled {
+  color: var(--text-muted);
   cursor: default;
+  text-decoration: none;
+}
+
+/* Tablet angosta y celular: el panel pasa a ser una franja con la marca. */
+@media (max-width: 900px) {
+  .login-page {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+  }
+  .login-panel {
+    flex-direction: row;
+    align-items: center;
+    padding: 14px 20px;
+  }
+  .login-panel-cuerpo,
+  .login-panel-pie {
+    display: none;
+  }
+  .login-panel-logo {
+    width: 36px;
+    height: 36px;
+    padding: 5px 4px;
+    border-radius: 8px;
+  }
+  .login-panel-nombre {
+    font-size: 18px;
+  }
+  .login-main {
+    align-items: flex-start;
+    padding: 48px 20px 40px;
+  }
+}
+
+/* ---------- Portal de clientes: tarjeta centrada con el logo del negocio ---------- */
+.login-portal {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 40px 16px;
+  background: var(--bg-app);
+}
+.login-portal-card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 36px 36px 32px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+}
+.login-portal-logo {
+  align-self: center;
+  width: 200px;
+  max-width: 70%;
+  height: auto;
+}
+.login-portal-pie {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+@media (max-width: 480px) {
+  .login-portal {
+    justify-content: flex-start;
+    padding-top: 32px;
+  }
+  .login-portal-card {
+    padding: 28px 20px 24px;
+  }
 }

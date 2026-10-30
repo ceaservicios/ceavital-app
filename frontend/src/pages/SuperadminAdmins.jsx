@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { api } from '../api/client.js';
 import { formatearFechaHora } from '../utils/format.js';
 
@@ -6,8 +6,10 @@ import { formatearFechaHora } from '../utils/format.js';
 // provisoria que se ve una sola vez (y sale por mail si el correo de la empresa está configurado).
 // Al entrar eligen su contraseña y activan la verificación en dos pasos, salvo que el superadmin
 // se la desactive: entonces entra solo con la contraseña y no la puede activar él desde "Mi cuenta".
+// Diseño (2026-10-29): cada Administrador ocupa dos renglones de la tabla: sus datos y, debajo, sus
+// acciones (o la confirmación de la que se eligió) a todo el ancho. En el celular, un bloque por cada uno.
 
-const METODO = { app: 'App', mail: 'Mail' };
+const METODO = { app: 'App autenticadora', mail: 'Código por mail' };
 
 // bloqueado_hasta viene en UTC sin zona ('YYYY-MM-DD HH:MM:SS'): sin la 'Z' se leería como hora local.
 const estaBloqueado = (a) => a.bloqueado_hasta && new Date(`${a.bloqueado_hasta.replace(' ', 'T')}Z`) > new Date();
@@ -15,16 +17,25 @@ const estaBloqueado = (a) => a.bloqueado_hasta && new Date(`${a.bloqueado_hasta.
 function estadoDe(a) {
   if (a.eliminado_en) return { texto: 'Dado de baja', clase: 'sa-chip-neutro' };
   if (estaBloqueado(a)) return { texto: 'Bloqueado', clase: 'sa-chip-alerta' };
-  if (a.debe_cambiar_password) return { texto: 'Contraseña provisoria', clase: 'sa-chip-aviso' };
+  if (a.debe_cambiar_password) return { texto: 'Contraseña provisoria', clase: 'sa-chip-info' };
   return { texto: 'Activo', clase: 'sa-chip-ok' };
 }
 
 const PREGUNTA = {
-  password: '¿Generar una contraseña provisoria nueva? Se le cierra la sesión.',
-  dosfa: '¿Restablecer su verificación en dos pasos? La vuelve a configurar al entrar.',
-  desactivar: '¿Desactivar su verificación en dos pasos? Entra solo con la contraseña y se borra lo que tenía configurado.',
-  activar: '¿Activar su verificación en dos pasos? Se le cierra la sesión y la configura al entrar.',
-  baja: '¿Dar de baja a este Administrador? Se le cierra la sesión; sus datos se conservan.',
+  password: '¿Generar una contraseña provisoria nueva? Se cierra su sesión.',
+  dosfa: '¿Restablecer su verificación en dos pasos? La configura de nuevo al ingresar.',
+  desactivar: '¿Desactivar su verificación en dos pasos? Ingresa solo con la contraseña y se borra la configuración actual.',
+  activar: '¿Activar su verificación en dos pasos? Se cierra su sesión y la configura al ingresar.',
+  baja: '¿Dar de baja a este Administrador? Se cierra su sesión; sus datos se conservan.',
+};
+
+// Texto del botón que confirma cada acción (en lugar de "Sí").
+const CONFIRMAR = {
+  password: 'Generar contraseña',
+  dosfa: 'Restablecer verificación',
+  desactivar: 'Desactivar verificación',
+  activar: 'Activar verificación',
+  baja: 'Dar de baja',
 };
 
 export default function SuperadminAdmins({ administradores, cupo, correoEmpresa, ocupado, ejecutar }) {
@@ -85,10 +96,10 @@ export default function SuperadminAdmins({ administradores, cupo, correoEmpresa,
     };
     const mensajes = {
       password: 'Contraseña provisoria nueva generada.',
-      dosfa: 'Verificación en dos pasos restablecida: la vuelve a configurar al entrar.',
-      desactivar: 'Verificación en dos pasos desactivada: entra solo con la contraseña.',
-      activar: 'Verificación en dos pasos activada: la configura al entrar.',
-      email: `Email cambiado: ahora entra con ${emailNuevo.trim()}.`,
+      dosfa: 'Verificación en dos pasos restablecida: la configura de nuevo al ingresar.',
+      desactivar: 'Verificación en dos pasos desactivada: ingresa solo con la contraseña.',
+      activar: 'Verificación en dos pasos activada: la configura al ingresar.',
+      email: `Email actualizado: ahora ingresa con ${emailNuevo.trim()}.`,
       baja: 'Administrador dado de baja.',
       reactivar: 'Administrador reactivado.',
     };
@@ -109,20 +120,21 @@ export default function SuperadminAdmins({ administradores, cupo, correoEmpresa,
 
   return (
     <section className="card sa-card">
-      <h2 className="sa-h2">Administradores del negocio</h2>
+      <div className="sa-card-cabecera">
+        <h2 className="sa-h2">Administradores del negocio</h2>
+        {/* Con espacios que no cortan: "3 de 4 en uso" no se parte en dos líneas. */}
+        <span className="sa-chip sa-chip-neutro">{sinTope ? 'Sin tope cargado' : `${cupo.usados} de ${cupo.tope} en uso`}</span>
+      </div>
       <p className="sa-ayuda">
-        Los da de alta CEA. Al entrar por primera vez eligen su contraseña y activan la verificación en dos pasos, que podés
-        desactivar para cada uno.{' '}
-        {/* Con espacios que no cortan: "Tope 5 · en uso 3." no se parte en dos líneas. */}
-        {sinTope
-          ? 'Cargá el tope de Administradores (arriba) para poder crear uno.'
-          : `Tope\u00a0${cupo.tope}\u00a0·\u00a0en\u00a0uso\u00a0${cupo.usados}.`}
+        Los da de alta CEA. Al ingresar por primera vez eligen su contraseña y activan la verificación en dos pasos, que se puede desactivar para
+        cada uno.
+        {sinTope && ' Cargá el tope de Administradores (arriba) para poder crear uno.'}
       </p>
 
       {credenciales && (
-        <div className="sa-credenciales">
+        <div className="sa-credenciales" role="status">
           <p>
-            Entra con el usuario <strong>{credenciales.usuario}</strong> y esta contraseña provisoria:
+            Ingresa con el usuario <strong>{credenciales.usuario}</strong> y esta contraseña provisoria:
           </p>
           <div className="sa-credenciales-fila">
             <code className="sa-credenciales-clave">{credenciales.password}</code>
@@ -132,63 +144,31 @@ export default function SuperadminAdmins({ administradores, cupo, correoEmpresa,
           </div>
           <p className="sa-ayuda">
             {credenciales.por_mail
-              ? 'También se le mandó por mail. '
+              ? 'También se envió por mail. '
               : credenciales.sin_email
-                ? 'No se mandó por mail (la cuenta no tiene email): pasásela vos. '
+                ? 'No se envió por mail porque la cuenta no tiene email: compartila por un medio seguro. '
                 : correoEmpresa
-                ? 'No se pudo mandar por mail: pasásela vos. '
-                : 'No se mandó por mail (falta el correo de la empresa): pasásela vos. '}
-            Se muestra una sola vez.
+                ? 'No se pudo enviar por mail: compartila por un medio seguro. '
+                : 'No se envió por mail (falta el correo de la empresa): compartila por un medio seguro. '}
+            Esta contraseña se muestra una sola vez.
           </p>
           <div>
             <button type="button" className="btn sa-btn-chico" onClick={() => setCredenciales(null)}>
-              Listo
+              Cerrar
             </button>
           </div>
         </div>
       )}
-
-      <form className="sa-form-admin" onSubmit={crear}>
-        <div className="field">
-          <label htmlFor="sa-admin-nombre">Nombre</label>
-          <input
-            id="sa-admin-nombre"
-            maxLength={200}
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            disabled={ocupado || !hayLugar}
-            required
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="sa-admin-email">Email (con el que va a entrar)</label>
-          <input
-            id="sa-admin-email"
-            type="email"
-            maxLength={100}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={ocupado || !hayLugar}
-            required
-          />
-        </div>
-        <button type="submit" className="btn btn-primary" disabled={ocupado || !hayLugar}>
-          Crear Administrador
-        </button>
-      </form>
-      {!sinTope && !hayLugar && <p className="sa-ayuda">No quedan lugares libres: para sumar otro, subí el tope.</p>}
 
       {administradores.length > 0 && (
         <div className="sa-tabla-scroll">
           <table className="sa-tabla sa-tabla-admins">
             <thead>
               <tr>
-                <th>Nombre</th>
-                <th>Email</th>
+                <th>Administrador</th>
                 <th>Estado</th>
-                <th>2 pasos</th>
+                <th>Verificación en dos pasos</th>
                 <th>Último ingreso</th>
-                <th aria-label="Acciones" />
               </tr>
             </thead>
             <tbody>
@@ -196,112 +176,160 @@ export default function SuperadminAdmins({ administradores, cupo, correoEmpresa,
                 const estado = estadoDe(a);
                 const preguntando = confirmando?.id === a.id ? confirmando.accion : null;
                 return (
-                  <tr key={a.id}>
-                    <td>{a.nombre}</td>
-                    <td className="sa-una-linea">{a.email ?? a.usuario}</td>
-                    <td>
-                      <span className={`sa-chip ${estado.clase}`}>{estado.texto}</span>
-                    </td>
-                    <td>
-                      {a.dosfa_desactivada ? (
-                        <span className="sa-chip sa-chip-aviso">Desactivada</span>
-                      ) : (
-                        (METODO[a.dosfa_metodo] ?? 'Sin configurar')
-                      )}
-                    </td>
-                    <td className="sa-una-linea">{a.ultimo_acceso ? formatearFechaHora(a.ultimo_acceso) : '—'}</td>
-                    <td className="sa-admin-acciones">
-                      {preguntando === 'email' ? (
-                        <form
-                          className="sa-confirmar"
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            accionar(a, 'email');
-                          }}
-                        >
-                          <span>Email nuevo: pasa a ser con el que entra. Se le cierra la sesión.</span>
-                          <input
-                            type="email"
-                            className="sa-admin-email-nuevo"
-                            aria-label={`Email nuevo de ${a.nombre}`}
-                            maxLength={100}
-                            value={emailNuevo}
-                            onChange={(e) => setEmailNuevo(e.target.value)}
-                            disabled={ocupado}
-                            required
-                            autoFocus
-                          />
-                          <button type="submit" className="btn sa-btn-chico btn-primary" disabled={ocupado}>
-                            Guardar
-                          </button>
-                          <button type="button" className="btn sa-btn-chico" disabled={ocupado} onClick={() => setConfirmando(null)}>
-                            Cancelar
-                          </button>
-                        </form>
-                      ) : preguntando ? (
-                        <div className="sa-confirmar">
-                          <span>{PREGUNTA[preguntando]}</span>
-                          <button type="button" className="btn sa-btn-chico btn-primary" disabled={ocupado} onClick={() => accionar(a, preguntando)}>
-                            Sí
-                          </button>
-                          <button type="button" className="btn sa-btn-chico" disabled={ocupado} onClick={() => setConfirmando(null)}>
-                            Cancelar
-                          </button>
-                        </div>
-                      ) : a.eliminado_en ? (
-                        <button type="button" className="btn sa-btn-chico" disabled={ocupado} onClick={() => accionar(a, 'reactivar')}>
-                          Reactivar
-                        </button>
-                      ) : (
-                        <div className="sa-admin-botones">
-                          <button type="button" className="btn sa-btn-chico" disabled={ocupado} onClick={() => setConfirmando({ id: a.id, accion: 'password' })}>
-                            Contraseña nueva
-                          </button>
-                          <button type="button" className="btn sa-btn-chico" disabled={ocupado} onClick={() => pedirEmail(a)}>
-                            Cambiar email
-                          </button>
-                          <button
-                            type="button"
-                            className="btn sa-btn-chico"
-                            disabled={ocupado || a.dosfa_desactivada || !a.dosfa_metodo}
-                            title={
-                              a.dosfa_desactivada
-                                ? 'Tiene la verificación en dos pasos desactivada'
-                                : a.dosfa_metodo
-                                  ? undefined
-                                  : 'Todavía no la configuró'
-                            }
-                            onClick={() => setConfirmando({ id: a.id, accion: 'dosfa' })}
+                  <Fragment key={a.id}>
+                    <tr className="sa-admin-fila">
+                      <td>
+                        <div className="sa-admin-nombre">{a.nombre}</div>
+                        <div className="sa-detalle-fila">{a.email ?? a.usuario}</div>
+                      </td>
+                      <td>
+                        <span className={`sa-chip ${estado.clase}`}>{estado.texto}</span>
+                      </td>
+                      <td data-etiqueta="Verificación">
+                        {a.dosfa_desactivada ? (
+                          <span className="sa-chip sa-chip-aviso">Desactivada</span>
+                        ) : (
+                          <span className={a.dosfa_metodo ? undefined : 'sa-faltante'}>{METODO[a.dosfa_metodo] ?? 'Sin configurar'}</span>
+                        )}
+                      </td>
+                      <td className="sa-una-linea" data-etiqueta="Último ingreso">
+                        {a.ultimo_acceso ? formatearFechaHora(a.ultimo_acceso) : <span className="sa-faltante">—</span>}
+                      </td>
+                    </tr>
+                    <tr className="sa-admin-acciones-fila">
+                      <td colSpan={4}>
+                        {preguntando === 'email' ? (
+                          <form
+                            className="sa-confirmar"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              accionar(a, 'email');
+                            }}
                           >
-                            Restablecer 2 pasos
-                          </button>
-                          <button
-                            type="button"
-                            className="btn sa-btn-chico"
-                            disabled={ocupado}
-                            onClick={() => setConfirmando({ id: a.id, accion: a.dosfa_desactivada ? 'activar' : 'desactivar' })}
-                          >
-                            {a.dosfa_desactivada ? 'Activar 2 pasos' : 'Desactivar 2 pasos'}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn sa-btn-chico sa-btn-peligro"
-                            disabled={ocupado || unicoActivo}
-                            title={unicoActivo ? 'Es el único Administrador activo: creá otro antes de darlo de baja.' : undefined}
-                            onClick={() => setConfirmando({ id: a.id, accion: 'baja' })}
-                          >
-                            Dar de baja
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
+                            <span>Nuevo email de ingreso de {a.nombre}. Al guardarlo se cierra su sesión.</span>
+                            <input
+                              type="email"
+                              className="sa-admin-email-nuevo"
+                              aria-label={`Email nuevo de ${a.nombre}`}
+                              maxLength={100}
+                              value={emailNuevo}
+                              onChange={(e) => setEmailNuevo(e.target.value)}
+                              disabled={ocupado}
+                              required
+                              autoFocus
+                            />
+                            <button type="submit" className="btn btn-primary" disabled={ocupado}>
+                              Guardar email
+                            </button>
+                            <button type="button" className="btn" disabled={ocupado} onClick={() => setConfirmando(null)}>
+                              Cancelar
+                            </button>
+                          </form>
+                        ) : preguntando ? (
+                          <div className="sa-confirmar">
+                            <span>{PREGUNTA[preguntando]}</span>
+                            <button
+                              type="button"
+                              className={`btn ${preguntando === 'baja' ? 'btn-peligro' : 'btn-primary'}`}
+                              disabled={ocupado}
+                              onClick={() => accionar(a, preguntando)}
+                            >
+                              {CONFIRMAR[preguntando]}
+                            </button>
+                            <button type="button" className="btn" disabled={ocupado} onClick={() => setConfirmando(null)}>
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : a.eliminado_en ? (
+                          <div className="sa-admin-botones">
+                            <button type="button" className="btn sa-btn-fantasma" disabled={ocupado} onClick={() => accionar(a, 'reactivar')}>
+                              Reactivar
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="sa-admin-botones">
+                            <button type="button" className="btn sa-btn-fantasma" disabled={ocupado} onClick={() => setConfirmando({ id: a.id, accion: 'password' })}>
+                              Restablecer contraseña
+                            </button>
+                            <button type="button" className="btn sa-btn-fantasma" disabled={ocupado} onClick={() => pedirEmail(a)}>
+                              Cambiar email
+                            </button>
+                            <button
+                              type="button"
+                              className="btn sa-btn-fantasma"
+                              disabled={ocupado || a.dosfa_desactivada || !a.dosfa_metodo}
+                              title={
+                                a.dosfa_desactivada
+                                  ? 'Tiene la verificación en dos pasos desactivada'
+                                  : a.dosfa_metodo
+                                    ? undefined
+                                    : 'Todavía no la configuró'
+                              }
+                              onClick={() => setConfirmando({ id: a.id, accion: 'dosfa' })}
+                            >
+                              Restablecer verificación
+                            </button>
+                            <button
+                              type="button"
+                              className="btn sa-btn-fantasma"
+                              disabled={ocupado}
+                              onClick={() => setConfirmando({ id: a.id, accion: a.dosfa_desactivada ? 'activar' : 'desactivar' })}
+                            >
+                              {a.dosfa_desactivada ? 'Activar verificación' : 'Desactivar verificación'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn sa-btn-fantasma sa-btn-fantasma-peligro"
+                              disabled={ocupado || unicoActivo}
+                              title={unicoActivo ? 'Es el único Administrador activo: creá otro antes de darlo de baja.' : undefined}
+                              onClick={() => setConfirmando({ id: a.id, accion: 'baja' })}
+                            >
+                              Dar de baja
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  </Fragment>
                 );
               })}
             </tbody>
           </table>
         </div>
       )}
+
+      <div className="sa-pozo">
+        <h3 className="sa-h3">Nuevo Administrador</h3>
+        <form className="sa-form-alta" onSubmit={crear}>
+          <div className="field">
+            <label htmlFor="sa-admin-nombre">Nombre</label>
+            <input
+              id="sa-admin-nombre"
+              maxLength={200}
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              disabled={ocupado || !hayLugar}
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="sa-admin-email">Email de ingreso</label>
+            <input
+              id="sa-admin-email"
+              type="email"
+              maxLength={100}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={ocupado || !hayLugar}
+              required
+            />
+          </div>
+          <button type="submit" className="btn btn-primary" disabled={ocupado || !hayLugar}>
+            Crear Administrador
+          </button>
+        </form>
+        {!sinTope && !hayLugar && <p className="sa-ayuda">No quedan lugares disponibles: para crear otro, aumentá el tope.</p>}
+      </div>
     </section>
   );
 }

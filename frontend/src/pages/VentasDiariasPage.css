@@ -1,5 +1,6 @@
-/* Ventas diarias (2026-10-16). Reutiliza las clases cliente-* (KPIs, pestañas, tablas) y el
-   detalle desplegable de Pedidos (pedido-*); acá va solo lo propio. */
+/* Ventas (2026-10-16; rediseño 2026-10-29). Reutiliza las clases cliente-* (cifras, pestañas,
+   tablas) y el detalle desplegable de Pedidos (pedido-*); acá va solo lo propio. Lo que hay que
+   pisar de esas hojas se pisa acá con más especificidad (no se tocan). */
 
 /* La lista crece con la venta desplegada: scrollea la página entera, como Pedidos. */
 .cliente-page.vd-page {
@@ -17,88 +18,169 @@
   position: static;
 }
 
-/* ---------- Filtros ---------- */
+/* ---------- Filtros: grilla de 4 columnas que cierra ---------- */
 .vd-filtros {
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.vd-rapidos {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.vd-rapido {
-  padding: 6px 14px;
-  border: 1.5px solid var(--border-default);
-  border-radius: var(--radius-pill);
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.vd-rapido:hover {
-  border-color: var(--color-primary);
-}
-.vd-rapido-activo {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: #ffffff;
-}
-.vd-campos {
+  padding: 20px 24px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px 20px;
+  align-items: end;
 }
 .vd-campo {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
-  font-size: 12.5px;
+}
+.vd-campo > span {
+  font-size: 13px;
   font-weight: 600;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .vd-campo input,
 .vd-campo select {
   width: 100%;
   min-width: 0;
-  padding: 9px 10px;
-  border: 1px solid var(--border-default);
+  height: var(--control-height);
+  padding: 0 12px;
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
   color: var(--text-primary);
   font: inherit;
   font-size: 14px;
   font-weight: 500;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.vd-campo input:hover,
+.vd-campo select:hover {
+  border-color: #b9c1ba;
+}
+.vd-campo input:focus,
+.vd-campo select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+.vd-campo input::placeholder {
+  color: #7d8682;
+}
+.vd-campo-periodo {
+  grid-column: span 2;
 }
 
-/* ---------- Totales por medio de pago ---------- */
-.vd-medios {
+/* Rango rápido: selector segmentado. */
+.vd-rapidos {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: -6px;
+  gap: 2px;
+  height: var(--control-height);
+  padding: 3px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
 }
-.vd-medio {
-  padding: 5px 12px;
-  border-radius: var(--radius-pill);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  font-size: 13px;
+.vd-rapido {
+  flex: 1 1 auto;
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
   color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
   white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
-.vd-medio strong {
+.vd-rapido:hover {
   color: var(--text-primary);
 }
-.vd-medio-anuladas {
+.vd-rapido.vd-rapido-activo {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(16, 32, 26, 0.12);
+}
+
+/* ---------- Cifras (la franja dividida la arma global.css) ---------- */
+.vd-kpi-nota {
+  font-size: 12.5px;
+  font-weight: 500;
   color: var(--text-tertiary);
-  background: transparent;
+}
+/* Solo un efectivo en caja negativo es alerta (un gasto no lo es). */
+.vd-kpis .vd-kpi-alerta {
+  color: var(--danger-ink);
+}
+
+/* ---------- Por medio de pago: lista compacta en columnas ---------- */
+.vd-medios {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.vd-medios-cab {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  flex-wrap: wrap;
+}
+.vd-medios-anuladas {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.vd-medios-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 32px;
+}
+.vd-medio {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+  padding: 11px 0;
+  border-top: 1px solid var(--border-rule);
+  font-size: 14px;
+}
+.vd-medio-nombre {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Cada medio con su ícono de color (estilo del 2026-10-29). */
+.vd-medios .vd-medio {
+  align-items: center;
+}
+.vd-medios .vd-medio-nombre {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.vd-medio-tickets {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.vd-medio-total {
+  min-width: 84px;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- Tablas ---------- */
@@ -109,8 +191,11 @@
 .vd-tabla .pedido-fila-detalle > td {
   white-space: normal;
 }
-.vd-total {
-  font-weight: 800;
+.vd-tabla .vd-total {
+  font-weight: 600;
+}
+.vd-tabla .vd-sin-dato {
+  color: var(--text-muted);
 }
 .vd-fila-anulada > td {
   color: var(--text-muted);
@@ -119,61 +204,90 @@
   text-decoration: line-through;
 }
 .vd-tabla tfoot td {
-  padding: 12px 14px;
-  font-weight: 800;
+  height: 48px;
+  padding: 12px;
+  font-weight: 700;
+  border-top: 1px solid var(--border-default);
   border-bottom: none;
+}
+.vd-tabla tfoot td:first-child {
+  padding-left: 0;
+}
+.vd-tabla tfoot td:last-child {
+  padding-right: 0;
+}
+.vd-badge-cobrada {
+  background: var(--ok-bg);
+  color: var(--ok-ink);
+}
+.vd-badge-anulada {
+  background: var(--neutral-bg);
+  color: var(--neutral-ink);
 }
 
 /* ---------- Gastos ---------- */
 .vd-gasto-form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 14px;
-  border-radius: var(--radius-sm);
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 16px 20px;
+  padding: 16px;
   background: var(--bg-muted);
-}
-.vd-gasto-form input,
-.vd-gasto-form select {
-  flex: 1 1 180px;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-rule);
   border-radius: var(--radius-sm);
-  background: var(--bg-surface);
-  font: inherit;
-  font-size: 14px;
+}
+.vd-gasto-pie {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 .vd-gasto-nota {
-  flex: 1 1 100%;
   font-size: 12.5px;
   color: var(--text-tertiary);
 }
-.vd-gasto-monto {
+.vd-gasto-botones {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.vd-tabla .vd-gasto-monto {
+  font-weight: 600;
+}
+.vd-tabla .vd-gasto-total {
   font-weight: 700;
-  color: var(--color-danger);
 }
 .vd-gasto-acciones {
   width: 1%;
   text-align: right;
+  white-space: nowrap;
 }
 .vd-eliminar {
+  width: 32px;
+  height: 32px;
   display: inline-flex;
-  padding: 4px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: none;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text-tertiary);
+  color: var(--text-muted);
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 .vd-eliminar:hover {
-  color: var(--color-danger);
+  background: var(--danger-bg);
+  color: var(--danger-ink);
 }
 .vd-confirmar {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-size: 13px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 14px;
+  font-size: 13.5px;
   color: var(--text-secondary);
 }
 .vd-link {
@@ -182,25 +296,54 @@
   background: none;
   color: var(--color-secondary);
   font: inherit;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
 }
+.vd-link:hover {
+  text-decoration: underline;
+}
 .vd-link-peligro {
-  color: #b0453b;
+  color: var(--danger-ink);
 }
 
-/* Celular: la lista muestra N°, fecha, medio y total (quién cobró y los productos se ven al
-   abrir la venta); los gastos, fecha, concepto y monto. Sin scroll lateral. */
-@media (max-width: 700px) {
+/* Tablet (o ventana angosta con menú): el desglose en dos columnas, las cifras de a tres y la
+   lista sin "Cobrado por" ni "Productos" (se ven al abrir la venta), así el total no se corta. */
+@media (max-width: 1000px) {
+  .vd-medios-lista {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .vd-page .vd-opcional {
     display: none;
   }
-  /* La fecha y el medio bajan de renglón; el total no (cliente-tabla .num ya es nowrap). */
+  .vd-gasto-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .vd-gasto-concepto {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 601px) and (max-width: 1000px) {
+  .app-layout-content .cliente-kpis.vd-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .app-layout-content .vd-kpis > .cliente-kpi {
+    box-shadow: -1px 0 0 var(--border-rule), 0 -1px 0 var(--border-rule);
+  }
+}
+
+/* Hasta 700px: filtros de a dos, tarjetas más compactas y celdas que pueden bajar de renglón. */
+@media (max-width: 700px) {
   .vd-tabla td {
     white-space: normal;
   }
-  .vd-page .cliente-card {
-    padding: 14px;
+  .vd-page .cliente-card,
+  .vd-filtros,
+  .vd-medios {
+    padding: 16px;
+  }
+  .vd-filtros {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 12px;
   }
   .vd-page .cliente-tabla th,
   .vd-page .cliente-tabla td {
@@ -210,38 +353,138 @@
   .vd-page .pedido-fila-detalle > td {
     padding: 0 0 12px;
   }
-  .vd-filtros {
-    padding: 14px;
+  .vd-rapido {
+    padding: 0 8px;
+    font-size: 13px;
   }
-  .vd-campos {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .vd-gasto-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .vd-gasto-botones {
+    flex: 1 1 100%;
+  }
+  .vd-gasto-botones .btn {
+    flex: 1;
   }
 }
 
-/* Seis tarjetas en una fila: Fondo, Ventas, Tickets, Ticket promedio, Gastos y Efectivo en caja.
-   "Efectivo en caja" es el resultado (lo que tendría que haber en el cajón): va resaltada. */
-.vd-kpis {
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
-}
-.vd-kpis .cliente-kpi {
-  padding: 14px 16px;
-  gap: 4px;
-}
-.vd-kpis .cliente-kpi-value {
-  font-size: 22px;
-  white-space: nowrap;
-}
-.vd-kpi-nota {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-tertiary);
-}
-.vd-kpi-caja {
-  background: linear-gradient(135deg, rgba(14, 75, 56, 0.09) 0%, rgba(14, 75, 56, 0.04) 100%), var(--bg-surface);
-  border-color: rgba(14, 75, 56, 0.2);
-}
-.vd-kpi-caja .cliente-kpi-label,
-.vd-kpi-caja .cliente-kpi-value {
-  color: var(--color-primary);
+/* Celular: cada venta y cada gasto en un renglón de dos líneas (identidad y monto arriba, el
+   resto en gris abajo), sin columnas cortadas ni scroll de costado. */
+@media (max-width: 600px) {
+  .vd-medios-lista {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vd-page .vd-tabla-ventas,
+  .vd-page .vd-tabla-ventas > tbody,
+  .vd-page .vd-tabla-gastos,
+  .vd-page .vd-tabla-gastos > tbody,
+  .vd-page .vd-tabla-gastos > tfoot {
+    display: block;
+  }
+  .vd-page .vd-tabla-ventas > thead,
+  .vd-page .vd-tabla-gastos > thead {
+    display: none;
+  }
+  .vd-page .vd-tabla-ventas > tbody > tr > td,
+  .vd-page .vd-tabla-gastos > tbody > tr > td,
+  .vd-page .vd-tabla-gastos > tfoot > tr > td {
+    height: auto;
+    padding: 0;
+    border: none;
+  }
+
+  .vd-page .vd-tabla-ventas > tbody > tr:not(.pedido-fila-detalle) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'num medio total'
+      'fecha fecha estado'
+      'cliente cliente cliente';
+    align-items: center;
+    gap: 2px 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-rule);
+  }
+  .vd-page .vd-tabla-ventas > tbody > tr.pedido-fila-abierta,
+  .vd-page .vd-tabla-ventas > tbody > tr:last-child {
+    border-bottom: none;
+  }
+  .vd-page .vd-tabla-ventas > tbody > tr.pedido-fila-detalle {
+    display: block;
+    border-bottom: 1px solid var(--border-rule);
+  }
+  .vd-page .vd-tabla-ventas > tbody > tr.pedido-fila-detalle > td {
+    display: block;
+    padding: 0 0 12px;
+  }
+  .vd-c-num {
+    grid-area: num;
+    font-weight: 600;
+    color: var(--text-tertiary);
+  }
+  .vd-c-medio {
+    grid-area: medio;
+    font-weight: 600;
+  }
+  .vd-c-total {
+    grid-area: total;
+  }
+  .vd-tabla .vd-c-fecha {
+    grid-area: fecha;
+    font-size: 12.5px;
+    color: var(--text-tertiary);
+  }
+  .vd-c-estado {
+    grid-area: estado;
+    justify-self: end;
+    margin-top: 4px;
+  }
+  .vd-tabla .vd-c-cliente {
+    grid-area: cliente;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .vd-tabla .vd-c-cliente.vd-sin-dato {
+    display: none;
+  }
+
+  .vd-page .vd-tabla-gastos > tbody > tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 32px;
+    grid-template-areas:
+      'concepto monto acc'
+      'fecha fecha acc';
+    align-items: center;
+    gap: 2px 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-rule);
+  }
+  .vd-g-concepto {
+    grid-area: concepto;
+  }
+  .vd-tabla .vd-g-fecha {
+    grid-area: fecha;
+    font-size: 12.5px;
+    color: var(--text-tertiary);
+  }
+  /* La fecha alineada con el concepto, a la derecha de su ícono (32px + 12px). */
+  .vd-page .vd-tabla-gastos > tbody > tr > td.vd-g-fecha {
+    padding-left: 44px;
+  }
+  .vd-tabla-gastos .vd-gasto-monto {
+    grid-area: monto;
+  }
+  .vd-tabla-gastos .vd-gasto-acciones {
+    grid-area: acc;
+    width: auto;
+    text-align: center;
+  }
+  .vd-page .vd-tabla-gastos > tfoot > tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 32px;
+    gap: 10px;
+    padding: 12px 0 0;
+  }
 }

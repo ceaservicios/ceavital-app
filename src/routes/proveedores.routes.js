@@ -3,7 +3,9 @@ import { requireAuth } from '../middleware/auth.middleware.js';
 import {
   anularCompraController,
   anularPagoController,
+  corregirCompraController,
   crearCompraController,
+  crearDeudaManualController,
   crearProveedorController,
   editarProveedorController,
   eliminarProveedorController,
@@ -29,6 +31,9 @@ router.delete('/:id', requireAuth(['admin']), eliminarProveedorController);
 // usuario). Los pedidos de antes ya no se cargan: se ven en el perfil como historial.
 router.post('/:id/compras', requireAuth(['admin', 'encargado']), crearCompraController);
 router.post('/:id/compras/:compraId/anular', requireAuth(['admin', 'encargado']), anularCompraController);
+// A mano, desde Saldos pendientes (2026-10-29): mismos roles.
+router.post('/:id/deudas', requireAuth(['admin', 'encargado']), crearDeudaManualController);
+router.post('/:id/compras/:compraId/correccion', requireAuth(['admin', 'encargado']), corregirCompraController);
 router.post('/:id/pagos', requireAuth(['admin', 'encargado']), registrarPagoController);
 router.post('/:id/pagos/:pagoId/anular', requireAuth(['admin', 'encargado']), anularPagoController);
 

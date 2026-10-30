@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client.js';
+import Hero from '../components/Hero.jsx';
+import { ConIcono, IconoFila } from '../components/ConAvatar.jsx';
+import Pestanas from '../components/Pestanas.jsx';
+import { COLOR } from '../utils/colores.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import AvisoEmergente from '../components/AvisoEmergente.jsx';
+import { iniciales } from '../constants/roles.js';
 import { formatearFechaHora, formatearMonto } from '../utils/format.js';
 import { estadoSaldo } from './clientesEmpresaComun.jsx';
 import PortalComprar from './PortalComprar.jsx';
@@ -12,12 +17,17 @@ import './ClientesEmpresaPage.css';
 import './PortalPage.css';
 
 const TABS = [
-  { clave: 'comprar', texto: 'Comprar' },
-  { clave: 'pedidos', texto: 'Mis pedidos' },
-  { clave: 'cuenta', texto: 'Cuenta corriente' },
+  { clave: 'comprar', texto: 'Comprar', icono: 'carrito', color: COLOR.verde },
+  { clave: 'pedidos', texto: 'Mis pedidos', icono: 'ticket', color: COLOR.azul },
+  { clave: 'cuenta', texto: 'Cuenta corriente', icono: 'billetera', color: COLOR.violeta },
 ];
 
 const ETIQUETA_TIPO = { CARGO: 'Compra', PAGO: 'Pago', AJUSTE: 'Ajuste' };
+const ICONO_TIPO = {
+  CARGO: { icono: 'carrito', color: COLOR.azul },
+  PAGO: { icono: 'billete', color: COLOR.verde },
+  AJUSTE: { icono: 'menos', color: COLOR.gris },
+};
 
 // Plan sin el módulo de portal: la API del portal da 404 ("No encontrado"), así que en vez de
 // mostrar eso se manda al ingreso, que ya explica "Portal no disponible". Si el plan cambia
@@ -61,9 +71,21 @@ function PortalContenido() {
       .finally(() => setCargando(false));
   }, [volverAlIngreso]);
 
+  // Pedidos del cliente, para "Pedidos pendientes" del panel verde. Si fallan, la cifra queda en "—".
+  const [pedidos, setPedidos] = useState(null);
+  const cargarPedidos = useCallback(() => {
+    return api
+      .get('/portal/pedidos')
+      .then((data) => setPedidos(data.pedidos))
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 401) volverAlIngreso();
+      });
+  }, [volverAlIngreso]);
+
   useEffect(() => {
     cargarCuenta();
-  }, [cargarCuenta]);
+    cargarPedidos();
+  }, [cargarCuenta, cargarPedidos]);
 
   // Si no se pueden leer, el pie sale sin los datos (no es motivo para cortar el portal).
   useEffect(() => {
@@ -96,13 +118,15 @@ function PortalContenido() {
   function cambiarTab(clave) {
     setTab(clave);
     if (clave !== 'pedidos') setAvisoPedido(null);
-    // Un pedido aprobado cambia el saldo: se vuelve a pedir la cuenta al abrir esa pestaña.
-    if (clave === 'cuenta') cargarCuenta();
+    // El negocio pudo aprobar o rechazar un pedido mientras tanto: el panel verde se vuelve a pedir.
+    cargarCuenta();
+    cargarPedidos();
   }
 
   function pedidoEnviado(pedido) {
-    setAvisoPedido(`Enviaste el pedido #${pedido.id} por ${formatearMonto(pedido.total)}. El negocio lo va a revisar.`);
+    setAvisoPedido(`Pedido #${pedido.id} enviado por ${formatearMonto(pedido.total)}. Queda pendiente de aprobación del negocio.`);
     setTab('pedidos');
+    cargarPedidos();
   }
 
   async function salir() {
@@ -117,73 +141,87 @@ function PortalContenido() {
   }
 
   const estado = cuenta ? estadoSaldo(cuenta.saldo) : null;
+  const pendientes = pedidos?.filter((p) => p.estado === 'pendiente') ?? [];
+  const montoPendiente = pendientes.reduce((acc, p) => acc + p.total, 0);
 
+  // Rediseño 2026-10-29: encabezado verde con la marca del negocio, el cliente y Salir, alineado
+  // con el contenido (1080px). Como en las pantallas del sistema con pestañas, el panel verde va
+  // arriba de las pestañas y es el mismo en las tres.
   return (
     <div className="portal-page">
       <header className="portal-header">
-        <div className="portal-marca">
-          <img src="/logo-negocio.png" alt={negocio?.nombre ?? 'Logo del negocio'} className="portal-logo-negocio" />
-        </div>
-        <div className="portal-usuario">
-          {cuenta && <span className="portal-razon" title={cuenta.cliente.razon_social}>{cuenta.cliente.razon_social}</span>}
-          <button type="button" className="btn" onClick={salir}>
-            Salir
-          </button>
+        <div className="portal-header-inner">
+          <div className="portal-marca">
+            <img src="/logo-negocio.png" alt={negocio?.nombre ?? 'Logo del negocio'} className="portal-logo-negocio" />
+            <span className="portal-marca-separador" aria-hidden="true" />
+            <h1 className="portal-marca-texto">Portal de clientes</h1>
+          </div>
+          <div className="portal-usuario">
+            {cuenta && (
+              <div className="portal-cliente" title={cuenta.cliente.razon_social}>
+                <span className="portal-avatar" aria-hidden="true">
+                  {iniciales(cuenta.cliente.razon_social)}
+                </span>
+                <span className="portal-razon">{cuenta.cliente.razon_social}</span>
+              </div>
+            )}
+            <button type="button" className="btn portal-salir" onClick={salir}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <path d="M16 17l5-5-5-5" />
+                <path d="M21 12H9" />
+              </svg>
+              Salir
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="portal-contenido">
-        <div className="cliente-tabs portal-tabs" role="tablist">
-          {TABS.map((t) => (
-            <button
-              key={t.clave}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.clave}
-              className={`cliente-tab${tab === t.clave ? ' cliente-tab-activa' : ''}`}
-              onClick={() => cambiarTab(t.clave)}
-            >
-              {t.texto}
-            </button>
-          ))}
-        </div>
+        {cuenta && (
+          <Hero
+            etiqueta="Saldo de tu cuenta"
+            valor={formatearMonto(cuenta.saldo)}
+            sub={estado.texto}
+            minis={[
+              {
+                etiqueta: 'Pedidos pendientes',
+                valor: pedidos ? pendientes.length : '—',
+                sub: pendientes.length > 0 ? `${formatearMonto(montoPendiente)} en revisión` : 'Ninguno en revisión',
+                icono: 'reloj',
+                tono: 'amarillo',
+              },
+              { etiqueta: 'Total comprado', valor: formatearMonto(cuenta.total_comprado), icono: 'carrito', tono: 'azul' },
+              { etiqueta: 'Total pagado', valor: formatearMonto(cuenta.total_pagado), icono: 'check', tono: 'verde' },
+            ]}
+          />
+        )}
+
+        <Pestanas items={TABS} activa={tab} onCambiar={cambiarTab} etiqueta="Secciones del portal" className="portal-tabs" />
 
         {tab === 'comprar' && <PortalComprar onSesionVencida={volverAlIngreso} onPedidoEnviado={pedidoEnviado} />}
-        {tab === 'pedidos' && <PortalPedidos onSesionVencida={volverAlIngreso} avisoInicial={avisoPedido} />}
+        {tab === 'pedidos' && <PortalPedidos onSesionVencida={volverAlIngreso} avisoInicial={avisoPedido} onCambio={cargarPedidos} />}
 
         {tab === 'cuenta' && cargando && <div className="cliente-vacio">Cargando…</div>}
         {tab === 'cuenta' && error && <div className="alert alert-danger">{error}</div>}
 
         {tab === 'cuenta' && cuenta && (
           <>
-            <div className="portal-titulo">
-              <h1 className="cliente-h1">Tu cuenta corriente</h1>
-              <span className={`cliente-badge cliente-badge-${estado.clave}`}>{estado.texto}</span>
-            </div>
-
-            <div className="cliente-kpis">
-              <div className="card cliente-kpi">
-                <span className="cliente-kpi-label">Saldo actual</span>
-                <span className={`cliente-kpi-value cliente-saldo-${estado.clave}`}>{formatearMonto(cuenta.saldo)}</span>
-              </div>
-              <div className="card cliente-kpi">
-                <span className="cliente-kpi-label">Total comprado</span>
-                <span className="cliente-kpi-value">{formatearMonto(cuenta.total_comprado)}</span>
-              </div>
-              <div className="card cliente-kpi">
-                <span className="cliente-kpi-label">Total pagado</span>
-                <span className="cliente-kpi-value">{formatearMonto(cuenta.total_pagado)}</span>
-              </div>
-            </div>
-
             <ResumenCuentaDescarga ruta="/portal/resumen" onSesionVencida={volverAlIngreso} />
 
             <div className="card cliente-card">
-              <span className="cliente-seccion-titulo">Movimientos ({cuenta.movimientos.length})</span>
+              <div className="cliente-seccion-cabecera">
+                <span className="cliente-seccion-titulo">Movimientos</span>
+                {cuenta.movimientos.length > 0 && (
+                  <span className="portal-contador">
+                    {cuenta.movimientos.length} {cuenta.movimientos.length === 1 ? 'movimiento' : 'movimientos'}
+                  </span>
+                )}
+              </div>
               {cuenta.movimientos.length === 0 ? (
-                <div className="cliente-vacio">Todavía no hay movimientos en tu cuenta.</div>
+                <div className="cliente-vacio">Sin movimientos registrados.</div>
               ) : (
-                <div className="cliente-tabla-wrap">
+                <div className="cliente-tabla-wrap portal-movs-tabla">
                   <table className="cliente-tabla cliente-tabla-movs">
                     <thead>
                       <tr>
@@ -196,9 +234,11 @@ function PortalContenido() {
                     <tbody>
                       {cuenta.movimientos.map((m) => (
                         <tr key={m.id} className="sin-click">
-                          <td>{formatearFechaHora(m.creado_en)}</td>
+                          <td className="portal-td-fecha">{formatearFechaHora(m.creado_en)}</td>
                           <td>
-                            <span className={`cliente-tipo cliente-tipo-${m.tipo}`}>{ETIQUETA_TIPO[m.tipo]}</span>
+                            <ConIcono {...ICONO_TIPO[m.tipo]}>
+                              <span className="cliente-td-nombre">{ETIQUETA_TIPO[m.tipo]}</span>
+                            </ConIcono>
                           </td>
                           <td>{m.descripcion || (m.venta_id ? `Venta #${m.venta_id}` : '—')}</td>
                           <td className="num cliente-mov-monto">
@@ -217,16 +257,19 @@ function PortalContenido() {
                 <ul className="portal-movs">
                   {cuenta.movimientos.map((m) => (
                     <li key={m.id} className="portal-mov">
-                      <div className="portal-mov-fila">
-                        <span className="portal-mov-detalle">{m.descripcion || (m.venta_id ? `Venta #${m.venta_id}` : '—')}</span>
-                        <span className="cliente-mov-monto">
-                          {m.monto > 0 ? '+' : ''}
-                          {formatearMonto(m.monto)}
-                        </span>
-                      </div>
-                      <div className="portal-mov-meta">
-                        <span className={`cliente-tipo cliente-tipo-${m.tipo}`}>{ETIQUETA_TIPO[m.tipo]}</span>
-                        <span>{formatearFechaHora(m.creado_en)}</span>
+                      <IconoFila {...ICONO_TIPO[m.tipo]} />
+                      <div className="portal-mov-texto">
+                        <div className="portal-mov-fila">
+                          <span className="portal-mov-detalle">{m.descripcion || (m.venta_id ? `Venta #${m.venta_id}` : '—')}</span>
+                          <span className="cliente-mov-monto">
+                            {m.monto > 0 ? '+' : ''}
+                            {formatearMonto(m.monto)}
+                          </span>
+                        </div>
+                        <div className="portal-mov-meta">
+                          <span className={`cliente-tipo cliente-tipo-${m.tipo}`}>{ETIQUETA_TIPO[m.tipo]}</span>
+                          <span>{formatearFechaHora(m.creado_en)}</span>
+                        </div>
                       </div>
                     </li>
                   ))}
@@ -238,20 +281,22 @@ function PortalContenido() {
       </main>
 
       <footer className="portal-pie">
-        {negocio && (
-          <div className="portal-pie-negocio">
-            <strong>{negocio.nombre}</strong>
-            {negocio.telefono && <span>Tel. {negocio.telefono}</span>}
-            {negocio.email && <a href={`mailto:${negocio.email}`}>{negocio.email}</a>}
-            {negocio.direccion && <span>{negocio.direccion}</span>}
-            {negocio.instagram && (
-              <a href={`https://www.instagram.com/${negocio.instagram}/`} target="_blank" rel="noopener noreferrer">
-                Instagram @{negocio.instagram}
-              </a>
-            )}
-          </div>
-        )}
-        <div className="portal-pie-cea">Con CEAVital, un producto de CEA Servicios</div>
+        <div className="portal-pie-inner">
+          {negocio && (
+            <div className="portal-pie-negocio">
+              <strong>{negocio.nombre}</strong>
+              {negocio.telefono && <span>Tel. {negocio.telefono}</span>}
+              {negocio.email && <a href={`mailto:${negocio.email}`}>{negocio.email}</a>}
+              {negocio.direccion && <span>{negocio.direccion}</span>}
+              {negocio.instagram && (
+                <a href={`https://www.instagram.com/${negocio.instagram}/`} target="_blank" rel="noopener noreferrer">
+                  Instagram @{negocio.instagram}
+                </a>
+              )}
+            </div>
+          )}
+          <div className="portal-pie-cea">Con CEAVital, un producto de CEA Servicios</div>
+        </div>
       </footer>
 
       {avisoIngreso && (

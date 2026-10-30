@@ -12,6 +12,9 @@ const MAX_LINEAS = 200;
 const MAX_CANTIDAD = 10_000_000;
 
 const COMPROBANTES = { remito: 'Remito', factura: 'Factura' };
+// Una deuda cargada a mano puede no tener comprobante (2026-10-29).
+const COMPROBANTES_DEUDA = { ...COMPROBANTES, sin: 'Sin comprobante' };
+const MAX_TOTAL = 1_000_000_000_000;
 const MEDIOS_PAGO = ['efectivo', 'mercado_pago', 'cheque'];
 
 function validarString(valor, campo, { requerido = true, maxLength = MAX_TEXTO } = {}) {
@@ -38,7 +41,17 @@ function validarFecha(valor, campo) {
   return valor;
 }
 
+// Fecha para pagar una boleta (opción A del usuario, 2026-10-29): la que trae la factura o el
+// remito. Sin ella vence el mismo día de la boleta. Nunca antes de esa fecha.
+function validarVence(valor, fecha) {
+  if (valor === undefined || valor === null || valor === '') return fecha;
+  const vence = validarFecha(valor, 'El vencimiento');
+  if (vence < fecha) throw new ApiError(400, 'El vencimiento no puede ser anterior a la fecha de la boleta.');
+  return vence;
+}
+
 function textoComprobante(c) {
+  if (c.comprobante_tipo === 'sin') return 'Sin comprobante';
   const tipo = COMPROBANTES[c.comprobante_tipo];
   return c.comprobante_numero ? `${tipo} ${c.comprobante_numero}` : `${tipo} sin número`;
 }
@@ -82,8 +95,8 @@ export async function obtenerProveedor(id, { rol } = {}) {
 
   const compras = await db
     .prepare(
-      `SELECT c.id, c.fecha, c.comprobante_tipo, c.comprobante_numero, c.total, c.creado_en, c.anulada_en,
-         u.nombre AS usuario_nombre, ua.nombre AS anulada_por_nombre,
+      `SELECT c.id, c.fecha, c.vence, c.comprobante_tipo, c.comprobante_numero, c.total, c.creado_en, c.anulada_en,
+         c.cargada_a_mano, c.nota, u.nombre AS usuario_nombre, ua.nombre AS anulada_por_nombre,
          COALESCE((SELECT SUM(pg.monto) FROM pagos_proveedor pg WHERE pg.compra_id = c.id AND pg.anulado_en IS NULL), 0) AS pagado
        FROM compras_proveedor c
        JOIN usuarios u ON u.id = c.usuario_id
@@ -117,6 +130,18 @@ export async function obtenerProveedor(id, { rol } = {}) {
        ORDER BY pg.fecha DESC, pg.id DESC`
     )
     .all(id);
+  const correcciones = await db
+    .prepare(
+      `SELECT cc.id, cc.compra_id, cc.motivo, cc.antes_tipo, cc.antes_numero, cc.antes_fecha, cc.antes_total,
+         cc.despues_tipo, cc.despues_numero, cc.despues_fecha, cc.despues_total, cc.antes_vence, cc.despues_vence,
+         cc.creado_en, u.nombre AS usuario_nombre
+       FROM correcciones_compra cc
+       JOIN compras_proveedor c ON c.id = cc.compra_id
+       JOIN usuarios u ON u.id = cc.usuario_id
+       WHERE c.proveedor_id = ?
+       ORDER BY cc.id DESC`
+    )
+    .all(id);
   const pedidos = await db
     .prepare(
       `SELECT id, fecha, estado FROM pedidos_proveedor
@@ -137,7 +162,12 @@ export async function obtenerProveedor(id, { rol } = {}) {
     total_comprado: activas.reduce((a, c) => a + c.total, 0),
     total_pagado: pagos.filter((p) => !p.anulado_en).reduce((a, p) => a + p.monto, 0),
     productos: await listarProductosDeProveedor(id, { rol }),
-    compras: compras.map((c) => ({ ...c, anulada: Boolean(c.anulada_en), items: items.filter((i) => i.compra_id === c.id) })),
+    compras: compras.map((c) => ({
+      ...c,
+      anulada: Boolean(c.anulada_en),
+      items: items.filter((i) => i.compra_id === c.id),
+      correcciones: correcciones.filter((x) => x.compra_id === c.id),
+    })),
     pagos: pagos.map((p) => ({ ...p, anulado: Boolean(p.anulado_en) })),
     pedidos_anteriores: pedidos.map((p) => ({ ...p, items: itemsPedidos.filter((i) => i.pedido_id === p.id) })),
   };
@@ -321,6 +351,7 @@ async function validarLinea(item, i) {
 // compra, un lote por línea (así entra al stock) y, si se le pagó algo en el momento, el pago.
 export async function crearCompra(proveedorId, datos, { usuarioId, rol }) {
   const fecha = validarFecha(datos.fecha ?? hoyNegocio(), 'La fecha');
+  const vence = validarVence(datos.vence, fecha);
   if (!COMPROBANTES[datos.comprobante_tipo]) throw new ApiError(400, 'comprobante_tipo tiene que ser remito o factura');
   const numero = validarString(datos.comprobante_numero, 'El número de comprobante', { requerido: false, maxLength: 50 });
   if (!Array.isArray(datos.items) || datos.items.length === 0) throw new ApiError(400, 'Agregá al menos un producto');
@@ -336,10 +367,10 @@ export async function crearCompra(proveedorId, datos, { usuarioId, rol }) {
 
     const compra = await db
       .prepare(
-        `INSERT INTO compras_proveedor (proveedor_id, usuario_id, fecha, comprobante_tipo, comprobante_numero, total)
-         VALUES (?, ?, ?, ?, ?, ?) RETURNING *`
+        `INSERT INTO compras_proveedor (proveedor_id, usuario_id, fecha, vence, comprobante_tipo, comprobante_numero, total)
+         VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *`
       )
-      .get(proveedorId, usuarioId, fecha, datos.comprobante_tipo, numero, total);
+      .get(proveedorId, usuarioId, fecha, vence, datos.comprobante_tipo, numero, total);
     for (const l of lineas) {
       const lote = await db
         .prepare('INSERT INTO lotes (producto_id, cantidad, fecha_ingreso, fecha_vencimiento) VALUES (?, ?, ?, ?) RETURNING id')
@@ -383,6 +414,84 @@ export async function anularCompra(proveedorId, compraId, { usuarioId, rol }) {
       await db.prepare('UPDATE lotes SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(l.lote_id);
     }
     await db.prepare('UPDATE compras_proveedor SET anulada_en = CURRENT_TIMESTAMP, anulada_por = ? WHERE id = ?').run(usuarioId, compraId);
+  });
+  return obtenerProveedor(proveedorId, { rol });
+}
+
+// -- A mano, desde Saldos pendientes (pedido del usuario, 2026-10-29) --
+
+// Comprobante, número y fecha de una boleta. Sin comprobante no lleva número.
+function validarComprobante(datos, tipos) {
+  if (!tipos[datos.comprobante_tipo]) throw new ApiError(400, `comprobante_tipo tiene que ser ${Object.keys(tipos).join(', ')}`);
+  return {
+    comprobante_tipo: datos.comprobante_tipo,
+    comprobante_numero:
+      datos.comprobante_tipo === 'sin'
+        ? null
+        : validarString(datos.comprobante_numero, 'El número de comprobante', { requerido: false, maxLength: 50 }),
+    fecha: validarFecha(datos.fecha, 'La fecha'),
+  };
+}
+
+// Deuda con un proveedor sin cargar mercadería (un saldo de antes, una boleta que no se carga
+// producto por producto): una compra sin líneas, que no toca el stock. Se paga y se anula como
+// cualquier compra.
+export async function crearDeudaManual(proveedorId, datos, { usuarioId, rol }) {
+  const comprobante = validarComprobante(datos, COMPROBANTES_DEUDA);
+  const vence = validarVence(datos.vence, comprobante.fecha);
+  const monto = validarEntero(datos.monto, 'El monto', { minimo: 1, maximo: MAX_TOTAL });
+  const nota = validarString(datos.nota, 'La nota', { requerido: false });
+  await db.transaction(async () => {
+    await obtenerProveedorActivo(proveedorId);
+    await db
+      .prepare(
+        `INSERT INTO compras_proveedor (proveedor_id, usuario_id, fecha, vence, comprobante_tipo, comprobante_numero, total, cargada_a_mano, nota)
+         VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, ?)`
+      )
+      .run(proveedorId, usuarioId, comprobante.fecha, vence, comprobante.comprobante_tipo, comprobante.comprobante_numero, monto, nota);
+  });
+  return obtenerProveedor(proveedorId, { rol });
+}
+
+// Corregir una boleta como dice la factura o el remito: comprobante, número, fecha, vencimiento y
+// total. La compra queda con lo corregido (el saldo y los pagos usan el total real) y lo de antes se
+// guarda en correcciones_compra con el motivo. El stock y los costos no cambian. El total no puede
+// quedar por debajo de lo ya pagado.
+export async function corregirCompra(proveedorId, compraId, datos, { usuarioId, rol }) {
+  const motivo = validarString(datos.motivo, 'El motivo');
+  const total = validarEntero(datos.total, 'El total', { minimo: 0, maximo: MAX_TOTAL });
+  await db.transaction(async () => {
+    await obtenerProveedorActivo(proveedorId);
+    const compra = await obtenerCompraActiva(proveedorId, compraId);
+    const comprobante = validarComprobante(datos, compra.cargada_a_mano ? COMPROBANTES_DEUDA : COMPROBANTES);
+    // Sin vencimiento en el pedido queda el que tenía, o la fecha nueva si la boleta pasó a ser posterior.
+    const vence =
+      datos.vence === undefined
+        ? (compra.vence < comprobante.fecha ? comprobante.fecha : compra.vence)
+        : validarVence(datos.vence, comprobante.fecha);
+    if (total < compra.pagado) {
+      throw new ApiError(409, `El total no puede quedar por debajo de lo ya pagado (${compra.pagado.toLocaleString('es-AR')}).`);
+    }
+    const igual =
+      comprobante.comprobante_tipo === compra.comprobante_tipo &&
+      comprobante.comprobante_numero === compra.comprobante_numero &&
+      comprobante.fecha === compra.fecha &&
+      vence === compra.vence &&
+      total === compra.total;
+    if (igual) throw new ApiError(400, 'No cambiaste nada de la boleta.');
+    await db
+      .prepare(
+        `INSERT INTO correcciones_compra (compra_id, usuario_id, motivo, antes_tipo, antes_numero, antes_fecha, antes_total,
+           despues_tipo, despues_numero, despues_fecha, despues_total, antes_vence, despues_vence)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        compraId, usuarioId, motivo, compra.comprobante_tipo, compra.comprobante_numero, compra.fecha, compra.total,
+        comprobante.comprobante_tipo, comprobante.comprobante_numero, comprobante.fecha, total, compra.vence, vence
+      );
+    await db
+      .prepare('UPDATE compras_proveedor SET comprobante_tipo = ?, comprobante_numero = ?, fecha = ?, vence = ?, total = ? WHERE id = ?')
+      .run(comprobante.comprobante_tipo, comprobante.comprobante_numero, comprobante.fecha, vence, total, compraId);
   });
   return obtenerProveedor(proveedorId, { rol });
 }

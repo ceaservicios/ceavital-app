@@ -1,68 +1,70 @@
-/* Menú lateral "isla flotante": tarjeta verde de marca redondeada, separada 12px del borde,
-   que con el margen ocupa los mismos 240px de ancho que el menú anterior. */
+/* Menú lateral pegado al borde, a toda la altura (rediseño 2026-10-29). Verde de marca,
+   con el activo en verde suave (pedido por el usuario el 2026-10-29). */
 .sidebar {
-  width: 216px;
+  width: 248px;
   flex-shrink: 0;
-  margin: 12px;
-  height: calc(100% - 24px);
+  height: 100%;
   background: var(--sidebar-bg);
   color: var(--sidebar-text-strong);
-  border-radius: 18px;
-  box-shadow: var(--shadow-float);
+  border-right: 1px solid var(--sidebar-border);
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  padding: 16px 8px 10px;
-  gap: 18px;
+  padding: 18px 12px 12px;
+  gap: 20px;
   overflow: auto;
 }
 
-/* La marca va en una tarjetita blanca: el isotipo y "CEA" son verdes y no se verían sobre el verde. */
+/* Marca: isotipo en un recuadro blanco (se ve igual sobre el menú claro y sobre el verde),
+   el nombre del producto y debajo el negocio. */
 .sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 10px;
-  border-radius: 13px;
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  box-shadow: 0 4px 12px rgba(4, 22, 16, 0.25);
+  gap: 10px;
+  padding: 0 6px;
 }
 .sidebar-brand-logo {
-  width: 46px;
-  height: auto;
+  width: 40px;
+  height: 40px;
+  padding: 5px 4px;
+  object-fit: contain;
   flex-shrink: 0;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid var(--border-default);
 }
 .sidebar-brand-text {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  line-height: 1.1;
+  line-height: 1.15;
 }
 .sidebar-brand-title {
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 800;
   letter-spacing: -0.02em;
   white-space: nowrap;
 }
 .sidebar-brand-cea {
-  color: var(--color-primary);
+  color: var(--sidebar-brand-a);
 }
 .sidebar-brand-vital {
-  color: var(--color-secondary);
+  color: var(--sidebar-brand-b);
 }
 .sidebar-brand-subtitle {
-  margin-top: 3px;
-  font-size: 11.5px;
+  margin-top: 2px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--sidebar-text-muted);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
   flex-grow: 1;
 }
 
@@ -72,15 +74,13 @@
   gap: 2px;
 }
 .sidebar-section-title {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  color: var(--sidebar-text-faint);
-  padding: 0 8px 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sidebar-text-muted);
+  padding: 0 10px 6px;
 }
 
-/* Ítem: ícono en un cuadradito + texto. La regla global de los links (a:hover azul) se
-   pisa con a.sidebar-item. */
+/* Ítem: ícono de línea + texto. La regla global de los links (a:hover azul) se pisa con a.sidebar-item. */
 .sidebar-item,
 a.sidebar-item,
 a.sidebar-item:hover {
@@ -90,26 +90,24 @@ a.sidebar-item:hover {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 40px;
-  padding: 4px 8px 4px 5px;
-  border-radius: 12px;
+  min-height: 38px;
+  padding: 0 10px;
+  border-radius: 8px;
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 14px;
   cursor: pointer;
   background: transparent;
-  transition: background 0.15s ease-out, color 0.15s ease-out, box-shadow 0.15s ease-out;
+  transition: background 0.15s ease-out, color 0.15s ease-out;
 }
 .sidebar-item-icon {
-  width: 30px;
-  height: 30px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
-  border-radius: 9px;
-  background: var(--sidebar-icon-bg);
-  color: var(--sidebar-text-muted);
+  color: var(--sidebar-icon);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s ease-out, color 0.15s ease-out;
+  transition: color 0.15s ease-out;
 }
 .sidebar-item-icon svg {
   width: 18px;
@@ -127,47 +125,31 @@ a.sidebar-item:hover {
   color: var(--sidebar-text-strong);
 }
 a.sidebar-item:hover .sidebar-item-icon {
-  background: rgba(255, 255, 255, 0.16);
   color: var(--sidebar-text-strong);
 }
 a.sidebar-item:focus-visible {
-  outline: 2px solid #ffffff;
-  outline-offset: 2px;
+  outline: 2px solid var(--sidebar-text-strong);
+  outline-offset: -2px;
 }
 a.sidebar-item.sidebar-item-active,
 a.sidebar-item.sidebar-item-active:hover {
   background: var(--sidebar-item-active-bg);
   color: var(--sidebar-item-active-text);
   font-weight: 700;
-  box-shadow: 0 6px 14px rgba(4, 22, 16, 0.28);
 }
 a.sidebar-item.sidebar-item-active .sidebar-item-icon {
-  background: rgba(14, 75, 56, 0.1);
-  color: var(--color-primary);
+  color: var(--sidebar-item-active-text);
 }
-.sidebar-item-disabled {
-  color: rgba(255, 255, 255, 0.38);
-  cursor: not-allowed;
-}
-.sidebar-item-disabled .sidebar-item-icon {
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.32);
-}
-/* El candado va como un sellito sobre la esquina del ícono, así el texto entra completo. */
 .sidebar-item-disabled {
   position: relative;
+  opacity: 0.5;
+  cursor: not-allowed;
 }
+/* El candado va a la derecha, donde iría un contador. */
 .sidebar-item-disabled > svg {
-  position: absolute;
-  left: 25px;
-  bottom: 1px;
+  flex-shrink: 0;
   width: 14px;
   height: 14px;
-  padding: 2px;
-  box-sizing: border-box;
-  border-radius: 50%;
-  background: var(--color-primary);
-  box-shadow: 0 0 0 1px var(--sidebar-line);
   color: var(--sidebar-text-muted);
 }
 
@@ -180,16 +162,12 @@ a.sidebar-item.sidebar-item-active .sidebar-item-icon {
   border-radius: 10px;
   background: var(--sidebar-badge-bg);
   color: var(--sidebar-badge-text);
-  font-size: 11.5px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-a.sidebar-item.sidebar-item-active .sidebar-badge {
-  background: var(--color-danger);
-  color: #ffffff;
 }
 .sidebar-sr {
   position: absolute;
@@ -204,12 +182,10 @@ a.sidebar-item.sidebar-item-active .sidebar-badge {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 2px 0;
+  padding: 12px 0 0;
   border-top: 1px solid var(--sidebar-line);
 }
-/* Avatar + nombre: enlace a "Mi cuenta" (un <a>, así que se le fijan los colores). Sobre el
-   verde, la cuenta abierta se marca con un velo blanco (el blanco lleno de los ítems dejaría el
-   nombre blanco sobre blanco). Mismo bloque que Central. */
+/* Avatar + nombre son un enlace a "Mi cuenta" (un <a>, así que se le fijan los colores). */
 .sidebar-cuenta,
 .sidebar-cuenta:hover {
   color: var(--sidebar-text-strong);
@@ -220,34 +196,33 @@ a.sidebar-item.sidebar-item-active .sidebar-badge {
   gap: 10px;
   flex-grow: 1;
   min-width: 0;
-  padding: 4px;
-  border-radius: 10px;
+  padding: 6px;
+  border-radius: 8px;
   transition: background 0.15s ease-out;
 }
 .sidebar-cuenta:hover {
   background: var(--sidebar-item-hover-bg);
 }
-.sidebar-cuenta:focus-visible {
-  outline: 2px solid #ffffff;
-  outline-offset: 2px;
+.sidebar-cuenta-activa,
+.sidebar-cuenta-activa:hover,
+.sidebar-cuenta-activa .sidebar-user-role {
+  background: var(--sidebar-item-active-bg);
+  color: var(--sidebar-item-active-text);
 }
-.sidebar-cuenta-activa {
-  background: rgba(255, 255, 255, 0.14);
-}
-.sidebar-cuenta-activa .sidebar-user-name {
-  color: #ffffff;
+.sidebar-cuenta-activa .sidebar-user-role {
+  background: transparent;
 }
 .sidebar-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
-  background: #ffffff;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
   color: var(--color-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
-  font-size: 13px;
+  font-weight: 700;
+  font-size: 12.5px;
   flex-shrink: 0;
 }
 .sidebar-user {
@@ -274,97 +249,65 @@ a.sidebar-item.sidebar-item-active .sidebar-badge {
   flex-shrink: 0;
   width: 36px;
   height: 36px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  border: none;
   background: transparent;
-  color: var(--sidebar-text);
+  color: var(--sidebar-icon);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: border-color 0.15s ease-out, color 0.15s ease-out, background 0.15s ease-out;
+  transition: color 0.15s ease-out, background 0.15s ease-out;
 }
 .sidebar-logout:hover {
-  border-color: rgba(255, 255, 255, 0.5);
   background: var(--sidebar-item-hover-bg);
   color: var(--sidebar-text-strong);
 }
-.sidebar-logout:focus-visible {
-  outline: 2px solid #ffffff;
-  outline-offset: 2px;
-}
 
-/* Celular y tablet vertical: el menú es un cajón flotante que sale desde la izquierda
+/* Celular y tablet vertical: el menú es un cajón que sale desde la izquierda
    (se abre con el botón de la barra superior, ver AppLayout/Topbar). */
 @media (max-width: 860px) {
   .sidebar {
     position: fixed;
-    top: 10px;
-    left: 10px;
-    bottom: 10px;
+    top: 0;
+    left: 0;
+    bottom: 0;
     z-index: 50;
-    margin: 0;
     height: auto;
-    width: min(280px, calc(100vw - 64px));
-    padding: 16px 10px 10px;
-    transform: translateX(calc(-100% - 20px));
+    width: min(288px, calc(100vw - 56px));
+    transform: translateX(-100%);
     visibility: hidden;
-    transition: transform 0.25s ease-out, visibility 0.25s;
+    transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0.22s;
   }
   .sidebar-abierto {
     transform: translateX(0);
     visibility: visible;
-    box-shadow: 0 20px 50px rgba(9, 30, 23, 0.3);
+    box-shadow: var(--shadow-float);
   }
   .sidebar-item {
     min-height: 44px;
-    font-size: 14px;
   }
 }
 
 /* Ventanas de poca altura: el menú se compacta para que entre completo, con el
-   usuario y el botón de salir siempre visibles (sin scroll propio). */
-@media (max-height: 820px) {
+   usuario y el botón de salir siempre visibles. */
+@media (max-height: 760px) and (min-width: 861px) {
   .sidebar {
-    padding-top: 12px;
-    gap: 12px;
+    padding-top: 14px;
+    gap: 14px;
   }
   .sidebar-nav {
-    gap: 8px;
+    gap: 12px;
   }
   .sidebar-item {
-    min-height: 36px;
-    padding-top: 3px;
-    padding-bottom: 3px;
-  }
-  .sidebar-item-icon {
-    width: 28px;
-    height: 28px;
+    min-height: 34px;
   }
 }
-@media (max-height: 640px) {
+@media (max-height: 620px) and (min-width: 861px) {
   .sidebar-brand-subtitle {
     display: none;
   }
   .sidebar-item {
-    min-height: 32px;
-    padding-top: 2px;
-    padding-bottom: 2px;
-  }
-  .sidebar-item-icon {
-    width: 26px;
-    height: 26px;
-  }
-  .sidebar-footer {
-    padding-top: 8px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sidebar,
-  .sidebar-item,
-  .sidebar-item-icon,
-  .sidebar-logout {
-    transition: none;
+    min-height: 30px;
   }
 }

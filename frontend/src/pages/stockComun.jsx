@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { fechaHoyISO } from '../utils/format.js';
@@ -96,9 +96,9 @@ export function AvisoEnvase({ unidad, envase, children }) {
   return (
     <div className="stock-aviso-envase" role="alert">
       <span>
-        <strong>Este producto se cargó con «{unidad}» como unidad.</strong> Así, el stock, el cobro y el descuento cuentan
-        cada {envase.nombre.toLowerCase()} como 1. Pasalo a unidad + {envase.nombre.toLowerCase()}: el stock y las ventas
-        anteriores se convierten solos.
+        <strong>Este producto está registrado con «{unidad}» como unidad.</strong> El stock, el cobro y los descuentos
+        cuentan cada {envase.nombre.toLowerCase()} como 1. Al convertirlo a unidad + {envase.nombre.toLowerCase()}, el stock
+        y las ventas anteriores se actualizan automáticamente.
       </span>
       {children}
     </div>
@@ -167,6 +167,22 @@ export function useCatalogosStock(puedeEditar) {
       .catch(() => setCategorias([]));
   }, [puedeEditar]);
   return { proveedores, categorias };
+}
+
+// Listas largas (Stock y Proveedores, clase `lista-entera`): al bajar la página, la barra de
+// búsqueda queda fija arriba y los títulos de la tabla se pegan debajo de ella. Como su alto cambia
+// (filtros, "N de M productos", renglones que bajan en pantallas angostas), se mide y se deja en
+// `--alto-barra` de la tarjeta.
+export function useBarraFija() {
+  const ref = useRef(null);
+  useEffect(() => {
+    const barra = ref.current;
+    if (!barra) return undefined;
+    const observador = new ResizeObserver(() => barra.parentElement.style.setProperty('--alto-barra', `${barra.offsetHeight}px`));
+    observador.observe(barra);
+    return () => observador.disconnect();
+  }, []);
+  return ref;
 }
 
 export function IconoLapiz() {

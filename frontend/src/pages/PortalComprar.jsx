@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
+import { IconoFila } from '../components/ConAvatar.jsx';
+import { colorDe } from '../utils/colores.js';
 import { formatearMonto } from '../utils/format.js';
 import {
   esFraccionable,
@@ -33,7 +35,7 @@ const clave = (productoId, presentacion) => `${productoId}:${presentacion}`;
 
 function Stepper({ nombre, valor, maximo, deshabilitado, onFijar }) {
   return (
-    <div className="pedido-stepper">
+    <div className="portal-stepper">
       <button type="button" aria-label={`Quitar uno de ${nombre}`} disabled={deshabilitado || valor === 0} onClick={() => onFijar(valor - 1)}>
         −
       </button>
@@ -58,7 +60,7 @@ function Stepper({ nombre, valor, maximo, deshabilitado, onFijar }) {
 // Cantidad con decimales para kg o litro: se tipea "2,5" y se guarda en gramos/ml.
 function CampoPeso({ nombre, medida, texto, deshabilitado, onCambiar }) {
   return (
-    <div className="pedido-peso">
+    <div className="portal-peso">
       <input
         type="text"
         inputMode="decimal"
@@ -211,15 +213,19 @@ export default function PortalComprar({ onSesionVencida, onPedidoEnviado }) {
     );
   }
 
+  // Rediseño 2026-10-29: cada producto es un renglón con el nombre y, debajo en gris, la
+  // presentación, la categoría y lo disponible; a la derecha precio y cantidad en columnas fijas
+  // (un producto con pack suma un renglón por presentación). Estilos en PortalPage.css.
   return (
-    <div className="pedido-comprar">
+    <div className="portal-comprar">
       {error && <div className="alert alert-danger">{error}</div>}
 
-      <div className="card cliente-card">
+      <div className="card cliente-card portal-catalogo-card">
         <input
           className="cliente-buscar"
           type="text"
-          placeholder="Buscar producto o categoría…"
+          placeholder="Buscar producto o categoría"
+          aria-label="Buscar producto o categoría"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
         />
@@ -228,20 +234,20 @@ export default function PortalComprar({ onSesionVencida, onPedidoEnviado }) {
           <div className="cliente-vacio">Cargando…</div>
         ) : visibles.length === 0 ? (
           <div className="cliente-vacio">
-            {productos.length === 0 ? 'Todavía no hay productos para pedir.' : 'Sin resultados.'}
+            {productos.length === 0 ? 'Todavía no hay productos disponibles.' : 'Sin productos que coincidan con la búsqueda.'}
           </div>
         ) : (
-          <ul className="pedido-catalogo">
+          <ul className="portal-catalogo">
             {visibles.map((p) => {
               const sinStock = p.stock_disponible <= 0;
               const stock = sinStock ? (
-                <span className="pedido-sin-stock">Sin stock</span>
+                <span className="portal-sin-stock">Sin stock</span>
               ) : (
                 `${formatearCantidad(p.stock_disponible, p.medida)} disponibles`
               );
               const meta = p.categoria;
               const precioCantidad = tienePrecioCantidad(p) && (
-                <span className="pedido-prod-promo">
+                <span className="portal-prod-promo">
                   Desde {formatearCantidad(p.precio_cantidad_desde, p.medida, { corta: true })}:{' '}
                   {formatearMonto(p.precio_cantidad)}
                   {esFraccionable(p.medida) ? sufijoPrecio(p.medida) : ' c/u'}
@@ -250,7 +256,7 @@ export default function PortalComprar({ onSesionVencida, onPedidoEnviado }) {
               const precioSuelto = `${formatearMonto(precioLinea(p, cantidadDe(p, 'unidad'), 'unidad').precio)}${sufijoPrecio(p.medida)}`;
               // Precio por cantidad del pack (migración 020): desde N packs.
               const precioCantidadPack = tienePrecioCantidad(p, 'pack') && (
-                <span className="pedido-prod-promo">
+                <span className="portal-prod-promo">
                   Desde {p.pack_cantidad_desde} {plural(p.pack_nombre, p.pack_cantidad_desde)}: {formatearMonto(p.precio_pack_cantidad)} c/u
                 </span>
               );
@@ -260,43 +266,55 @@ export default function PortalComprar({ onSesionVencida, onPedidoEnviado }) {
 
               if (formas.length === 1) {
                 const pres = formas[0];
+                const detalle = [pres === 'pack' && etiquetaPackP, meta].filter(Boolean).join(' · ');
                 return (
-                  <li className="pedido-prod" key={p.id}>
-                    <div className="pedido-prod-info">
-                      <span className="pedido-prod-nombre">{p.nombre}</span>
-                      {pres === 'pack' && <span className="pedido-prod-meta">{etiquetaPackP}</span>}
-                      {meta && <span className="pedido-prod-meta">{meta}</span>}
-                      {pres === 'unidad' ? precioCantidad : precioCantidadPack}
+                  <li className="portal-prod" key={p.id}>
+                    <div className="portal-prod-cabeza">
+                      <IconoFila icono="paquete" color={colorDe(p.id)} />
+                      <div className="portal-prod-info">
+                        <span className="portal-prod-nombre">{p.nombre}</span>
+                        <span className="portal-prod-meta">
+                          {detalle}
+                          {detalle && ' · '}
+                          {stock}
+                        </span>
+                        {pres === 'unidad' ? precioCantidad : precioCantidadPack}
+                      </div>
                     </div>
-                    <span className="pedido-prod-precio">{pres === 'pack' ? precioPack : precioSuelto}</span>
-                    <span className="pedido-prod-stock">{stock}</span>
+                    <span className="portal-prod-precio">{pres === 'pack' ? precioPack : precioSuelto}</span>
                     {control(p, pres, p.nombre)}
                   </li>
                 );
               }
 
               return (
-                <li className="pedido-prod pedido-prod-pack" key={p.id}>
-                  <div className="pedido-prod-info">
-                    <span className="pedido-prod-nombre">{p.nombre}</span>
-                    {meta && <span className="pedido-prod-meta">{meta}</span>}
-                    <span className="pedido-prod-meta">{stock}</span>
+                <li className="portal-prod portal-prod-pack" key={p.id}>
+                  <div className="portal-prod-cabeza">
+                    <IconoFila icono="paquete" color={colorDe(p.id)} />
+                    <div className="portal-prod-info">
+                      <span className="portal-prod-nombre">{p.nombre}</span>
+                      <span className="portal-prod-meta">
+                        {meta}
+                        {meta && ' · '}
+                        {stock}
+                      </span>
+                    </div>
                   </div>
-                  <div className="pedido-opciones">
-                    <div className="pedido-opcion">
-                      <span className="pedido-opcion-nombre">
+                  <div className="portal-opciones">
+                    <div className="portal-opcion">
+                      <span className="portal-opcion-nombre">
                         {esFraccionable(p.medida) ? `Por ${simboloMedida(p.medida)}` : 'Por unidad'}
                         {precioCantidad}
                       </span>
-                      <span className="pedido-prod-precio">{precioSuelto}</span>
+                      <span className="portal-prod-precio">{precioSuelto}</span>
                       {control(p, 'unidad', `${p.nombre} suelto`)}
                     </div>
-                    <div className="pedido-opcion">
-                      <span className="pedido-opcion-nombre">
+                    <div className="portal-opcion">
+                      <span className="portal-opcion-nombre">
                         {etiquetaPackP}
                         {precioCantidadPack}
                       </span>
-                      <span className="pedido-prod-precio">{precioPack}</span>
+                      <span className="portal-prod-precio">{precioPack}</span>
                       {control(p, 'pack', `${p.nombre} por ${p.pack_nombre}`)}
                     </div>
                   </div>
@@ -307,20 +325,20 @@ export default function PortalComprar({ onSesionVencida, onPedidoEnviado }) {
         )}
       </div>
 
-      <div className="pedido-resumen">
-        <div className="pedido-resumen-total">
+      <div className="portal-resumen">
+        <div className="portal-resumen-total">
           <span>
             {lineas.length === 0
-              ? 'Tu pedido está vacío'
+              ? 'Sin productos seleccionados'
               : `${cantidadProductos} ${cantidadProductos === 1 ? 'producto' : 'productos'}`}
           </span>
-          <span>{formatearMonto(total)}</span>
+          <span className="num">{formatearMonto(total)}</span>
         </div>
         <input
           type="text"
           maxLength={500}
-          placeholder="Nota para el negocio (opcional)…"
-          aria-label="Nota para el negocio"
+          placeholder="Observaciones para el negocio (opcional)"
+          aria-label="Observaciones para el negocio"
           value={observaciones}
           onChange={(e) => setObservaciones(e.target.value)}
         />

@@ -243,11 +243,12 @@ async function obtenerLoteActivo(productoId, loteId) {
 // JOIN contra los catálogos (contrato de la API: strings). El JOIN no filtra
 // por eliminado_en del catálogo a propósito: un producto ya cargado con una
 // categoría que después se desactivó sigue mostrando su nombre real, no un "—"
-// (mismo espíritu del proyecto: nunca perder historial).
+// (mismo espíritu del proyecto: nunca perder historial). `proveedor` es solo el nombre, para el
+// filtro de Caja, que usan los tres roles (usuario, 2026-10-30): el Cajero no ve los proveedores.
 const SELECT_PRODUCTOS_CON_STOCK = `
   SELECT
     p.id, p.nombre, p.codigo_barras, p.precio_costo, p.precio_venta,
-    p.proveedor_id, p.stock_minimo, p.dias_aviso_vencimiento,
+    p.proveedor_id, pr.nombre AS proveedor, p.stock_minimo, p.dias_aviso_vencimiento,
     p.eliminado_en, p.creado_en, p.actualizado_en,
     p.categoria_id, c.nombre AS categoria,
     p.unidad_medida_id, u.nombre AS unidad_medida,
@@ -266,6 +267,7 @@ const SELECT_PRODUCTOS_CON_STOCK = `
   LEFT JOIN lotes l ON l.producto_id = p.id AND l.eliminado_en IS NULL
   LEFT JOIN categorias c ON c.id = p.categoria_id
   LEFT JOIN unidades_medida u ON u.id = p.unidad_medida_id
+  LEFT JOIN proveedores pr ON pr.id = p.proveedor_id
 `;
 
 export async function listarProductos({ rol, buscar, codigoBarras }) {
@@ -280,7 +282,7 @@ export async function listarProductos({ rol, buscar, codigoBarras }) {
     params.push(`%${buscar}%`, `%${buscar}%`, `%${buscar}%`);
   }
 
-  const sql = `${SELECT_PRODUCTOS_CON_STOCK} WHERE ${condiciones.join(' AND ')} GROUP BY p.id, c.id, u.id ORDER BY LOWER(p.nombre)`;
+  const sql = `${SELECT_PRODUCTOS_CON_STOCK} WHERE ${condiciones.join(' AND ')} GROUP BY p.id, c.id, u.id, pr.id ORDER BY LOWER(p.nombre)`;
   const productos = await db.prepare(sql).all(...params);
 
   // coincide_codigo: si lo buscado es exactamente el código de la unidad o el del pack.
@@ -299,7 +301,7 @@ export async function listarProductos({ rol, buscar, codigoBarras }) {
 
 export async function obtenerProducto(id, { rol }) {
   const producto = await db
-    .prepare(`${SELECT_PRODUCTOS_CON_STOCK} WHERE p.id = ? AND p.eliminado_en IS NULL GROUP BY p.id, c.id, u.id`)
+    .prepare(`${SELECT_PRODUCTOS_CON_STOCK} WHERE p.id = ? AND p.eliminado_en IS NULL GROUP BY p.id, c.id, u.id, pr.id`)
     .get(id);
   if (!producto) throw new ApiError(404, 'Producto no encontrado');
 
@@ -348,7 +350,7 @@ export async function obtenerProducto(id, { rol }) {
 export async function listarProductosDeProveedor(proveedorId, { rol }) {
   const productos = await db
     .prepare(
-      `${SELECT_PRODUCTOS_CON_STOCK} WHERE p.proveedor_id = ? AND p.eliminado_en IS NULL GROUP BY p.id, c.id, u.id ORDER BY LOWER(p.nombre)`
+      `${SELECT_PRODUCTOS_CON_STOCK} WHERE p.proveedor_id = ? AND p.eliminado_en IS NULL GROUP BY p.id, c.id, u.id, pr.id ORDER BY LOWER(p.nombre)`
     )
     .all(proveedorId);
   return productos.map((p) => ocultarCosto(conAlerta(p), rol));

@@ -11,13 +11,13 @@ const CANAL = {
     nombre: 'Correo de CEA',
     variables: 'SA_SMTP_*',
     uso: 'Avisos de cuota a la empresa, alertas de seguridad, copias de seguridad fallidas y tus códigos de ingreso.',
-    sin: 'Mientras falte, no sale ningún aviso de cuota ni alerta de seguridad, y tu verificación en dos pasos solo puede ser con la app.',
+    sin: 'Mientras falte, no se envían avisos de cuota ni alertas de seguridad, y tu verificación en dos pasos solo puede usar la app autenticadora.',
   },
   empresa: {
     nombre: 'Correo de la empresa',
     variables: 'SMTP_*',
     uso: 'Mails a los usuarios del negocio y a los clientes del portal: códigos de ingreso, contraseñas provisorias y datos de acceso.',
-    sin: 'Mientras falte, la app funciona igual: la contraseña provisoria de un Administrador se ve en pantalla, el 2FA de los Administradores va por app, la verificación del email de Encargados y Cajeros queda en pausa y una contraseña olvidada la restablece el Administrador (o vos, si es de un Administrador).',
+    sin: 'Mientras falte, el sistema funciona igual: la contraseña provisoria de un Administrador se muestra en pantalla, su verificación en dos pasos usa la app, la verificación del email de Encargados y Cajeros queda en pausa y una contraseña olvidada la restablece el Administrador (o CEA, si es de un Administrador).',
   },
 };
 
@@ -32,9 +32,9 @@ const TIPO = {
 };
 
 const ESTADO = {
-  pendiente: { texto: 'En cola', clase: 'sa-chip-aviso' },
+  pendiente: { texto: 'En cola', clase: 'sa-chip-info' },
   enviado: { texto: 'Enviado', clase: 'sa-chip-ok' },
-  fallido: { texto: 'Falló', clase: 'sa-chip-alerta' },
+  fallido: { texto: 'Fallido', clase: 'sa-chip-alerta' },
   descartado: { texto: 'Descartado', clase: 'sa-chip-neutro' },
 };
 
@@ -55,7 +55,7 @@ export default function SuperadminCorreo({ usuario, irAlLogin }) {
   const manejarError = useCallback(
     (err) => {
       if (err instanceof ApiError && err.status === 401) return irAlLogin();
-      setError(err instanceof ApiError ? err.message : 'No se pudo completar la acción. Probá de nuevo.');
+      setError(err instanceof ApiError ? err.message : 'No se pudo completar la acción. Intentá de nuevo.');
     },
     [irAlLogin]
   );
@@ -83,7 +83,7 @@ export default function SuperadminCorreo({ usuario, irAlLogin }) {
     setAviso(null);
     try {
       const r = await api.post('/sa/correo/prueba', { canal });
-      setAviso(`${CANAL[canal].nombre}: correo de prueba enviado a ${r.enviado_a}. Fijate que te llegue.`);
+      setAviso(`${CANAL[canal].nombre}: correo de prueba enviado a ${r.enviado_a}. Verificá que haya llegado.`);
     } catch (err) {
       manejarError(err);
     } finally {
@@ -103,71 +103,77 @@ export default function SuperadminCorreo({ usuario, irAlLogin }) {
 
   return (
     <>
-      <section className="card sa-card">
-        <h2 className="sa-h2">Correos de esta instalación</h2>
-        <p className="sa-ayuda">
-          Todos los mails salen en cola: si uno no sale, se reintenta solo (al minuto, a los 5, a los 30 minutos, a las 2 y a las 6 horas). Un
-          código de ingreso que no salió en 10 minutos se descarta. La prueba sale en el momento, sin cola, a tu mail ({usuario}).
-        </p>
-        {error && <div className="alert alert-danger">{error}</div>}
-        {aviso && <div className="alert sa-alert-ok">{aviso}</div>}
-        <div className="sa-planes-grilla">
-          {estado.canales.map((c) => {
-            const info = CANAL[c.id];
-            return (
-              <div key={c.id} className="sa-plan-tarjeta">
-                <div className="sa-plan-cabecera">
-                  <span className="sa-plan-nombre">{info.nombre}</span>
-                  <span className={`sa-chip ${c.configurado ? 'sa-chip-ok' : c.id === 'cea' ? 'sa-chip-alerta' : 'sa-chip-aviso'}`}>
-                    {c.configurado ? 'Configurado' : 'Sin configurar'}
-                  </span>
-                </div>
-                <p className="sa-detalle">{info.uso}</p>
-                <dl className="sa-correo-datos">
-                  <dt>Sale desde</dt>
+      {error && <div className="alert alert-danger">{error}</div>}
+      {aviso && <div className="alert alert-exito">{aviso}</div>}
+
+      <div className="sa-grilla-2">
+        {estado.canales.map((c) => {
+          const info = CANAL[c.id];
+          return (
+            <section key={c.id} className="card sa-card">
+              <div className="sa-card-cabecera">
+                <h2 className="sa-h2">{info.nombre}</h2>
+                <span className={`sa-chip ${c.configurado ? 'sa-chip-ok' : c.id === 'cea' ? 'sa-chip-alerta' : 'sa-chip-aviso'}`}>
+                  {c.configurado ? 'Configurado' : 'Sin configurar'}
+                </span>
+              </div>
+              <p className="sa-ayuda">{info.uso}</p>
+              <dl className="sa-datos sa-datos-2">
+                <div className="sa-dato-full">
+                  <dt>Remitente</dt>
                   <dd>{c.remitente ?? '—'}</dd>
-                  {c.id === 'empresa' && (
-                    <>
-                      <dt>Respuestas a</dt>
-                      <dd>{c.responder_a ?? (c.configurado ? 'al mismo remitente' : '—')}</dd>
-                    </>
-                  )}
+                </div>
+                {c.id === 'empresa' && (
+                  <div className="sa-dato-full">
+                    <dt>Respuestas a</dt>
+                    <dd>{c.responder_a ?? (c.configurado ? 'Al remitente' : '—')}</dd>
+                  </div>
+                )}
+                <div>
                   <dt>En cola</dt>
                   <dd>{c.pendientes}</dd>
+                </div>
+                <div>
                   <dt>Fallidos (30 días)</dt>
                   <dd>{c.fallidos_30d}</dd>
-                  <dt>Último enviado</dt>
-                  <dd>{c.ultimo_enviado ? formatearFechaHora(c.ultimo_enviado) : '—'}</dd>
-                </dl>
-                {!c.configurado && (
-                  <p className="sa-ayuda">
-                    Faltan las variables {info.variables} en el servidor. {info.sin}
-                  </p>
-                )}
-                <div className="sa-plan-pie">
-                  <button type="button" className="btn" disabled={ocupado || !c.configurado} onClick={() => probar(c.id)}>
-                    Mandar correo de prueba
-                  </button>
                 </div>
+                <div className="sa-dato-full">
+                  <dt>Último envío</dt>
+                  <dd>{c.ultimo_enviado ? formatearFechaHora(c.ultimo_enviado) : '—'}</dd>
+                </div>
+              </dl>
+              {!c.configurado && (
+                <p className="sa-ayuda">
+                  Faltan las variables {info.variables} en el servidor. {info.sin}
+                </p>
+              )}
+              <div className="sa-card-pie">
+                <button type="button" className="btn" disabled={ocupado || !c.configurado} onClick={() => probar(c.id)}>
+                  Enviar correo de prueba
+                </button>
               </div>
-            );
-          })}
-        </div>
-      </section>
+            </section>
+          );
+        })}
+      </div>
 
       <section className="card sa-card">
         <h2 className="sa-h2">Últimos mails</h2>
+        <p className="sa-ayuda">
+          Los mails salen en cola: si uno falla, se reintenta automáticamente (al minuto, a los 5 y 30 minutos, a las 2 y a las 6 horas). Un código
+          de ingreso que no sale en 10 minutos se descarta. El correo de prueba sale en el momento, sin cola, a tu mail ({usuario}).
+        </p>
         {estado.correos.length === 0 ? (
-          <p className="sa-ayuda">Todavía no salió ningún mail.</p>
+          <p className="sa-vacio">Todavía no se envió ningún mail.</p>
         ) : (
           <div className="sa-tabla-scroll">
             <table className="sa-tabla sa-tabla-correos">
               <thead>
                 <tr>
                   <th>Fecha</th>
-                  <th>Correo</th>
-                  <th>Qué</th>
-                  <th>A</th>
+                  <th>Canal</th>
+                  <th>Tipo</th>
+                  <th>Destinatario</th>
                   <th>Estado</th>
                 </tr>
               </thead>
@@ -181,9 +187,11 @@ export default function SuperadminCorreo({ usuario, irAlLogin }) {
                       <td>{c.canal === 'cea' ? 'CEA' : 'Empresa'}</td>
                       <td>{TIPO[c.tipo] ?? c.tipo}</td>
                       <td>{c.para}</td>
-                      <td className="sa-correo-estado">
-                        <span className={`sa-chip ${e.clase}`}>{e.texto}</span>
-                        {detalle && <span className="sa-detalle-fila">{detalle}</span>}
+                      <td>
+                        <div className="sa-celda-estado">
+                          <span className={`sa-chip ${e.clase}`}>{e.texto}</span>
+                          {detalle && <span className="sa-detalle-fila">{detalle}</span>}
+                        </div>
                       </td>
                     </tr>
                   );
