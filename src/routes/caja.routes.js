@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import {
+  cargarFondoController,
+  editarCierreController,
+  eliminarCierreController,
   listarCierresController,
   obtenerCierreController,
   obtenerResumenController,
@@ -24,6 +27,11 @@ router.get('/cierres/:id', requireAuth(), obtenerCierreController);
 // Cajero (Docs/Resumen-Ejecutivo.md: "Cajero... ve el cierre de caja, sin
 // editar ni eliminar nada").
 router.post('/cierres', requireAuth(['admin', 'encargado']), registrarCierreController);
+// Corregir un cierre y eliminar el último (2026-10-31, pedido del usuario): solo el Administrador.
+router.patch('/cierres/:id', requireAuth(['admin']), editarCierreController);
+router.delete('/cierres/:id', requireAuth(['admin']), eliminarCierreController);
+// Fondo inicial del turno abierto, cargado a mano (2026-10-31): los mismos que cierran la caja.
+router.put('/fondo', requireAuth(['admin', 'encargado']), cargarFondoController);
 
 // Gastos y pagos a proveedores (corrección pedida 2026-09-15, decisiones
 // confirmadas 2026-09-18). Crear/Ver: los 3 roles (cualquiera en caja puede

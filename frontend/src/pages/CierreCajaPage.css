@@ -183,6 +183,43 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+/* Fondo inicial cargado a mano (2026-10-31): el campo baja a su propio renglón, a todo el ancho,
+   y con un fondo ya cargado queda "Cambiar" al lado del importe. */
+.cierre-fondo-editando {
+  flex-wrap: wrap;
+}
+.cierre-fondo-form.field {
+  flex: 1 1 100%;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.cierre-fondo-form.field input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+.cierre-fondo-form .btn {
+  flex: none;
+}
+.cierre-fondo-valor {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.cierre-fondo-cambiar {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+.cierre-fondo-cambiar:hover {
+  text-decoration: underline;
+}
 /* Un efectivo esperado negativo no puede estar en el cajón: alerta. */
 .cierre-cuenta-negativa span:last-child {
   color: var(--danger-ink);
@@ -284,6 +321,98 @@
   color: var(--warn-ink);
 }
 
+/* Corregir y eliminar cierres (Administrador, 2026-10-31): íconos al final de la fila y, abajo de
+   ella, el formulario o la confirmación, como "Corregir" en Saldos. */
+.cliente-tabla.cierre-tabla td.cierre-acciones {
+  width: 1%;
+  padding-left: 4px;
+  text-align: right;
+}
+/* Con los íconos, en 1280 px no entraba todo en un renglón: la fecha (con "corregido"), quién
+   registró y la diferencia bajan de renglón solo si falta lugar. */
+.cliente-tabla.cierre-tabla td.cierre-fecha,
+.cliente-tabla.cierre-tabla td.cierre-quien,
+.cliente-tabla.cierre-tabla td.cierre-dif {
+  white-space: normal;
+}
+.cierre-accion {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.cierre-accion:hover,
+.cierre-accion.activa {
+  background: #e6f2ec;
+  color: var(--color-primary);
+}
+.cierre-accion-peligro:hover,
+.cierre-accion-peligro.activa {
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+}
+.cierre-accion-hueco {
+  display: inline-block;
+  width: 32px;
+  vertical-align: middle;
+}
+.cierre-corregido {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--warn-ink);
+}
+.cliente-tabla.cierre-tabla tr.cierre-fila-extra td {
+  height: auto;
+  padding: 0 0 14px;
+  white-space: normal;
+}
+.cierre-editar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid #cfe3d8;
+  border-radius: 14px;
+  background: #f3f9f5;
+}
+.cierre-editar.cierre-eliminar {
+  border-color: #f1c6ca;
+  background: var(--danger-bg);
+}
+.cierre-editar-cab strong {
+  display: block;
+  font-size: 15px;
+}
+.cierre-editar-cab span,
+.cierre-editar-nota {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.cierre-editar-campos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+.cierre-editar-campos .cierre-diferencia {
+  min-height: var(--control-height);
+}
+.cierre-editar-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 @media (max-width: 700px) {
   .cierre-opcional {
     display: none;
@@ -308,5 +437,42 @@
   }
   .cierre-total span:last-child {
     font-size: 20px;
+  }
+  /* Más lugar para el importe al lado de Guardar y Cancelar. */
+  .cierre-fondo-form .btn {
+    padding: 0 12px;
+  }
+  /* En celular la tabla ya corría de costado: el recuadro queda quieto a la vista, del ancho visible
+     de la tabla (100cqw del contenedor que corre). */
+  .cierre-editar {
+    padding: 14px;
+  }
+  .cierre-historial .cliente-tabla-wrap {
+    container-type: inline-size;
+  }
+  .cierre-fila-extra .cierre-editar {
+    position: sticky;
+    left: 0;
+    width: 100cqw;
+  }
+  .cierre-editar-campos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cierre-editar-campos .cierre-diferencia {
+    grid-column: 1 / -1;
+  }
+  .cierre-corregido {
+    display: block;
+    margin-left: 0;
+  }
+  /* En celular los dos íconos van uno arriba del otro. */
+  .cliente-tabla.cierre-tabla td.cierre-acciones {
+    white-space: normal;
+  }
+  .cierre-accion {
+    display: flex;
+  }
+  .cierre-accion-hueco {
+    display: none;
   }
 }

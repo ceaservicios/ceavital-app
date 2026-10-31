@@ -28,7 +28,12 @@ export async function listarVentasController(req, res) {
     let caja = null;
     if ((q.hasta ?? q.desde) === q.desde && q.desde === hoyNegocio()) {
       const resumen = await calcularResumenDelTurno();
-      caja = { fondo: resumen.fondo_heredado, fondo_desde: resumen.desde, efectivo_en_caja: resumen.total_efectivo_esperado };
+      caja = {
+        fondo: resumen.fondo_heredado,
+        fondo_desde: resumen.desde,
+        fondo_a_mano: resumen.fondo_cargado !== null,
+        efectivo_en_caja: resumen.total_efectivo_esperado,
+      };
     }
     res.json({ ...resultado, caja });
     return;

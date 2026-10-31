@@ -267,7 +267,13 @@ export default function VentasDiariasPage() {
           {
             etiqueta: 'Fondo',
             valor: esHoy ? formatearMonto(caja?.fondo ?? 0) : '—',
-            sub: !esHoy ? 'Solo para hoy' : caja?.fondo_desde ? `Cierre ${cuandoFueElCierreCorto(caja.fondo_desde)}` : 'Sin cierres anteriores',
+            sub: !esHoy
+              ? 'Solo para hoy'
+              : caja?.fondo_a_mano
+                ? 'Cargado a mano'
+                : caja?.fondo_desde
+                  ? `Cierre ${cuandoFueElCierreCorto(caja.fondo_desde)}`
+                  : 'Sin cierres anteriores',
             icono: 'caja',
             tono: 'azul',
           },

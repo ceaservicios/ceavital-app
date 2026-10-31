@@ -33,10 +33,27 @@ function validarEnteroNoNegativo(valor, campo) {
 //   sin depender de la hora (dos movimientos del mismo segundo no se pierden ni se cuentan dos veces).
 // - Un cierre anterior a la 024 no tiene esos datos: se usa su hora.
 // - Si nunca hubo un cierre, desde el inicio del día (hora argentina).
+// Un cierre eliminado (migración 033) no cuenta: el turno que había cerrado vuelve a estar abierto.
 async function ultimoCierre() {
   return db
-    .prepare('SELECT id, fecha, creado_en, fondo_dejado, hasta_venta_id, hasta_gasto_id FROM cierres_caja ORDER BY id DESC LIMIT 1')
+    .prepare(
+      `SELECT id, fecha, creado_en, fondo_dejado, hasta_venta_id, hasta_gasto_id
+       FROM cierres_caja WHERE eliminado_en IS NULL ORDER BY id DESC LIMIT 1`
+    )
     .get();
+}
+
+// Fondo del turno abierto cargado a mano (2026-10-31), si lo hay: el último que se cargó para este
+// turno. Sin él, vale el que dejó el cierre anterior.
+async function fondoCargado(anterior) {
+  return db
+    .prepare(
+      `SELECT f.monto, f.creado_en, u.nombre AS usuario_nombre
+       FROM fondos_turno f JOIN usuarios u ON u.id = f.usuario_id
+       WHERE f.desde_cierre_id ${anterior ? '= ?' : 'IS NULL'}
+       ORDER BY f.id DESC LIMIT 1`
+    )
+    .get(...(anterior ? [anterior.id] : []));
 }
 
 function condicionDelTurno(anterior, columnaHasta) {
@@ -49,11 +66,12 @@ function condicionDelTurno(anterior, columnaHasta) {
 // anuladas) -- cálculo en vivo; cierres_caja guarda la FOTO de cada cierre ya hecho. Es lo que
 // ven los 3 roles en Cierre de Caja antes de que Admin/Encargado confirmen el cierre.
 //
-// Efectivo que tiene que haber en la caja = fondo que dejó el cierre anterior + ventas en
-// efectivo del turno − gastos y pagos a proveedores del turno (se asumen en efectivo: salen del
-// cajón, ver gastos.service.js).
+// Efectivo que tiene que haber en la caja = fondo inicial del turno (el que dejó el cierre anterior
+// o el cargado a mano) + ventas en efectivo del turno − gastos y pagos a proveedores del turno (se
+// asumen en efectivo: salen del cajón, ver gastos.service.js).
 export async function calcularResumenDelTurno() {
   const anterior = await ultimoCierre();
+  const cargado = await fondoCargado(anterior);
   const ventasTurno = condicionDelTurno(anterior, 'hasta_venta_id');
   const gastosTurno = condicionDelTurno(anterior, 'hasta_gasto_id');
 
@@ -73,7 +91,7 @@ export async function calcularResumenDelTurno() {
     .get(...gastosTurno.params);
 
   const total_general = MEDIOS_PAGO.reduce((acc, m) => acc + totales[m], 0);
-  const fondo_heredado = Number(anterior?.fondo_dejado ?? 0);
+  const fondo_heredado = cargado ? Number(cargado.monto) : Number(anterior?.fondo_dejado ?? 0);
   const total_gastos = Number(gastos.total);
 
   return {
@@ -82,6 +100,8 @@ export async function calcularResumenDelTurno() {
     desde: anterior?.creado_en ?? null,
     cierre_anterior_id: anterior?.id ?? null,
     fondo_heredado,
+    // Quién cargó a mano el fondo y cuándo, o null si es el que dejó el cierre anterior.
+    fondo_cargado: cargado ? { por: cargado.usuario_nombre, en: cargado.creado_en } : null,
     total_gastos,
     total_efectivo: totales.efectivo,
     total_efectivo_esperado: totales.efectivo + fondo_heredado - total_gastos,
@@ -97,17 +117,94 @@ export async function calcularResumenDelTurno() {
 export function listarCierres() {
   return db
     .prepare(
-      `SELECT c.*, u.nombre AS usuario_nombre
-       FROM cierres_caja c JOIN usuarios u ON u.id = c.usuario_id
+      `SELECT c.*, u.nombre AS usuario_nombre, ue.nombre AS editado_por_nombre
+       FROM cierres_caja c
+       JOIN usuarios u ON u.id = c.usuario_id
+       LEFT JOIN usuarios ue ON ue.id = c.editado_por
+       WHERE c.eliminado_en IS NULL
        ORDER BY c.id DESC`
     )
     .all();
 }
 
 export async function obtenerCierre(id) {
-  const cierre = await db.prepare('SELECT * FROM cierres_caja WHERE id = ?').get(id);
+  const cierre = await db.prepare('SELECT * FROM cierres_caja WHERE id = ? AND eliminado_en IS NULL').get(id);
   if (!cierre) throw new ApiError(404, 'Cierre de caja no encontrado');
   return cierre;
+}
+
+// Corregir un cierre (Administrador, pedido del usuario, 2026-10-31): lo que se cargó a mano, el
+// efectivo contado y el fondo dejado. La diferencia se recalcula contra el esperado de la foto; lo
+// vendido no cambia. El fondo dejado se cambia solo en el último cierre: el de uno anterior ya está
+// en la foto del cierre que siguió. Devuelve el antes, para el registro de acciones.
+export async function editarCierre(id, { total_efectivo_contado, fondo_dejado }, { usuarioId }) {
+  const contado = validarEnteroNoNegativo(total_efectivo_contado, 'El efectivo contado');
+  const fondoDejado = fondo_dejado != null ? validarEnteroNoNegativo(fondo_dejado, 'El fondo dejado') : 0;
+  if (fondoDejado > contado) throw new ApiError(400, 'El fondo a dejar no puede ser mayor que lo que contaste.');
+
+  return db.transaction(async () => {
+    // Como al registrar un cierre: de a uno, así nadie cierra el turno mientras se corrige el último.
+    await db.exec('LOCK TABLE cierres_caja IN SHARE ROW EXCLUSIVE MODE');
+    const cierre = await obtenerCierre(id);
+    const antes = { contado: Number(cierre.total_efectivo_contado), fondo: Number(cierre.fondo_dejado) };
+    if (contado === antes.contado && fondoDejado === antes.fondo) return { cierre, antes, cambio: false };
+    if (fondoDejado !== antes.fondo && (await ultimoCierre()).id !== id) {
+      throw new ApiError(400, 'El fondo dejado se cambia solo en el último cierre: el de este ya pasó al turno siguiente.');
+    }
+    const corregido = await db
+      .prepare(
+        `UPDATE cierres_caja
+         SET total_efectivo_contado = ?, diferencia_efectivo = ?, fondo_dejado = ?,
+             editado_en = (NOW() AT TIME ZONE 'UTC'), editado_por = ?
+         WHERE id = ?
+         RETURNING *`
+      )
+      .get(contado, contado - Number(cierre.total_efectivo_esperado), fondoDejado, usuarioId, id);
+    return { cierre: corregido, antes, cambio: true };
+  });
+}
+
+// Eliminar un cierre (Administrador, 2026-10-31): baja lógica y solo del último. Sus ventas y gastos
+// vuelven al turno abierto, que arranca otra vez desde el cierre anterior y con su fondo. Uno
+// anterior no: su turno ya quedó entre otros dos cierres.
+export async function eliminarCierre(id, { usuarioId }) {
+  return db.transaction(async () => {
+    await db.exec('LOCK TABLE cierres_caja IN SHARE ROW EXCLUSIVE MODE');
+    const cierre = await obtenerCierre(id);
+    if ((await ultimoCierre()).id !== id) {
+      throw new ApiError(409, 'Solo se puede eliminar el último cierre: los anteriores ya quedaron entre otros dos turnos.');
+    }
+    await db
+      .prepare(`UPDATE cierres_caja SET eliminado_en = (NOW() AT TIME ZONE 'UTC'), eliminado_por = ? WHERE id = ?`)
+      .run(usuarioId, id);
+    return cierre;
+  });
+}
+
+// Fondo inicial del turno abierto, cargado a mano (pedido del usuario, 2026-10-31): el primer turno
+// no tiene un cierre anterior que lo deje, y si un cierre dejó un fondo equivocado se corrige acá.
+// Admin y Encargado, los mismos que cierran la caja. desde_cierre_id es el cierre anterior que vio
+// la pantalla: si mientras tanto se cerró el turno, no se carga en el turno nuevo sin que lo vean.
+// Devuelve el fondo que valía antes, para el registro de acciones.
+export async function cargarFondo({ monto, desde_cierre_id }, { usuarioId }) {
+  const valor = validarEnteroNoNegativo(monto, 'El fondo inicial');
+  const desde = desde_cierre_id == null ? null : Number(desde_cierre_id);
+  if (desde !== null && (!Number.isInteger(desde) || desde <= 0)) throw new ApiError(400, 'desde_cierre_id inválido');
+
+  return db.transaction(async () => {
+    // Espera a un cierre que se esté registrando (LOCK en conflicto con el del cierre).
+    await db.exec('LOCK TABLE cierres_caja IN SHARE MODE');
+    const anterior = await ultimoCierre();
+    if ((anterior?.id ?? null) !== desde) {
+      throw new ApiError(409, 'Se registró un cierre de caja recién. Revisá el turno nuevo y, si hace falta, cargá el fondo de nuevo.');
+    }
+    const cargado = await fondoCargado(anterior);
+    const antes = cargado ? Number(cargado.monto) : Number(anterior?.fondo_dejado ?? 0);
+    await db
+      .prepare('INSERT INTO fondos_turno (desde_cierre_id, monto, usuario_id) VALUES (?, ?, ?)')
+      .run(desde, valor, usuarioId);
+    return { monto: valor, antes };
+  });
 }
 
 // "Cierre de caja -- Editar" (Admin+Encargado, no Cajero -- confirmado en
@@ -135,7 +232,10 @@ export async function registrarCierre({ total_efectivo_contado, fondo_dejado }, 
     // mismos totales (contaría un turno vacío), así que se rechaza cualquier cierre que llegue
     // menos de 5 segundos después de otro.
     const reciente = await db
-      .prepare(`SELECT id FROM cierres_caja WHERE creado_en >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '5 seconds' LIMIT 1`)
+      .prepare(
+        `SELECT id FROM cierres_caja
+         WHERE eliminado_en IS NULL AND creado_en >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '5 seconds' LIMIT 1`
+      )
       .get();
     if (reciente) {
       throw new ApiError(409, 'Se acaba de registrar un cierre. Si querías cerrar otro turno, esperá unos segundos y volvé a intentar.');

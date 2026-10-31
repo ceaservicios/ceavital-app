@@ -86,6 +86,28 @@ const CATALOGO = {
     titulo: 'Cambió el medio de pago de una venta',
     detalle: (d) => `venta #${d.venta_id} · ${MEDIO_PAGO[d.de] ?? d.de} → ${MEDIO_PAGO[d.a] ?? d.a}`,
   },
+  'fondo-turno': {
+    categoria: 'instalacion',
+    titulo: 'Cargó el fondo inicial de la caja',
+    detalle: (d) => `${pesos(d.monto)} (antes: ${pesos(d.antes)})`,
+  },
+  'cierre-editado': {
+    categoria: 'instalacion',
+    titulo: 'Corrigió un cierre de caja',
+    detalle: (d) =>
+      [
+        `cierre #${d.cierre_id} del ${fecha(d.fecha)}`,
+        d.contado !== d.contado_antes && `contado ${pesos(d.contado_antes)} → ${pesos(d.contado)}`,
+        d.fondo !== d.fondo_antes && `fondo dejado ${pesos(d.fondo_antes)} → ${pesos(d.fondo)}`,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+  },
+  'cierre-eliminado': {
+    categoria: 'instalacion',
+    titulo: 'Eliminó un cierre de caja',
+    detalle: (d) => `cierre #${d.cierre_id} del ${fecha(d.fecha)} · contado ${pesos(d.contado)} · fondo dejado ${pesos(d.fondo)}`,
+  },
   'plan-cambiado': { categoria: 'instalacion', titulo: 'Cambió el plan', detalle: (d) => `${d.de} → ${d.a}` },
   'instalacion-suspendida': {
     categoria: 'instalacion',
