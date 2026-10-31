@@ -33,7 +33,8 @@ router.post('/:id/pasar-a-pack', requireAuth(['admin']), pasarAPackController);
 router.delete('/:id', requireAuth(['admin']), eliminarProductoController);
 
 router.post('/:id/lotes', requireAuth(['admin', 'encargado']), crearLoteController);
-router.patch('/:id/lotes/:loteId', requireAuth(['admin', 'encargado']), editarLoteController);
+// Corregir un lote ya cargado: solo el Administrador (pedido del usuario, 2026-10-31).
+router.patch('/:id/lotes/:loteId', requireAuth(['admin']), editarLoteController);
 router.delete('/:id/lotes/:loteId', requireAuth(['admin', 'encargado']), eliminarLoteController);
 
 export default router;

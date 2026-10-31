@@ -17,6 +17,7 @@ import {
   esFraccionable,
   etiquetaPack,
   formatearCantidad,
+  parsearCantidad,
   plural,
   simboloMedida,
   textoDeCantidad,
@@ -72,6 +73,10 @@ export default function ProductoDetallePage() {
   const [pasandoAPack, setPasandoAPack] = useState(false);
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
   const [loteAEliminar, setLoteAEliminar] = useState(null);
+  // Corregir un lote ya cargado (Administrador, 2026-10-31): cantidad, ingreso y vencimiento.
+  const [loteAEditar, setLoteAEditar] = useState(null);
+  const [edLote, setEdLote] = useState(null);
+  const edLoteRef = useRef(null);
   const [error, setError] = useState(null);
   const [exito, setExito] = useState(location.state?.exito ?? null);
   // Guardia sincrónica compartida por guardar, agregar lote, eliminar lote y eliminar producto:
@@ -169,6 +174,40 @@ export default function ProductoDetallePage() {
       setExito('Stock ingresado.');
     }, 'No se pudo registrar el ingreso.');
   }
+
+  function abrirEdicionLote(lote) {
+    setLoteAEliminar(null);
+    setLoteAEditar(lote);
+    setEdLote({
+      cantidad: textoDeCantidad(lote.cantidad, detalle.medida),
+      fecha_ingreso: lote.fecha_ingreso,
+      fecha_vencimiento: lote.fecha_vencimiento ?? '',
+    });
+  }
+
+  function guardarLote(e) {
+    e.preventDefault();
+    const cantidad = parsearCantidad(edLote.cantidad, detalle.medida);
+    if (!cantidad) {
+      setError('La cantidad no es válida. Para dejar el lote en cero, eliminalo.');
+      return;
+    }
+    return conGuardia(async () => {
+      await api.patch(`/productos/${id}/lotes/${loteAEditar.id}`, {
+        cantidad,
+        fecha_ingreso: edLote.fecha_ingreso,
+        fecha_vencimiento: edLote.fecha_vencimiento || null,
+      });
+      setLoteAEditar(null);
+      await cargar();
+      setExito('Lote corregido.');
+    }, 'No se pudo corregir el lote.');
+  }
+
+  // El formulario va abajo de la tabla: con muchos lotes, que quede a la vista al abrirlo.
+  useEffect(() => {
+    if (loteAEditar) edLoteRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [loteAEditar]);
 
   function eliminarLote(loteId) {
     return conGuardia(async () => {
@@ -429,13 +468,31 @@ export default function ProductoDetallePage() {
                     </td>
                     {puedeEditar && (
                       <td className="accion">
+                        {esAdmin && (
+                          <button
+                            type="button"
+                            className={`boton-icono${loteAEditar?.id === lote.id ? ' activo' : ''}`}
+                            title="Corregir lote"
+                            aria-label={`Corregir el lote ingresado el ${formatearFecha(lote.fecha_ingreso)}`}
+                            disabled={guardando}
+                            onClick={() => (loteAEditar?.id === lote.id ? setLoteAEditar(null) : abrirEdicionLote(lote))}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M12 20h9" />
+                              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+                            </svg>
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="boton-icono boton-icono-peligro"
                           title="Eliminar lote"
                           aria-label="Eliminar lote"
                           disabled={guardando}
-                          onClick={() => setLoteAEliminar(lote)}
+                          onClick={() => {
+                            setLoteAEditar(null);
+                            setLoteAEliminar(lote);
+                          }}
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                             <path d="M3 6h18" />
@@ -450,6 +507,77 @@ export default function ProductoDetallePage() {
               </tbody>
             </table>
           </div>
+        )}
+
+        {/* Corregir un lote, abajo de la tabla como la confirmación de eliminar (2026-10-31). */}
+        {loteAEditar && edLote && (
+          <form ref={edLoteRef} className="card producto-lote-confirm producto-lote-editar" onSubmit={guardarLote}>
+            <div className="producto-seccion-cabecera">
+              <h3 className="producto-subtitulo">Corregir el lote ingresado el {formatearFecha(loteAEditar.fecha_ingreso)}</h3>
+              <p className="producto-seccion-ayuda">
+                Hoy tiene {describirStock(loteAEditar.cantidad, detalle, stockEnPacks)}. Las ventas ya hechas
+                {loteAEditar.compra ? ' y la boleta del proveedor' : ''} no cambian.
+              </p>
+            </div>
+            <div className="producto-campos-ingreso">
+              <div className="field">
+                <label htmlFor="lote-editar-cantidad">Cantidad</label>
+                <ConUnidad sufijo={simboloMedida(detalle.medida)}>
+                  <input
+                    id="lote-editar-cantidad"
+                    required
+                    type="text"
+                    inputMode={esFraccionable(detalle.medida) ? 'decimal' : 'numeric'}
+                    value={edLote.cantidad}
+                    onChange={(e) => setEdLote({ ...edLote, cantidad: e.target.value })}
+                  />
+                </ConUnidad>
+              </div>
+              <div className="field">
+                <label htmlFor="lote-editar-ingreso">Fecha de ingreso</label>
+                <input
+                  id="lote-editar-ingreso"
+                  required
+                  type="date"
+                  value={edLote.fecha_ingreso}
+                  onChange={(e) => setEdLote({ ...edLote, fecha_ingreso: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="lote-editar-vence">Vencimiento (opcional)</label>
+                <input
+                  id="lote-editar-vence"
+                  type="date"
+                  value={edLote.fecha_vencimiento}
+                  onChange={(e) => setEdLote({ ...edLote, fecha_vencimiento: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="producto-ajuste-pie">
+              <CuentaIngreso
+                cantidad={edLote.cantidad}
+                enPacks={false}
+                producto={detalle}
+                stockActual={detalle.stock_total - loteAEditar.cantidad}
+                textoFinal="el stock del producto queda en"
+              />
+              <button type="button" className="btn" onClick={() => setLoteAEditar(null)}>
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={
+                  guardando ||
+                  (parsearCantidad(edLote.cantidad, detalle.medida) === loteAEditar.cantidad &&
+                    edLote.fecha_ingreso === loteAEditar.fecha_ingreso &&
+                    edLote.fecha_vencimiento === (loteAEditar.fecha_vencimiento ?? ''))
+                }
+              >
+                {guardando ? 'Guardando…' : 'Guardar'}
+              </button>
+            </div>
+          </form>
         )}
 
         {/* El tacho de un lote pide confirmación antes de borrar (2026-10-29). */}

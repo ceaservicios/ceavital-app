@@ -454,6 +454,21 @@
 .producto-lote-confirm {
   margin-top: 12px;
 }
+/* Corregir un lote (Administrador, 2026-10-31): verde claro, como "Corregir" en Saldos. Con .card
+   delante: global.css va después en el build y su .card le ganaba el fondo y el borde. */
+.card.producto-lote-editar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 24px;
+  border-color: #cfe3d8;
+  background: #f3f9f5;
+}
+.boton-icono.activo {
+  background: #e6f2ec;
+  border-color: #cfe3d8;
+  color: var(--color-primary);
+}
 
 @media (max-width: 600px) {
   .producto-seccion {
@@ -470,7 +485,8 @@
   .producto-kpis > :last-child:nth-child(odd) {
     grid-column: 1 / -1;
   }
-  .producto-eliminar-confirm {
+  .producto-eliminar-confirm,
+  .card.producto-lote-editar {
     padding: 16px;
   }
 }
@@ -891,6 +907,14 @@
     grid-area: accion;
     width: auto;
     align-self: center;
+  }
+  /* Con el lápiz del Admin (2026-10-31), los dos íconos uno arriba del otro: así la columna de la
+     derecha no se ensancha y no les quita lugar a las fechas. */
+  .producto-lotes-tabla tbody td.accion {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
   }
   .producto-lotes-tabla td[data-label]::before {
     content: attr(data-label);

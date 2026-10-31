@@ -703,10 +703,15 @@ export async function crearLote(productoId, datos) {
   });
 }
 
+// Corregir un lote ya cargado (Administrador, pedido del usuario, 2026-10-31: "en el stock que ya se
+// cargó hay que hacer una modificación pero no me deja"): cantidad (en la medida chica), ingreso y
+// vencimiento. Las ventas ya hechas y la boleta del proveedor no cambian. Devuelve también cómo
+// estaba y el producto, para el registro de acciones.
 export async function editarLote(productoId, loteId, datos) {
   return db.transaction(async () => {
     await obtenerProductoActivo(productoId);
-    await obtenerLoteActivo(productoId, loteId);
+    const antes = await obtenerLoteActivo(productoId, loteId);
+    const producto = await db.prepare('SELECT nombre, medida FROM productos WHERE id = ?').get(productoId);
 
     const actualizaciones = {};
     if (datos.cantidad !== undefined) actualizaciones.cantidad = validarEntero(datos.cantidad, 'cantidad', { minimo: 0 });
@@ -722,9 +727,10 @@ export async function editarLote(productoId, loteId, datos) {
     const set = claves.map((c) => `${c} = ?`).join(', ');
     const valores = claves.map((c) => actualizaciones[c]);
 
-    return db
+    const lote = await db
       .prepare(`UPDATE lotes SET ${set}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ? RETURNING *`)
       .get(...valores, loteId);
+    return { lote, antes, producto };
   });
 }
 

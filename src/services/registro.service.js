@@ -13,6 +13,11 @@ const usd = (centavos) =>
 const pesos = (n) => `$ ${Number(n).toLocaleString('es-AR')}`;
 const cotizacion = (centavos) =>
   `$ ${(Number(centavos) / 100).toLocaleString('es-AR', { minimumFractionDigits: Number(centavos) % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
+// Cantidad de un lote en la medida chica -> "24 u.", "8,5 kg", "1,25 L".
+const cantidadLote = (n, medida) =>
+  medida === 'kg' || medida === 'litro'
+    ? `${(Number(n) / 1000).toLocaleString('es-AR')} ${medida === 'kg' ? 'kg' : 'L'}`
+    : `${Number(n).toLocaleString('es-AR')} u.`;
 const METODO = { app: 'app autenticadora', mail: 'código por mail' };
 const ROL = { admin: 'Administrador', encargado: 'Encargado', cajero: 'Cajero' };
 const SEGUNDO_PASO = { app: 'con la app autenticadora', mail: 'con código por mail', recuperacion: 'con un código de recuperación' };
@@ -107,6 +112,19 @@ const CATALOGO = {
     categoria: 'instalacion',
     titulo: 'Eliminó un cierre de caja',
     detalle: (d) => `cierre #${d.cierre_id} del ${fecha(d.fecha)} · contado ${pesos(d.contado)} · fondo dejado ${pesos(d.fondo)}`,
+  },
+  'lote-editado': {
+    categoria: 'instalacion',
+    titulo: 'Corrigió un lote de stock',
+    detalle: (d) =>
+      [
+        `${d.producto} · lote del ${fecha(d.ingreso)}`,
+        d.cantidad !== undefined && `cantidad ${cantidadLote(d.cantidad_antes, d.medida)} → ${cantidadLote(d.cantidad, d.medida)}`,
+        d.ingreso_nuevo && `ingreso → ${fecha(d.ingreso_nuevo)}`,
+        d.cambia_vence && `vence ${d.vence_antes ? fecha(d.vence_antes) : 'sin fecha'} → ${d.vence ? fecha(d.vence) : 'sin fecha'}`,
+      ]
+        .filter(Boolean)
+        .join(' · '),
   },
   'plan-cambiado': { categoria: 'instalacion', titulo: 'Cambió el plan', detalle: (d) => `${d.de} → ${d.a}` },
   'instalacion-suspendida': {
