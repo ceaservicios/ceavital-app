@@ -602,34 +602,28 @@ button.caja-search-item:hover {
   color: #ffffff;
 }
 
-/* Cobrar con varios medios (2026-11-01): el rótulo con el link para pasar de un modo al otro, y en
-   lugar de los botones, una tarjeta por medio con su monto. Con monto, el borde y el fondo de su
-   color, como el medio elegido. Van en la misma grilla que los botones (una fila, tres columnas o
-   dos, según el ancho). */
+/* Cobrar con varios medios (2026-11-01; opción A de la maqueta, elegida por el usuario el mismo
+   día, porque las cinco tarjetas al lado de "Cobrar venta" quedaban amontonadas): el rótulo con el
+   link para pasar de un modo al otro; los cinco medios a lo ancho, cada uno con su nombre en un
+   renglón y el campo debajo, sin tarjeta; y abajo cuánto falta, una barra con el color de cada medio
+   y "Cobrar venta". Con monto, el campo toma el borde y el fondo de su color, como el medio elegido. */
 .caja-cobro-titulo {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 16px;
 }
+.caja-medios-grid.caja-medios-partes {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
 .caja-medio-parte {
   --c: var(--color-primary);
-  flex: 1 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   gap: 6px;
-  padding: 8px;
-  border: 1px solid var(--border-control);
-  border-radius: 12px;
-  background: var(--bg-surface);
-  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
-}
-.caja-medio-parte.caja-medio-parte-con-monto {
-  border-color: var(--c);
-  box-shadow: inset 0 0 0 1px var(--c);
-  background: color-mix(in srgb, var(--c) 8%, #ffffff);
 }
 .caja-medio-parte-nombre {
   display: flex;
@@ -642,81 +636,168 @@ button.caja-search-item:hover {
   color: var(--text-primary);
   cursor: pointer;
 }
+.caja-medio-parte-nombre span {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .caja-medio-parte-nombre svg {
   flex: none;
   box-sizing: content-box;
-  padding: 5px;
-  border-radius: 8px;
+  padding: 3px;
+  border-radius: 7px;
   background: color-mix(in srgb, var(--c) 14%, #ffffff);
   color: var(--c);
+  transition: background 0.15s ease, color 0.15s ease;
 }
 .caja-medio-parte-con-monto .caja-medio-parte-nombre svg {
   background: var(--c);
   color: #ffffff;
 }
+/* El campo es el recuadro entero: "$", el monto a la derecha y, si está vacío y falta plata, "+ $X"
+   mientras se lo usa. */
 .caja-medio-parte-monto {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--border-control);
+  border-radius: 10px;
+  background: var(--bg-surface);
   font-weight: 700;
-  color: var(--text-secondary);
+  color: var(--text-muted);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.caja-medio-parte-monto:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+.caja-medio-parte-con-monto .caja-medio-parte-monto {
+  border-color: var(--c);
+  box-shadow: inset 0 0 0 1px var(--c);
+  background: color-mix(in srgb, var(--c) 7%, #ffffff);
+}
+.caja-medio-parte-con-monto .caja-medio-parte-monto:focus-within {
+  box-shadow: inset 0 0 0 1px var(--c), 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent);
 }
 .caja-medio-parte-monto input {
   flex: 1 1 auto;
   width: 100%;
   min-width: 0;
-  height: 34px;
-  padding: 0 8px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface);
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
   font: inherit;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
   text-align: right;
   font-variant-numeric: tabular-nums;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .caja-medio-parte-monto input:focus {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-primary-ring);
 }
 .caja-medio-parte-resto {
+  display: none;
   flex: none;
-  min-height: 34px;
-  padding: 0 8px;
+  padding: 3px 8px;
   border: 1px solid color-mix(in srgb, var(--c) 40%, #ffffff);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--c) 10%, #ffffff);
   color: color-mix(in srgb, var(--c) 80%, #000000);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
+}
+.caja-medio-parte-monto:focus-within .caja-medio-parte-resto {
+  display: inline-flex;
 }
 .caja-medio-parte-resto:hover {
   background: color-mix(in srgb, var(--c) 18%, #ffffff);
 }
-/* Debajo de las tarjetas: cuánto se cargó, cuánto falta o sobra. */
+/* Abajo: cuánto falta (o sobra) y la barra a la izquierda; "Cobrar venta" a la derecha. */
+.caja-partes-pie {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.caja-partes-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
 .caja-partes-estado {
   font-size: 13.5px;
   font-weight: 600;
-  line-height: 1.4;
-}
-.caja-partes-neutro {
+  line-height: 1.35;
   color: var(--text-secondary);
 }
-.caja-partes-falta {
+.caja-partes-estado strong {
+  font-weight: 800;
+}
+.caja-partes-falta strong {
   color: var(--warn-ink);
 }
-.caja-partes-sobra {
+.caja-partes-sobra strong {
   color: var(--danger-ink);
 }
-.caja-partes-ok {
+.caja-partes-ok strong {
   color: var(--ok-ink);
+}
+.caja-partes-barra {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-bg);
+  overflow: hidden;
+}
+.caja-partes-barra span {
+  flex: none;
+  height: 100%;
+  background: var(--c);
+  transition: width 0.2s ease;
+}
+.caja-partes-pie .btn.caja-cobrar {
+  min-height: 48px;
+}
+/* Por debajo de 1200 (el cobro va debajo del carrito, con el menú al costado hasta los 860): un
+   medio por renglón, el nombre a la izquierda y el campo a la derecha; debajo, cuánto falta y
+   "Cobrar venta" a todo el ancho. */
+@media (max-width: 1200px) {
+  .caja-medios-grid.caja-medios-partes {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .caja-medio-parte {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+  .caja-medio-parte-nombre {
+    flex: 1 1 auto;
+  }
+  .caja-medio-parte-monto {
+    flex: 0 0 min(220px, 50%);
+  }
+  .caja-partes-pie {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .caja-partes-pie .btn.caja-cobrar {
+    min-height: 52px;
+  }
 }
 
 .caja-cliente-vacio {

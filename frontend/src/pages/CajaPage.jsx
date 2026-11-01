@@ -547,17 +547,25 @@ export default function CajaPage() {
     !faltaPeso &&
     !enviando &&
     (variosMedios ? partes.length > 0 && falta === 0 : !(medioPago === 'cta_cte' && !clienteEmpresaId));
+  // Debajo de los medios: lo que importa en negrita y de su color (destacado) y, al lado, el detalle.
   const deTotal = `Cargado ${formatearMonto(cargado)} de ${formatearMonto(total)}`;
   const estadoPartes =
     carrito.length === 0
-      ? { tono: 'neutro', corto: 'Sin productos', texto: 'Sumá productos al carrito y cargá cuánto se paga con cada medio.' }
+      ? { tono: 'neutro', corto: 'Sin productos', detalle: 'Sumá productos al carrito y cargá cuánto se paga con cada medio.' }
       : partes.length === 0
-        ? { tono: 'neutro', corto: 'Cargá los montos', texto: `Cargá cuánto se paga con cada medio. Total: ${formatearMonto(total)}.` }
+        ? { tono: 'neutro', corto: 'Cargá los montos', detalle: `Cargá cuánto se paga con cada medio · Total ${formatearMonto(total)}` }
         : falta > 0
-          ? { tono: 'falta', corto: `Faltan ${formatearMonto(falta)}`, texto: `${deTotal} · Faltan ${formatearMonto(falta)}` }
+          ? { tono: 'falta', corto: `Faltan ${formatearMonto(falta)}`, destacado: `Faltan ${formatearMonto(falta)}`, detalle: deTotal }
           : falta < 0
-            ? { tono: 'sobra', corto: `Sobran ${formatearMonto(-falta)}`, texto: `${deTotal} · Sobran ${formatearMonto(-falta)}` }
-            : { tono: 'ok', corto: 'Completo', texto: `${deTotal} · Listo para cobrar` };
+            ? { tono: 'sobra', corto: `Sobran ${formatearMonto(-falta)}`, destacado: `Sobran ${formatearMonto(-falta)}`, detalle: deTotal }
+            : {
+                tono: 'ok',
+                corto: 'Completo',
+                destacado: 'Listo para cobrar',
+                detalle: `${formatearMonto(total)} en ${partes.length === 1 ? 'un medio' : `${partes.length} medios`}`,
+              };
+  // La barra reparte el ancho entre los medios cargados; si sobra, la base es lo cargado.
+  const baseBarra = Math.max(total, cargado);
 
   function alternarVariosMedios() {
     setVariosMedios((antes) => !antes);
@@ -668,6 +676,12 @@ export default function CajaPage() {
     }
   }
 
+  const botonCobrar = (
+    <button type="button" className="btn btn-primary caja-cobrar" disabled={!puedeCobrar} onClick={confirmarVenta}>
+      {enviando ? 'Registrando…' : 'Cobrar venta'}
+    </button>
+  );
+
   return (
     <div className="caja-page">
       {/* Panel verde (2026-10-29): el total a cobrar arriba, como el visor de un punto de venta, con
@@ -733,8 +747,9 @@ export default function CajaPage() {
 
         <div className="caja-cobro-fila">
           {variosMedios ? (
-            // Un monto por medio, en el mismo lugar que los botones. "Resto" completa ese medio con lo
-            // que falta para el total.
+            // Opción A de la maqueta (elegida por el usuario, 2026-11-01): los cinco medios a lo ancho,
+            // cada uno con su nombre y el campo debajo, sin tarjeta. Al tocar un campo vacío aparece
+            // "+ $X", que lo completa con lo que falta para el total.
             <div className="caja-medios-grid caja-medios-partes" role="group" aria-labelledby="caja-medios-label">
               {MEDIOS_REPARTIBLES.map((medio) => {
                 const monto = montos[medio.valor] ?? '';
@@ -755,10 +770,10 @@ export default function CajaPage() {
                         id={`caja-parte-${medio.valor}`}
                         type="text"
                         inputMode="numeric"
-                        maxLength={10}
+                        maxLength={13}
                         placeholder="0"
                         autoComplete="off"
-                        value={monto}
+                        value={conMonto ? Number(monto).toLocaleString('es-AR') : ''}
                         onChange={(e) => cambiarMonto(medio.valor, e.target.value)}
                         disabled={enviando}
                       />
@@ -767,10 +782,12 @@ export default function CajaPage() {
                           type="button"
                           className="caja-medio-parte-resto"
                           title={`Completar con lo que falta: ${formatearMonto(falta)}`}
+                          // Sin robarle el foco al campo: si no, el botón se esconde antes del click.
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => cambiarMonto(medio.valor, String(falta))}
                           disabled={enviando}
                         >
-                          Resto
+                          + {formatearMonto(falta)}
                         </button>
                       )}
                     </span>
@@ -799,14 +816,32 @@ export default function CajaPage() {
               ))}
             </div>
           )}
-          <button type="button" className="btn btn-primary caja-cobrar" disabled={!puedeCobrar} onClick={confirmarVenta}>
-            {enviando ? 'Registrando…' : 'Cobrar venta'}
-          </button>
+          {!variosMedios && botonCobrar}
         </div>
 
+        {/* Con varios medios, "Cobrar venta" baja al lado de cuánto falta, así los medios usan todo el
+            ancho; la barra muestra cómo se reparte la venta, con el color de cada medio. */}
         {variosMedios && (
-          <div className={`caja-partes-estado caja-partes-${estadoPartes.tono}`} role="status">
-            {estadoPartes.texto}
+          <div className="caja-partes-pie">
+            <div className="caja-partes-info">
+              <div className={`caja-partes-estado caja-partes-${estadoPartes.tono}`} role="status">
+                {estadoPartes.destacado && (
+                  <>
+                    <strong>{estadoPartes.destacado}</strong> ·{' '}
+                  </>
+                )}
+                {estadoPartes.detalle}
+              </div>
+              <div className="caja-partes-barra" aria-hidden="true">
+                {partes.map((p) => (
+                  <span
+                    key={p.medio_pago}
+                    style={{ '--c': COLOR_MEDIO[p.medio_pago], width: `${(p.monto / baseBarra) * 100}%` }}
+                  />
+                ))}
+              </div>
+            </div>
+            {botonCobrar}
           </div>
         )}
 
