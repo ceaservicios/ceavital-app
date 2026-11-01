@@ -37,21 +37,46 @@ export async function eliminarComboController(req, res) {
   res.status(204).send();
 }
 
-export async function guardarProductoController(req, res) {
-  const cambio = await combosService.guardarProducto(parsearId(req.params.id, 'id'), req.body || {});
+export async function agregarRenglonController(req, res) {
+  const { combo, renglon } = await combosService.agregarRenglon(parsearId(req.params.id, 'id'), req.body || {});
+  await registrar(req, 'combo-renglon-agregado', { combo: combo.nombre, renglon });
+  res.status(204).send();
+}
+
+export async function editarRenglonController(req, res) {
+  const cambio = await combosService.editarRenglon(
+    parsearId(req.params.id, 'id'),
+    parsearId(req.params.renglonId, 'renglón'),
+    req.body || {}
+  );
+  if (cambio) await registrar(req, 'combo-renglon-cambiado', { combo: cambio.combo.nombre, antes: cambio.antes, despues: cambio.despues });
+  res.status(204).send();
+}
+
+export async function sacarRenglonController(req, res) {
+  const { combo, renglon } = await combosService.sacarRenglon(parsearId(req.params.id, 'id'), parsearId(req.params.renglonId, 'renglón'));
+  await registrar(req, 'combo-renglon-sacado', { combo: combo.nombre, renglon });
+  res.status(204).send();
+}
+
+export async function agregarMarcaController(req, res) {
+  const cambio = await combosService.agregarMarca(
+    parsearId(req.params.id, 'id'),
+    parsearId(req.params.renglonId, 'renglón'),
+    parsearId(req.params.productoId, 'producto_id')
+  );
   if (cambio) {
-    await registrar(req, cambio.antes ? 'combo-producto-cambiado' : 'combo-producto-agregado', {
-      combo: cambio.combo.nombre,
-      producto: cambio.producto,
-      lleva: cambio.lleva,
-      antes: cambio.antes,
-    });
+    await registrar(req, 'combo-marca-agregada', { combo: cambio.combo.nombre, renglon: cambio.renglon, producto: cambio.producto });
   }
   res.status(204).send();
 }
 
-export async function sacarProductoController(req, res) {
-  const { combo, producto, lleva } = await combosService.sacarProducto(parsearId(req.params.id, 'id'), parsearId(req.params.itemId, 'item'));
-  await registrar(req, 'combo-producto-sacado', { combo: combo.nombre, producto, lleva });
+export async function sacarMarcaController(req, res) {
+  const { combo, renglon, producto } = await combosService.sacarMarca(
+    parsearId(req.params.id, 'id'),
+    parsearId(req.params.renglonId, 'renglón'),
+    parsearId(req.params.productoId, 'producto_id')
+  );
+  await registrar(req, 'combo-marca-sacada', { combo: combo.nombre, renglon, producto });
   res.status(204).send();
 }

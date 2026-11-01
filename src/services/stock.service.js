@@ -656,14 +656,16 @@ export async function pasarAPack(id, datos, { rol }) {
          WHERE producto_id = ? AND pack_nombre IS NULL`
       )
       .run(n, packNombre, n, id);
-    // Combos (migración 036): lo que llevaban "suelto" eran cajas, así que pasan a la misma cantidad
-    // de packs. No puede haber ya una fila por pack: el producto no tenía.
+    // Combos (migración 037): un renglón suelto donde este producto es la única marca llevaba cajas,
+    // así que pasa a la misma cantidad de packs. Con otras marcas no se toca: ellas siguen sueltas.
     await db
       .prepare(
-        `UPDATE combo_items SET presentacion = 'pack', actualizado_en = CURRENT_TIMESTAMP
-         WHERE producto_id = ? AND presentacion = 'unidad' AND eliminado_en IS NULL`
+        `UPDATE combo_renglones r SET presentacion = 'pack', actualizado_en = CURRENT_TIMESTAMP
+         WHERE r.presentacion = 'unidad' AND r.eliminado_en IS NULL
+           AND EXISTS (SELECT 1 FROM combo_renglon_productos rp WHERE rp.renglon_id = r.id AND rp.producto_id = ? AND rp.eliminado_en IS NULL)
+           AND NOT EXISTS (SELECT 1 FROM combo_renglon_productos rp WHERE rp.renglon_id = r.id AND rp.producto_id <> ? AND rp.eliminado_en IS NULL)`
       )
-      .run(id);
+      .run(id, id);
     await db
       .prepare(
         `UPDATE productos SET unidad_medida_id = ?, codigo_barras = ?, precio_venta = ?, precio_costo = ?,

@@ -9,8 +9,9 @@ import { formatearMonto, fechaHoyISO } from '../utils/format.js';
 import {
   aplicarCombos,
   claveDeSuma,
+  combosParaCobrar,
   cuentasPorGrupo,
-  describirItemCombo,
+  describirCantidadRenglon,
   describirStockLargo,
   esFraccionable,
   etiquetaPack,
@@ -235,7 +236,7 @@ export default function CajaPage() {
   const cargarCombos = useCallback(() => {
     api
       .get('/combos')
-      .then((data) => setCombos(data.items.filter((c) => c.vigente)))
+      .then((data) => setCombos(combosParaCobrar(data.items)))
       .catch(() => setCombos([]));
   }, []);
   useEffect(() => {
@@ -508,12 +509,28 @@ export default function CajaPage() {
   const cantidadSuelta = (item) => cobradaSuelta.get(item.clave) ?? 0;
   // De cada línea, qué combos se llevaron una parte: clave → [{ nombre, cantidad }].
   const enCombos = new Map();
-  for (const { combo, veces } of combosAplicados) {
-    for (const ci of combo.items) {
-      const clave = `${ci.producto_id}:${ci.presentacion}`;
-      enCombos.set(clave, [...(enCombos.get(clave) ?? []), { nombre: combo.nombre, cantidad: ci.cantidad * veces }]);
+  for (const { combo, partes } of combosAplicados) {
+    for (const p of partes) {
+      const clave = `${p.producto_id}:${p.presentacion}`;
+      enCombos.set(clave, [...(enCombos.get(clave) ?? []), { nombre: combo.nombre, cantidad: p.cantidad }]);
     }
   }
+  // "1 Fernet + 2 Cola (1 Coca-Cola, 1 Pepsi)": cada renglón con lo que llevó y, si tiene varias
+  // marcas, cuáles se tomaron.
+  const detalleCombo = (combo, veces, partes) =>
+    combo.renglones
+      .map((r, i) => {
+        const cuanto = `${describirCantidadRenglon(r.presentacion, r.cantidad * veces, r.marcas)} ${r.nombre}`;
+        if (r.marcas.length < 2) return cuanto;
+        const tomadas = partes
+          .filter((p) => p.renglon === i)
+          .map((p) => {
+            const marca = r.marcas.find((m) => m.producto_id === p.producto_id);
+            return `${describirCantidadRenglon(r.presentacion, p.cantidad, marca ? [marca] : [])} ${marca?.producto_nombre ?? ''}`.trim();
+          });
+        return `${cuanto} (${tomadas.join(', ')})`;
+      })
+      .join(' + ');
   // Grupos de promoción (2026-11-01): para el precio por cantidad cuenta todo el grupo del carrito,
   // sin lo que entró en combos.
   const cuentas = cuentasPorGrupo(resto);
@@ -1138,15 +1155,13 @@ export default function CajaPage() {
                 );
               })}
               {/* Combos aplicados (2026-11-01): una fila por combo, con lo que lleva y su precio. */}
-              {combosAplicados.map(({ combo, veces }) => (
+              {combosAplicados.map(({ combo, veces, partes }) => (
                 <div className="caja-cart-row caja-cart-row-combo" key={`combo-${combo.id}`}>
                   <span style={{ flex: 2.4 }} className="caja-cart-nombre">
                     <IconoFila icono="rayo" color={colorDe(combo.id)} />
                     <span className="caja-cart-nombre-col">
                       <span className="caja-cart-nombre-texto">Combo {combo.nombre}</span>
-                      <span className="caja-cart-promo-hint">
-                        {combo.items.map((ci) => `${describirItemCombo(ci)} ${ci.producto_nombre}`).join(' + ')}
-                      </span>
+                      <span className="caja-cart-promo-hint">{detalleCombo(combo, veces, partes)}</span>
                     </span>
                   </span>
                   <span style={{ flex: 1.2 }} className="caja-cart-cantidad caja-cart-combo-veces">

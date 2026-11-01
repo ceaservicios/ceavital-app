@@ -326,8 +326,8 @@ export async function registrarVentaEnTransaccion(
     for (const linea of armarLineas(resto, productos)) {
       lineas.push({ ...linea, producto: productos.get(linea.producto_id) });
     }
-    for (const { combo, veces } of aplicados) {
-      for (const linea of lineasDeCombo(combo, veces, productos)) {
+    for (const { combo, veces, partes } of aplicados) {
+      for (const linea of lineasDeCombo(combo, veces, partes, productos)) {
         lineas.push({ ...linea, producto: productos.get(linea.producto_id) });
       }
     }

@@ -143,31 +143,74 @@ export function subtotalLinea(producto, cantidad, presentacion, cuenta = cantida
   return Math.round((cantidad * precio) / factorMedida(producto.medida));
 }
 
-// Combos (2026-11-01): productos con su forma (suelto o su pack) y su cantidad, a un precio total.
-// La misma regla que el servidor (src/services/presentacion.js → aplicarCombos), que es el que cobra.
+// Combos (2026-11-01): renglones ("Fernet", "Cola"), cada uno con su forma (suelto o la caja o pack de
+// cada marca), su cantidad y las marcas que valen, a un precio total. Cualquier marca del renglón
+// cuenta, mezcladas. La misma regla que el servidor (src/services/presentacion.js → aplicarCombos),
+// que es el que cobra.
 
 const claveDeLinea = (productoId, presentacion) => `${productoId}:${presentacion}`;
 
 /**
+ * Los combos de GET /combos listos para aplicarCombos: solo los vigentes y, en cada renglón,
+ * `productos` con los ids de las marcas que cuentan (como el servidor) y `marcas` con sus datos.
+ */
+export function combosParaCobrar(combos) {
+  return combos
+    .filter((c) => c.vigente)
+    .map((c) => ({
+      ...c,
+      renglones: c.renglones.map((r) => ({
+        ...r,
+        marcas: r.productos,
+        productos: r.productos.filter((m) => !m.problema).map((m) => m.producto_id),
+      })),
+    }));
+}
+
+// Saca `veces` combos de lo que queda: cada renglón toma de sus marcas en orden hasta completar.
+// Devuelve las partes tomadas, o null si algún renglón no se completa (y no toca `quedan`).
+function tomarCombo(combo, veces, quedan) {
+  const copia = new Map(quedan);
+  const partes = [];
+  for (let renglon = 0; renglon < combo.renglones.length; renglon++) {
+    const r = combo.renglones[renglon];
+    let falta = veces * r.cantidad;
+    for (const productoId of r.productos) {
+      if (falta <= 0) break;
+      const clave = claveDeLinea(productoId, r.presentacion);
+      const tomar = Math.min(copia.get(clave) ?? 0, falta);
+      if (tomar > 0) {
+        copia.set(clave, copia.get(clave) - tomar);
+        partes.push({ renglon, producto_id: productoId, presentacion: r.presentacion, cantidad: tomar });
+        falta -= tomar;
+      }
+    }
+    if (falta > 0) return null;
+  }
+  for (const [clave, cantidad] of copia) quedan.set(clave, cantidad);
+  return partes;
+}
+
+/**
  * Saca de las líneas [{ producto_id, presentacion, cantidad, ... }] lo que entra en combos: cada
  * combo, en orden, las veces que entre completo con lo que va quedando. Devuelve { aplicados:
- * [{ combo, veces }], resto }: `resto`, las mismas líneas con lo que no entró (sin las que quedaron
- * en 0), que se cobran como siempre.
+ * [{ combo, veces, partes }], resto }: `partes`, lo que tomó de cada marca; `resto`, las mismas
+ * líneas con lo que no entró (sin las que quedaron en 0), que se cobran como siempre.
  */
 export function aplicarCombos(lineas, combos) {
   const quedan = new Map(lineas.map((l) => [claveDeLinea(l.producto_id, l.presentacion), Number(l.cantidad) || 0]));
   const aplicados = [];
   for (const combo of combos) {
-    if (combo.items.length === 0) continue;
-    const veces = Math.min(
-      ...combo.items.map((ci) => Math.floor((quedan.get(claveDeLinea(ci.producto_id, ci.presentacion)) ?? 0) / ci.cantidad))
-    );
-    if (!(veces >= 1)) continue;
-    for (const ci of combo.items) {
-      const clave = claveDeLinea(ci.producto_id, ci.presentacion);
-      quedan.set(clave, quedan.get(clave) - veces * ci.cantidad);
+    if (combo.renglones.length === 0) continue;
+    const hay = (r) => r.productos.reduce((acc, id) => acc + (quedan.get(claveDeLinea(id, r.presentacion)) ?? 0), 0);
+    // Tope por lo que hay de cada renglón; si una marca está en dos renglones, se baja hasta que entre.
+    for (let veces = Math.min(...combo.renglones.map((r) => Math.floor(hay(r) / r.cantidad))); veces >= 1; veces--) {
+      const partes = tomarCombo(combo, veces, quedan);
+      if (partes) {
+        aplicados.push({ combo, veces, partes });
+        break;
+      }
     }
-    aplicados.push({ combo, veces });
   }
   const resto = lineas
     .map((l) => ({ ...l, cantidad: quedan.get(claveDeLinea(l.producto_id, l.presentacion)) }))
@@ -175,19 +218,34 @@ export function aplicarCombos(lineas, combos) {
   return { aplicados, resto };
 }
 
-/** Lo que lleva un combo de un producto: "2", "0,5 kg", "1 Caja x 12". `item` trae los datos del producto. */
-export function describirItemCombo(item) {
-  if (item.presentacion === 'pack') return `${item.cantidad} ${etiquetaPack(item.pack_nombre, item.pack_unidades, item.medida)}`;
-  return formatearCantidad(item.cantidad, item.medida, { corta: true });
+/**
+ * Cuánto lleva un renglón: "2", "0,5 kg", "1 Pack x 6", o "1 caja o pack" si cada marca tiene la suya.
+ * `marcas`: las de ese renglón, con los datos del producto.
+ */
+export function describirCantidadRenglon(presentacion, cantidad, marcas) {
+  if (presentacion === 'pack') {
+    const etiquetas = [...new Set(marcas.filter((m) => m.pack_nombre).map((m) => etiquetaPack(m.pack_nombre, m.pack_unidades, m.medida)))];
+    return etiquetas.length === 1 ? `${cantidad} ${etiquetas[0]}` : `${cantidad} ${cantidad === 1 ? 'caja o pack' : 'cajas o packs'}`;
+  }
+  return formatearCantidad(cantidad, marcas[0]?.medida ?? 'unidad', { corta: true });
 }
 
-/** Cuánto sale lo del combo por separado, a precio normal (sin precio por cantidad). */
-export function precioNormalCombo(items) {
-  return items.reduce(
-    (acc, i) =>
-      acc + (i.presentacion === 'pack' ? i.cantidad * (i.precio_pack ?? 0) : Math.round((i.cantidad * (i.precio_venta ?? 0)) / factorMedida(i.medida))),
-    0
-  );
+/** Cuánto sale lo del combo por separado, a precio normal: { min, max } según las marcas que se lleven. */
+export function precioNormalCombo(renglones) {
+  let min = 0;
+  let max = 0;
+  for (const r of renglones) {
+    const precios = r.productos
+      .filter((m) => !m.problema)
+      .map((m) =>
+        r.presentacion === 'pack' ? r.cantidad * (m.precio_pack ?? 0) : Math.round((r.cantidad * (m.precio_venta ?? 0)) / factorMedida(m.medida))
+      );
+    if (precios.length) {
+      min += Math.min(...precios);
+      max += Math.max(...precios);
+    }
+  }
+  return { min, max };
 }
 
 /** Cuánto falta para el precio por cantidad (0 si ya llegó o no tiene): en la medida chica, o en packs. */

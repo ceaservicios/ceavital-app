@@ -226,21 +226,66 @@
   color: var(--danger-ink);
 }
 
-/* ---------- Promociones (2026-11-01): un recuadro por grupo, con sus productos y el buscador ---------- */
-.promo-grupo {
-  display: flex;
-  flex-direction: column;
+/* ---------- Promociones (2026-11-01): combos y grupos en tarjetas desplegables ----------
+   Cerrada: nombre, precio y resumen. Abierta: lo que lleva en una tabla, aparte del nombre. */
+.promo-tarjeta {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
+  overflow: hidden;
 }
-.promo-grupo-cabeza {
+.promo-tarjeta.abierta {
+  border-color: var(--color-primary);
+}
+.promo-cabeza {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px 10px 10px;
   background: var(--bg-hover);
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 }
-.promo-grupo-sub,
+.promo-desplegar {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 2px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.promo-desplegar:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.promo-flecha {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  transition: transform 0.15s ease;
+}
+.promo-tarjeta.abierta .promo-flecha {
+  transform: rotate(90deg);
+}
+.promo-titulo {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.promo-titulo strong {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.promo-resumen,
 .promo-aviso {
   display: block;
-  margin-top: 2px;
   font-size: 12.5px;
   font-weight: 500;
   line-height: 1.45;
@@ -249,11 +294,100 @@
 .promo-aviso {
   color: var(--danger-ink);
 }
+.promo-precio {
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.promo-cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px 16px;
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-surface);
+}
+.promo-cuerpo-titulo {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.promo-tabla {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-rule);
+  border-radius: var(--radius-sm);
+}
+.promo-fila {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(140px, 1fr) minmax(160px, auto) auto;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 10px 12px;
+}
+.promo-fila + .promo-fila,
+.promo-bloque + .promo-bloque {
+  border-top: 1px solid var(--border-rule);
+}
+.promo-tabla-cabeza {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  background: var(--bg-hover);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.promo-fila-producto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.promo-fila-acciones {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.promo-btn-chico {
+  min-height: 34px;
+  padding: 0 14px;
+  box-shadow: none;
+}
+/* Grupos: cada producto con una fila por forma de venta (desde cuántos y a qué precio). */
+.promo-bloque-cabeza {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.promo-bloque .promo-fila {
+  padding-top: 8px;
+}
+.promo-fila-grupo {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+.promo-forma {
+  font-size: 14px;
+  font-weight: 600;
+}
+.promo-cuerpo .promo-sumar {
+  padding: 0;
+}
 .promo-sumar {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 16px 14px;
 }
 .promo-sumar input {
   width: 100%;
@@ -304,7 +438,7 @@
   box-shadow: none;
 }
 
-/* ---------- Combos (2026-11-01): precio al lado del nombre y, en cada producto, forma y cantidad ---------- */
+/* ---------- Combos: precio al lado del nombre y, en cada producto, forma y cantidad ---------- */
 .combo-precio-campo {
   display: flex;
   flex: 0 0 150px;
@@ -316,17 +450,10 @@
 .combo-precio-campo input {
   width: 100%;
 }
-.combo-sugerencia {
-  flex-wrap: wrap;
-}
-.combo-sugerencia .promo-sugerencia-texto {
-  min-width: 160px;
-}
-.combo-sugerencia-controles {
+.combo-cantidad {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 .promo-sumar .combo-control,
 .combo-control {
@@ -340,8 +467,16 @@
   font: inherit;
   font-size: 14px;
 }
-.promo-sumar .combo-control-cantidad {
-  width: 72px;
+.promo-fila select.combo-control {
+  width: 100%;
+}
+.promo-sumar .combo-control-cantidad,
+.combo-control-cantidad {
+  width: 80px;
+  text-align: right;
+}
+.combo-control-precio {
+  width: 100px;
   text-align: right;
 }
 .combo-control:focus {
@@ -349,14 +484,125 @@
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-primary-ring);
 }
-.combo-forma-unica,
 .combo-unidad {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
+  white-space: nowrap;
+}
+/* Renglones del combo: nombre, forma, cantidad, marcas que valen y acciones. */
+.promo-fila-renglon {
+  grid-template-columns: minmax(110px, 0.9fr) minmax(130px, 0.9fr) auto minmax(0, 1.6fr) auto;
+  align-items: start;
+}
+.combo-control-nombre {
+  width: 100%;
+  min-width: 0;
+  font-weight: 700;
+}
+.promo-marcas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.promo-marca {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 4px 6px 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.promo-marca.con-problema {
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+}
+.promo-marca-x {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.promo-marca-x:hover {
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+}
+.promo-sumar-marca {
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 1px dashed var(--border-control);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.promo-sumar-marca:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.promo-nota {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ok-ink);
+}
+.promo-nota.con-problema {
+  color: var(--danger-ink);
+}
+/* Buscador de una marca o de un renglón nuevo: un recuadro aparte, debajo. */
+.promo-panel {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+}
+.promo-panel-cabeza {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.promo-panel .promo-panel-buscar {
+  flex: 1;
+  min-width: 0;
+  height: var(--control-height);
+}
+.promo-panel-fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+.promo-panel .promo-tabla {
+  background: var(--bg-surface);
 }
 
-/* Tablet vertical y celular: la descripción va arriba de los controles. */
 @media (max-width: 900px) {
   .config-seccion {
     grid-template-columns: minmax(0, 1fr);
@@ -396,5 +642,32 @@
   }
   .combo-precio-campo {
     flex: 1 1 120px;
+  }
+  /* Promociones: la cabecera baja las acciones y cada fila de la tabla va en dos columnas. */
+  .promo-cabeza {
+    flex-wrap: wrap;
+  }
+  .promo-cabeza .config-catalogo-acciones,
+  .promo-cabeza .config-catalogo-botones {
+    margin-left: auto;
+  }
+  .promo-cuerpo {
+    padding: 12px;
+  }
+  .promo-tabla-cabeza {
+    display: none;
+  }
+  .promo-fila,
+  .promo-fila-grupo {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .promo-fila-producto,
+  .promo-fila-acciones,
+  .combo-control-nombre,
+  .promo-marcas {
+    grid-column: 1 / -1;
+  }
+  .combo-control-precio {
+    width: 80px;
   }
 }

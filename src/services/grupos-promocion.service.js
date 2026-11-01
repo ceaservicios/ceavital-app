@@ -130,6 +130,80 @@ export function agregarProducto(grupoId, productoId) {
   });
 }
 
+const MAX_PRECIO = 1_000_000_000;
+
+// "desde 10 a $ 1.150" / "sin precio por cantidad", para el registro. `desde` va en la medida chica
+// (suelto) o en packs.
+function describirPrecioCantidad(producto, presentacion, desde, precio) {
+  if (desde == null) return 'sin precio por cantidad';
+  const cuantos =
+    presentacion === 'pack'
+      ? `${desde} ${String(producto.pack_nombre).toLowerCase()}`
+      : producto.medida === 'unidad'
+        ? String(desde)
+        : `${(desde / 1000).toLocaleString('es-AR')} ${producto.medida === 'kg' ? 'kg' : 'L'}`;
+  return `desde ${cuantos} a $ ${Number(precio).toLocaleString('es-AR')}`;
+}
+
+/**
+ * Cambia, desde el grupo, el precio por cantidad de un producto del grupo en una de sus formas
+ * (pedido del usuario, 2026-11-01: "no puedo editar los productos que voy agregando"). Es el mismo
+ * dato que se carga en su ficha: suelto, `desde` en la medida chica (unidades, gramos o ml); pack,
+ * en packs. `desde` null lo saca. Devuelve { grupo, producto, forma, antes, despues }, o null si no
+ * cambió nada.
+ */
+export function cambiarPrecioCantidad(grupoId, productoId, { presentacion, desde, precio }) {
+  if (presentacion !== 'unidad' && presentacion !== 'pack') throw new ApiError(400, 'presentacion tiene que ser "unidad" o "pack"');
+  let nuevoDesde = null;
+  let nuevoPrecio = null;
+  if (desde !== null && desde !== undefined && desde !== '') {
+    nuevoDesde = Number(desde);
+    nuevoPrecio = Number(precio);
+    if (typeof desde === 'boolean' || !Number.isInteger(nuevoDesde) || nuevoDesde < 2) {
+      throw new ApiError(400, 'El precio por cantidad rige desde 2 o más');
+    }
+    if (nuevoDesde > (presentacion === 'pack' ? 100_000 : 10_000_000)) throw new ApiError(400, 'La cantidad es demasiado grande');
+    if (typeof precio === 'boolean' || precio === null || precio === '' || !Number.isInteger(nuevoPrecio) || nuevoPrecio < 0) {
+      throw new ApiError(400, 'Cargá el precio por cantidad');
+    }
+    if (nuevoPrecio > MAX_PRECIO) throw new ApiError(400, `El precio no puede superar $ ${MAX_PRECIO.toLocaleString('es-AR')}`);
+  }
+
+  return db.transaction(async () => {
+    const grupo = await obtenerActivo(grupoId);
+    const producto = await db
+      .prepare(
+        `SELECT id, nombre, medida, vende_suelto, pack_nombre, pack_unidades, precio_cantidad_desde, precio_cantidad,
+                pack_cantidad_desde, precio_pack_cantidad
+         FROM productos WHERE id = ? AND grupo_promocion_id = ? AND eliminado_en IS NULL`
+      )
+      .get(productoId, grupoId);
+    if (!producto) throw new ApiError(404, 'Ese producto no está en el grupo');
+    const porPack = presentacion === 'pack';
+    if (porPack && !producto.pack_nombre) throw new ApiError(400, `"${producto.nombre}" no se vende por caja ni por pack`);
+    if (!porPack && producto.vende_suelto === false) {
+      throw new ApiError(400, `"${producto.nombre}" no se vende suelto: el precio por cantidad va en su ${String(producto.pack_nombre).toLowerCase()}`);
+    }
+    const antesDesde = porPack ? producto.pack_cantidad_desde : producto.precio_cantidad_desde;
+    const antesPrecio = porPack ? producto.precio_pack_cantidad : producto.precio_cantidad;
+    if (antesDesde === nuevoDesde && (nuevoDesde === null || antesPrecio === nuevoPrecio)) return null;
+    await db
+      .prepare(
+        porPack
+          ? 'UPDATE productos SET pack_cantidad_desde = ?, precio_pack_cantidad = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?'
+          : 'UPDATE productos SET precio_cantidad_desde = ?, precio_cantidad = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?'
+      )
+      .run(nuevoDesde, nuevoPrecio, productoId);
+    return {
+      grupo,
+      producto: producto.nombre,
+      forma: porPack ? `${producto.pack_nombre} x ${producto.pack_unidades}` : 'suelto',
+      antes: describirPrecioCantidad(producto, presentacion, antesDesde, antesPrecio),
+      despues: describirPrecioCantidad(producto, presentacion, nuevoDesde, nuevoPrecio),
+    };
+  });
+}
+
 /** Saca un producto del grupo: vuelve a contar solo. Devuelve { grupo, producto }. */
 export function sacarProducto(grupoId, productoId) {
   return db.transaction(async () => {

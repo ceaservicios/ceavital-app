@@ -11,7 +11,7 @@ import { ApiError } from '../utils/api-error.js';
 // - Grupos de promocion (2026-11-01, migracion 035): los productos de un mismo grupo suman juntos
 //   para llegar, sueltos con sueltos y packs con packs (decision del usuario); sin grupo cuenta solo
 //   ese producto. Cada producto usa su propio "desde" y su precio contra el total del grupo.
-// - Combos (2026-11-01, migracion 036): ver aplicarCombos y lineasDeCombo, mas abajo.
+// - Combos (2026-11-01, migraciones 036 y 037): ver aplicarCombos y lineasDeCombo, mas abajo.
 
 export const PRESENTACIONES = ['unidad', 'pack'];
 
@@ -132,33 +132,59 @@ export function armarLineas(items, productos) {
   });
 }
 
-// Combos (2026-11-01, migracion 036): un conjunto fijo de productos, cada uno con su forma (suelto o
-// su pack) y su cantidad, con un precio total. Solo Caja. La misma regla esta en
-// frontend/src/utils/presentacion.js, para mostrar el total antes de cobrar.
+// Combos (2026-11-01, migraciones 036 y 037): renglones ("Fernet", "Cola"), cada uno con su forma
+// (suelto o la caja o pack de cada marca), su cantidad y las marcas que valen, con un precio total.
+// Cualquier marca del renglon cuenta, mezcladas (1 Coca + 1 Pepsi = 2 colas). Solo Caja. La misma
+// regla esta en frontend/src/utils/presentacion.js, para mostrar el total antes de cobrar.
 
 const claveDeLinea = (productoId, presentacion) => `${productoId}:${presentacion}`;
+
+// Saca `veces` combos de lo que queda: cada renglon toma de sus marcas en orden hasta completar.
+// Devuelve las partes tomadas, o null si algun renglon no se completa (y no toca `quedan`).
+function tomarCombo(combo, veces, quedan) {
+  const copia = new Map(quedan);
+  const partes = [];
+  for (let renglon = 0; renglon < combo.renglones.length; renglon++) {
+    const r = combo.renglones[renglon];
+    let falta = veces * r.cantidad;
+    for (const productoId of r.productos) {
+      if (falta <= 0) break;
+      const clave = claveDeLinea(productoId, r.presentacion);
+      const tomar = Math.min(copia.get(clave) ?? 0, falta);
+      if (tomar > 0) {
+        copia.set(clave, copia.get(clave) - tomar);
+        partes.push({ renglon, producto_id: productoId, presentacion: r.presentacion, cantidad: tomar });
+        falta -= tomar;
+      }
+    }
+    if (falta > 0) return null;
+  }
+  for (const [clave, cantidad] of copia) quedan.set(clave, cantidad);
+  return partes;
+}
 
 /**
  * Saca de las lineas lo que entra en combos: cada combo, en orden, las veces que entre completo con
  * lo que va quedando. `items`: lineas juntadas [{ producto_id, presentacion, cantidad }]; `combos`:
- * [{ id, nombre, precio, items: [{ producto_id, presentacion, cantidad }] }], ordenados por id.
- * Devuelve { aplicados: [{ combo, veces }], resto }: `resto` son las lineas con lo que no entro en
- * ningun combo (sin las que quedaron en 0), que se cobran como siempre (armarLineas).
+ * [{ id, nombre, precio, renglones: [{ presentacion, cantidad, productos: [producto_id] }] }],
+ * ordenados por id. Devuelve { aplicados: [{ combo, veces, partes }], resto }: `partes`, lo que tomo
+ * de cada marca ({ renglon, producto_id, presentacion, cantidad }); `resto`, las lineas con lo que no
+ * entro en ningun combo (sin las que quedaron en 0), que se cobran como siempre (armarLineas).
  */
 export function aplicarCombos(items, combos) {
   const quedan = new Map(items.map((i) => [claveDeLinea(i.producto_id, i.presentacion), i.cantidad]));
   const aplicados = [];
   for (const combo of combos) {
-    if (combo.items.length === 0) continue;
-    const veces = Math.min(
-      ...combo.items.map((ci) => Math.floor((quedan.get(claveDeLinea(ci.producto_id, ci.presentacion)) ?? 0) / ci.cantidad))
-    );
-    if (!(veces >= 1)) continue;
-    for (const ci of combo.items) {
-      const clave = claveDeLinea(ci.producto_id, ci.presentacion);
-      quedan.set(clave, quedan.get(clave) - veces * ci.cantidad);
+    if (combo.renglones.length === 0) continue;
+    const hay = (r) => r.productos.reduce((acc, id) => acc + (quedan.get(claveDeLinea(id, r.presentacion)) ?? 0), 0);
+    // Tope por lo que hay de cada renglon; si una marca esta en dos renglones, se baja hasta que entre.
+    for (let veces = Math.min(...combo.renglones.map((r) => Math.floor(hay(r) / r.cantidad))); veces >= 1; veces--) {
+      const partes = tomarCombo(combo, veces, quedan);
+      if (partes) {
+        aplicados.push({ combo, veces, partes });
+        break;
+      }
     }
-    aplicados.push({ combo, veces });
   }
   const resto = items
     .map((i) => ({ ...i, cantidad: quedan.get(claveDeLinea(i.producto_id, i.presentacion)) }))
@@ -167,17 +193,17 @@ export function aplicarCombos(items, combos) {
 }
 
 /**
- * Las lineas de un combo cobrado `veces` veces: cada producto con su cantidad, y el precio del combo
- * repartido entre ellos en proporcion a su precio normal, redondeando sobre lo acumulado (asi suman
- * justo el precio del combo). Sin precio por cantidad; guardan el combo y una copia de su nombre.
- * `productos`: Map producto_id -> fila con COLUMNAS_PRESENTACION.
+ * Las lineas de un combo cobrado `veces` veces: una por cada marca tomada (`partes`, de
+ * aplicarCombos), y el precio del combo repartido entre ellas en proporcion a su precio normal,
+ * redondeando sobre lo acumulado (asi suman justo el precio del combo). Sin precio por cantidad;
+ * guardan el combo y una copia de su nombre. `productos`: Map producto_id -> fila con
+ * COLUMNAS_PRESENTACION.
  */
-export function lineasDeCombo(combo, veces, productos) {
-  const partes = combo.items.map((ci) => {
-    const producto = productos.get(ci.producto_id);
-    const cantidad = ci.cantidad * veces;
+export function lineasDeCombo(combo, veces, partesTomadas, productos) {
+  const partes = partesTomadas.map(({ producto_id, presentacion, cantidad }) => {
+    const producto = productos.get(producto_id);
     // Con cuenta 0 nunca llega al precio por cantidad: da el precio normal, que se usa para repartir.
-    return { producto, cantidad, presentacion: ci.presentacion, linea: armarLinea(producto, { cantidad, presentacion: ci.presentacion }, 0) };
+    return { producto, cantidad, presentacion, linea: armarLinea(producto, { cantidad, presentacion }, 0) };
   });
   const total = combo.precio * veces;
   const sumaNormal = partes.reduce((acc, p) => acc + p.linea.subtotal, 0);

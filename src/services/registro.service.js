@@ -143,6 +143,11 @@ const CATALOGO = {
     titulo: 'Sumó un producto a un grupo de promoción',
     detalle: (d) => `${d.producto} → ${d.grupo}${d.anterior ? ` (estaba en ${d.anterior})` : ''}`,
   },
+  'grupo-promocion-precio-cantidad': {
+    categoria: 'instalacion',
+    titulo: 'Cambió el precio por cantidad de un producto de un grupo de promoción',
+    detalle: (d) => `${d.producto} (${d.forma}) · ${d.antes} → ${d.despues} · ${d.grupo}`,
+  },
   'grupo-promocion-producto-sacado': {
     categoria: 'instalacion',
     titulo: 'Sacó un producto de un grupo de promoción',
@@ -162,6 +167,24 @@ const CATALOGO = {
         .join(' · '),
   },
   'combo-eliminado': { categoria: 'instalacion', titulo: 'Eliminó un combo', detalle: (d) => d.combo },
+  'combo-renglon-agregado': { categoria: 'instalacion', titulo: 'Agregó un renglón a un combo', detalle: (d) => `${d.renglon} · ${d.combo}` },
+  'combo-renglon-cambiado': {
+    categoria: 'instalacion',
+    titulo: 'Cambió un renglón de un combo',
+    detalle: (d) => `${d.antes} → ${d.despues} · ${d.combo}`,
+  },
+  'combo-renglon-sacado': { categoria: 'instalacion', titulo: 'Sacó un renglón de un combo', detalle: (d) => `${d.renglon} · ${d.combo}` },
+  'combo-marca-agregada': {
+    categoria: 'instalacion',
+    titulo: 'Sumó una marca a un renglón de un combo',
+    detalle: (d) => `${d.producto} → ${d.renglon} · ${d.combo}`,
+  },
+  'combo-marca-sacada': {
+    categoria: 'instalacion',
+    titulo: 'Sacó una marca de un renglón de un combo',
+    detalle: (d) => `${d.producto} · ${d.renglon} · ${d.combo}`,
+  },
+  // Antes de los renglones (migración 037): quedan para leer el registro de entonces.
   'combo-producto-agregado': {
     categoria: 'instalacion',
     titulo: 'Sumó un producto a un combo',
@@ -169,7 +192,7 @@ const CATALOGO = {
   },
   'combo-producto-cambiado': {
     categoria: 'instalacion',
-    titulo: 'Cambió la cantidad de un producto en un combo',
+    titulo: 'Cambió un producto de un combo',
     detalle: (d) => `${d.producto} · ${d.antes} → ${d.lleva} · ${d.combo}`,
   },
   'combo-producto-sacado': {

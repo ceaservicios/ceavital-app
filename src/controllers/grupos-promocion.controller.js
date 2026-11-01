@@ -47,6 +47,24 @@ export async function agregarProductoController(req, res) {
   res.status(204).send();
 }
 
+export async function cambiarPrecioCantidadController(req, res) {
+  const cambio = await gruposService.cambiarPrecioCantidad(
+    parsearId(req.params.id, 'id'),
+    parsearId(req.params.productoId, 'producto_id'),
+    req.body || {}
+  );
+  if (cambio) {
+    await registrar(req, 'grupo-promocion-precio-cantidad', {
+      grupo: cambio.grupo.nombre,
+      producto: cambio.producto,
+      forma: cambio.forma,
+      antes: cambio.antes,
+      despues: cambio.despues,
+    });
+  }
+  res.status(204).send();
+}
+
 export async function sacarProductoController(req, res) {
   const { grupo, producto } = await gruposService.sacarProducto(parsearId(req.params.id, 'id'), parsearId(req.params.productoId, 'producto_id'));
   await registrar(req, 'grupo-promocion-producto-sacado', { grupo: grupo.nombre, producto });
