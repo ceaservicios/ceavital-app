@@ -515,22 +515,9 @@ export default function CajaPage() {
       enCombos.set(clave, [...(enCombos.get(clave) ?? []), { nombre: combo.nombre, cantidad: p.cantidad }]);
     }
   }
-  // "1 Fernet + 2 Cola (1 Coca-Cola, 1 Pepsi)": cada renglón con lo que llevó y, si tiene varias
-  // marcas, cuáles se tomaron.
-  const detalleCombo = (combo, veces, partes) =>
-    combo.renglones
-      .map((r, i) => {
-        const cuanto = `${describirCantidadRenglon(r.presentacion, r.cantidad * veces, r.marcas)} ${r.nombre}`;
-        if (r.marcas.length < 2) return cuanto;
-        const tomadas = partes
-          .filter((p) => p.renglon === i)
-          .map((p) => {
-            const marca = r.marcas.find((m) => m.producto_id === p.producto_id);
-            return `${describirCantidadRenglon(r.presentacion, p.cantidad, marca ? [marca] : [])} ${marca?.producto_nombre ?? ''}`.trim();
-          });
-        return `${cuanto} (${tomadas.join(', ')})`;
-      })
-      .join(' + ');
+  // "1 Fernet Branca 750 ml + 2 Coca-Cola 2,25 L": cada producto del combo con lo que llevó.
+  const detalleCombo = (combo, veces) =>
+    combo.renglones.map((r) => `${describirCantidadRenglon(r.presentacion, r.cantidad * veces, r.marcas)} ${r.nombre}`).join(' + ');
   // Grupos de promoción (2026-11-01): para el precio por cantidad cuenta todo el grupo del carrito,
   // sin lo que entró en combos.
   const cuentas = cuentasPorGrupo(resto);
@@ -1155,13 +1142,13 @@ export default function CajaPage() {
                 );
               })}
               {/* Combos aplicados (2026-11-01): una fila por combo, con lo que lleva y su precio. */}
-              {combosAplicados.map(({ combo, veces, partes }) => (
+              {combosAplicados.map(({ combo, veces }) => (
                 <div className="caja-cart-row caja-cart-row-combo" key={`combo-${combo.id}`}>
                   <span style={{ flex: 2.4 }} className="caja-cart-nombre">
                     <IconoFila icono="rayo" color={colorDe(combo.id)} />
                     <span className="caja-cart-nombre-col">
                       <span className="caja-cart-nombre-texto">Combo {combo.nombre}</span>
-                      <span className="caja-cart-promo-hint">{detalleCombo(combo, veces, partes)}</span>
+                      <span className="caja-cart-promo-hint">{detalleCombo(combo, veces)}</span>
                     </span>
                   </span>
                   <span style={{ flex: 1.2 }} className="caja-cart-cantidad caja-cart-combo-veces">

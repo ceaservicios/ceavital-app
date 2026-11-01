@@ -656,8 +656,8 @@ export async function pasarAPack(id, datos, { rol }) {
          WHERE producto_id = ? AND pack_nombre IS NULL`
       )
       .run(n, packNombre, n, id);
-    // Combos (migración 037): un renglón suelto donde este producto es la única marca llevaba cajas,
-    // así que pasa a la misma cantidad de packs. Con otras marcas no se toca: ellas siguen sueltas.
+    // Combos (migraciones 037 y 038): un renglón suelto de este producto llevaba cajas, así que pasa a
+    // la misma cantidad de packs; su precio en la promo, que era por caja, queda como precio por pack.
     await db
       .prepare(
         `UPDATE combo_renglones r SET presentacion = 'pack', actualizado_en = CURRENT_TIMESTAMP

@@ -43,8 +43,9 @@
 .config-seccion-ancha {
   grid-template-columns: minmax(0, 1fr);
 }
+/* El texto también a todo el ancho (comentario del usuario sobre la maqueta, 2026-11-01). */
 .config-seccion-ancha .config-seccion-desc {
-  max-width: 75ch;
+  max-width: none;
 }
 .config-seccion-ancha .config-seccion-cuerpo {
   max-width: none;
@@ -502,112 +503,75 @@
   color: var(--text-secondary);
   white-space: nowrap;
 }
-/* Renglones del combo, como la maqueta: nombre, forma y cantidad de ancho fijo (así las columnas
-   quedan alineadas entre renglones), las marcas en el resto y las acciones al final. Si no entra, la
-   tabla se corre de costado. */
-.promo-fila-renglon {
-  grid-template-columns: 150px 170px 180px minmax(0, 1fr) auto;
-  align-items: start;
-  min-width: 760px;
+/* Productos del combo (2026-11-01, maqueta aprobada): uno por fila, con su forma, su cantidad, su
+   precio en la promo y el subtotal. Columnas fijas (salvo el producto) para que queden alineadas
+   entre filas; entran desde 1280 px de ancho y, si no, la tabla se corre de costado. */
+.promo-fila-combo {
+  grid-template-columns: minmax(140px, 1fr) 140px 145px 120px 95px 146px;
+  min-width: 870px;
 }
-.combo-control-nombre {
-  width: 100%;
-  min-width: 0;
+.combo-monto {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.promo-tabla-cabeza .combo-monto {
+  white-space: normal;
+}
+.combo-monto-por {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+.combo-subtotal {
   font-weight: 700;
+  color: var(--text-primary);
 }
-/* El nombre del renglón se ve como texto, alineado con "Renglón"; el recuadro aparece al pasar o al
-   tocarlo para cambiarlo. */
-.promo-fila-renglon .combo-control-nombre {
-  width: calc(100% + 11px);
-  margin-left: -11px;
-  border-color: transparent;
-  background: transparent;
-  text-overflow: ellipsis;
+/* Precio en la promo, editable en la fila: "$" y el campo, con "por unidad" y el normal abajo. */
+.combo-precio-fila {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
-.promo-fila-renglon .combo-control-nombre:hover {
-  border-color: var(--border-control);
-  background: var(--bg-surface);
+.combo-precio-fila .combo-control-precio {
+  width: 90px;
 }
-.promo-fila-renglon .combo-control-nombre:focus {
-  border-color: var(--color-primary);
-  background: var(--bg-surface);
+/* Debajo de la tabla, a la derecha: el precio del combo, la suma de los productos. */
+.combo-precio-final {
+  display: flex;
+  align-items: center;
+  align-self: flex-end;
+  gap: 24px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-rule);
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+}
+.combo-precio-final-rotulo {
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.combo-precio-final-valor {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
 }
 .config-catalogo-accion.promo-sacar {
   color: var(--danger-ink);
 }
-.promo-marcas {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.promo-marca {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
-  min-height: 30px;
-  padding: 4px 6px 4px 10px;
-  border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-  font-size: 13px;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-.promo-marca.con-problema {
-  background: var(--danger-bg);
-  color: var(--danger-ink);
-}
-.promo-marca-x {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  flex-shrink: 0;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: none;
-  color: var(--text-tertiary);
-  font: inherit;
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-}
-.promo-marca-x:hover {
-  background: var(--danger-bg);
-  color: var(--danger-ink);
-}
-.promo-sumar-marca {
-  min-height: 30px;
-  padding: 4px 12px;
-  border: 1px dashed var(--border-control);
-  border-radius: var(--radius-pill);
-  background: none;
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.promo-sumar-marca:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-.promo-nota {
-  grid-column: 1 / -1;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ok-ink);
-}
-.promo-nota.con-problema {
-  color: var(--danger-ink);
-}
-.promo-fila-renglon .promo-nota {
-  grid-column: 4 / -1;
-}
-/* Buscador de una marca o de un renglón nuevo: un recuadro aparte, debajo. */
+/* Buscador de un producto para el combo: un recuadro aparte, debajo. */
 .promo-panel {
   grid-column: 1 / -1;
   display: flex;
@@ -627,15 +591,6 @@
   flex: 1;
   min-width: 0;
   height: var(--control-height);
-}
-.promo-panel-fila {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface);
 }
 .promo-panel .promo-tabla {
   background: var(--bg-surface);
@@ -699,23 +654,26 @@
   .promo-fila-grupo {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
-  /* En el celular el renglón va en dos columnas, sin correrse, y el nombre se ve como campo. */
-  .promo-fila-renglon {
+  /* En el celular cada producto del combo va en dos columnas, sin correrse; el subtotal dice qué es. */
+  .promo-fila-combo {
     min-width: 0;
   }
-  .promo-fila-renglon .promo-nota {
-    grid-column: 1 / -1;
+  .promo-fila-combo .combo-monto {
+    align-items: flex-start;
+    text-align: left;
   }
-  .promo-fila-renglon .combo-control-nombre {
-    width: 100%;
-    margin-left: 0;
-    border-color: var(--border-control);
-    background: var(--bg-surface);
+  .combo-subtotal::before {
+    content: "Subtotal";
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+  }
+  .combo-precio-final {
+    align-self: stretch;
+    justify-content: space-between;
   }
   .promo-fila-producto,
-  .promo-fila-acciones,
-  .combo-control-nombre,
-  .promo-marcas {
+  .promo-fila-acciones {
     grid-column: 1 / -1;
   }
   .combo-control-precio {

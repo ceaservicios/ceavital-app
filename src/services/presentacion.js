@@ -11,7 +11,7 @@ import { ApiError } from '../utils/api-error.js';
 // - Grupos de promocion (2026-11-01, migracion 035): los productos de un mismo grupo suman juntos
 //   para llegar, sueltos con sueltos y packs con packs (decision del usuario); sin grupo cuenta solo
 //   ese producto. Cada producto usa su propio "desde" y su precio contra el total del grupo.
-// - Combos (2026-11-01, migraciones 036 y 037): ver aplicarCombos y lineasDeCombo, mas abajo.
+// - Combos (2026-11-01, migraciones 036, 037 y 038): ver aplicarCombos y lineasDeCombo, mas abajo.
 
 export const PRESENTACIONES = ['unidad', 'pack'];
 
@@ -132,10 +132,16 @@ export function armarLineas(items, productos) {
   });
 }
 
-// Combos (2026-11-01, migraciones 036 y 037): renglones ("Fernet", "Cola"), cada uno con su forma
-// (suelto o la caja o pack de cada marca), su cantidad y las marcas que valen, con un precio total.
-// Cualquier marca del renglon cuenta, mezcladas (1 Coca + 1 Pepsi = 2 colas). Solo Caja. La misma
-// regla esta en frontend/src/utils/presentacion.js, para mostrar el total antes de cobrar.
+// Combos (2026-11-01, migraciones 036, 037 y 038): renglones, uno por producto, cada uno con su forma
+// (suelto o su caja o pack), su cantidad y su precio en la promo, que vale solo para el combo. El
+// precio del combo es la suma de sus renglones. Solo Caja. La misma regla esta en
+// frontend/src/utils/presentacion.js, para mostrar el total antes de cobrar.
+
+/** Cuanto suma un renglon al combo: cantidad × su precio (suelto en kg o litro, la cantidad va en gramos o ml). */
+export function subtotalRenglon(renglon, medida) {
+  if (renglon.presentacion === 'pack') return renglon.cantidad * renglon.precio;
+  return Math.round((renglon.cantidad * renglon.precio) / factorMedida(medida));
+}
 
 const claveDeLinea = (productoId, presentacion) => `${productoId}:${presentacion}`;
 
@@ -166,9 +172,9 @@ function tomarCombo(combo, veces, quedan) {
 /**
  * Saca de las lineas lo que entra en combos: cada combo, en orden, las veces que entre completo con
  * lo que va quedando. `items`: lineas juntadas [{ producto_id, presentacion, cantidad }]; `combos`:
- * [{ id, nombre, precio, renglones: [{ presentacion, cantidad, productos: [producto_id] }] }],
+ * [{ id, nombre, precio, renglones: [{ presentacion, cantidad, precio, productos: [producto_id] }] }],
  * ordenados por id. Devuelve { aplicados: [{ combo, veces, partes }], resto }: `partes`, lo que tomo
- * de cada marca ({ renglon, producto_id, presentacion, cantidad }); `resto`, las lineas con lo que no
+ * de cada producto ({ renglon, producto_id, presentacion, cantidad }); `resto`, las lineas con lo que no
  * entro en ningun combo (sin las que quedaron en 0), que se cobran como siempre (armarLineas).
  */
 export function aplicarCombos(items, combos) {
@@ -193,35 +199,24 @@ export function aplicarCombos(items, combos) {
 }
 
 /**
- * Las lineas de un combo cobrado `veces` veces: una por cada marca tomada (`partes`, de
- * aplicarCombos), y el precio del combo repartido entre ellas en proporcion a su precio normal,
- * redondeando sobre lo acumulado (asi suman justo el precio del combo). Sin precio por cantidad;
- * guardan el combo y una copia de su nombre. `productos`: Map producto_id -> fila con
- * COLUMNAS_PRESENTACION.
+ * Las lineas de un combo cobrado `veces` veces: una por cada parte tomada (`partes`, de
+ * aplicarCombos; desde la 038, una por renglon), cada una a su precio en la promo. El subtotal es el
+ * del renglon por las veces, asi el combo suma justo `combo.precio × veces` (lo que muestra Caja).
+ * Sin precio por cantidad; guardan el combo y una copia de su nombre. `productos`: Map producto_id ->
+ * fila con COLUMNAS_PRESENTACION.
  */
-export function lineasDeCombo(combo, veces, partesTomadas, productos) {
-  const partes = partesTomadas.map(({ producto_id, presentacion, cantidad }) => {
+export function lineasDeCombo(combo, veces, partes, productos) {
+  return partes.map(({ renglon, producto_id, presentacion, cantidad }) => {
     const producto = productos.get(producto_id);
-    // Con cuenta 0 nunca llega al precio por cantidad: da el precio normal, que se usa para repartir.
-    return { producto, cantidad, presentacion, linea: armarLinea(producto, { cantidad, presentacion }, 0) };
-  });
-  const total = combo.precio * veces;
-  const sumaNormal = partes.reduce((acc, p) => acc + p.linea.subtotal, 0);
-  let acumulado = 0;
-  let asignado = 0;
-  return partes.map(({ producto, cantidad, presentacion, linea }) => {
-    acumulado += sumaNormal > 0 ? linea.subtotal : 1;
-    const subtotal = Math.round((total * acumulado) / (sumaNormal > 0 ? sumaNormal : partes.length)) - asignado;
-    asignado += subtotal;
-    // Precio de referencia de la linea: por pack, por unidad, o por kg/litro.
-    const precio =
-      presentacion === 'pack' ? Math.round(subtotal / cantidad) : Math.round((subtotal * factorMedida(producto.medida)) / cantidad);
+    const r = combo.renglones[renglon];
+    // armarLinea, para las unidades de stock y la copia del pack; el precio es el de la promo.
+    const linea = armarLinea(producto, { cantidad, presentacion }, 0);
     return {
       ...linea,
-      precio_unitario: precio,
+      precio_unitario: r.precio,
       precio_cantidad_desde: null,
       precio_cantidad_grupo: null,
-      subtotal,
+      subtotal: Math.round((subtotalRenglon(r, producto.medida) * cantidad) / r.cantidad),
       combo_id: combo.id,
       combo_nombre: combo.nombre,
     };

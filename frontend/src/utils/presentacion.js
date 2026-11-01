@@ -143,16 +143,15 @@ export function subtotalLinea(producto, cantidad, presentacion, cuenta = cantida
   return Math.round((cantidad * precio) / factorMedida(producto.medida));
 }
 
-// Combos (2026-11-01): renglones ("Fernet", "Cola"), cada uno con su forma (suelto o la caja o pack de
-// cada marca), su cantidad y las marcas que valen, a un precio total. Cualquier marca del renglón
-// cuenta, mezcladas. La misma regla que el servidor (src/services/presentacion.js → aplicarCombos),
-// que es el que cobra.
+// Combos (2026-11-01): renglones, uno por producto, cada uno con su forma (suelto o su caja o pack),
+// su cantidad y su precio en la promo; el precio del combo (`precio` de GET /combos) es la suma. La
+// misma regla que el servidor (src/services/presentacion.js → aplicarCombos), que es el que cobra.
 
 const claveDeLinea = (productoId, presentacion) => `${productoId}:${presentacion}`;
 
 /**
  * Los combos de GET /combos listos para aplicarCombos: solo los vigentes y, en cada renglón,
- * `productos` con los ids de las marcas que cuentan (como el servidor) y `marcas` con sus datos.
+ * `productos` con el id del producto si cuenta (como el servidor) y `marcas` con sus datos.
  */
 export function combosParaCobrar(combos) {
   return combos

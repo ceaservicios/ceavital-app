@@ -153,8 +153,13 @@ const CATALOGO = {
     titulo: 'Sacó un producto de un grupo de promoción',
     detalle: (d) => `${d.producto} · ${d.grupo}`,
   },
-  // Combos (2026-11-01): productos con su forma y cantidad a un precio total, en Caja.
-  'combo-creado': { categoria: 'instalacion', titulo: 'Creó un combo', detalle: (d) => `${d.combo} · ${pesos(d.precio)}` },
+  // Combos (2026-11-01): productos con su forma, su cantidad y su precio en la promo, en Caja. Desde la
+  // migración 038 el precio va en cada renglón: los combos nuevos se crean sin precio.
+  'combo-creado': {
+    categoria: 'instalacion',
+    titulo: 'Creó un combo',
+    detalle: (d) => (d.precio == null ? d.combo : `${d.combo} · ${pesos(d.precio)}`),
+  },
   'combo-editado': {
     categoria: 'instalacion',
     titulo: 'Cambió un combo',
@@ -174,6 +179,7 @@ const CATALOGO = {
     detalle: (d) => `${d.antes} → ${d.despues} · ${d.combo}`,
   },
   'combo-renglon-sacado': { categoria: 'instalacion', titulo: 'Sacó un renglón de un combo', detalle: (d) => `${d.renglon} · ${d.combo}` },
+  // Marcas de un renglón (migración 037, hasta la 038): quedan para leer el registro de entonces.
   'combo-marca-agregada': {
     categoria: 'instalacion',
     titulo: 'Sumó una marca a un renglón de un combo',

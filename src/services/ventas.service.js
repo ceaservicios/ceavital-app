@@ -301,7 +301,7 @@ async function validarClienteEmpresa(medioPago, clienteEmpresaId) {
 // en venta_pagos. Las partes tienen que sumar el total que calcula el servidor.
 //
 // Combos (2026-11-01, solo Caja): antes de ponerle precio a las líneas se saca lo que entra en los
-// combos vigentes (aplicarCombos); eso va en líneas propias con el precio del combo repartido y el
+// combos vigentes (aplicarCombos); eso va en líneas propias, cada una a su precio en la promo, y el
 // resto se cobra como siempre. Al aprobar un pedido (lineasCongeladas) no se aplican.
 export async function registrarVentaEnTransaccion(
   { medio_pago, pagos, items, cliente_empresa_id },

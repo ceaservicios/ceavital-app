@@ -4,8 +4,10 @@ import { formatearMonto } from '../utils/format.js';
 import {
   esFraccionable,
   etiquetaPack,
+  factorMedida,
   parsearCantidad,
   plural,
+  porMedida,
   precioNormalCombo,
   simboloMedida,
   textoDeCantidad,
@@ -14,11 +16,12 @@ import {
 } from '../utils/presentacion.js';
 import { alternarEn, TarjetaPromo } from './promocionesComun.jsx';
 
-// Configuración → Promociones → Combos (pedido del usuario, 2026-11-01; aprobó la maqueta: "me
-// gusta"). Un combo lleva renglones ("Fernet", "Cola"), cada uno con su forma (unidad, kg, caja o
-// pack), su cantidad y las marcas que valen; en Caja cualquier marca del renglón cuenta, mezcladas.
-// Solo el Administrador. Cada combo es una tarjeta desplegable con sus renglones en una tabla, donde
-// se cambia todo ahí mismo.
+// Configuración → Promociones → Combos (pedidos del usuario, 2026-11-01; aprobó la maqueta). Solo el
+// Administrador. Cada combo es una tarjeta desplegable con sus productos en una tabla, uno por fila,
+// con su forma, su cantidad y su precio en la promo, que arranca con el precio normal del producto
+// (el del pack o el de la unidad, el kg o el litro) y se cambia ahí mismo. Ese precio vale solo para
+// el combo: "No debe cambiar el valor en el sistema. Es solo un apartado. El stock sí, pero precio
+// no". El precio del combo es la suma de las filas.
 
 const MAX_SUGERENCIAS = 6;
 
@@ -40,30 +43,34 @@ function buscar(productos, busqueda) {
 
 const etiquetaSuelto = (medida) => (esFraccionable(medida) ? `Por ${simboloMedida(medida)}` : 'Unidad');
 
-// Formas en que se vende un producto: las mismas que en Caja.
-function formasDeProducto(producto) {
+// Formas en que se vende un producto: las mismas que en Caja (y la que tiene ahora, aunque ya no se
+// venda así, para que se vea qué hay que corregir).
+function formasDeProducto(producto, actual = null) {
   const formas = [];
-  if (vendeSuelto(producto)) formas.push({ presentacion: 'unidad', etiqueta: etiquetaSuelto(producto.medida) });
-  if (tienePack(producto)) {
-    formas.push({ presentacion: 'pack', etiqueta: etiquetaPack(producto.pack_nombre, producto.pack_unidades, producto.medida) });
+  if (vendeSuelto(producto) || actual === 'unidad') formas.push({ presentacion: 'unidad', etiqueta: etiquetaSuelto(producto.medida) });
+  if (tienePack(producto) || actual === 'pack') {
+    formas.push({
+      presentacion: 'pack',
+      etiqueta: tienePack(producto) ? etiquetaPack(producto.pack_nombre, producto.pack_unidades, producto.medida) : 'Caja o pack',
+    });
   }
   return formas;
 }
 
-// Formas que puede tener un renglón: las que tienen todas sus marcas (y la que tiene ahora, aunque
-// alguna marca ya no se venda así). La caja o pack es la de cada marca.
-function formasDeRenglon(renglon) {
-  const marcas = renglon.productos.filter((m) => !m.producto_eliminado);
-  const formas = [];
-  if (marcas.every(vendeSuelto) || renglon.presentacion === 'unidad') {
-    formas.push({ presentacion: 'unidad', etiqueta: etiquetaSuelto(marcas[0]?.medida ?? 'unidad') });
-  }
-  if (marcas.every(tienePack) || renglon.presentacion === 'pack') {
-    const etiquetas = [...new Set(marcas.filter(tienePack).map((m) => etiquetaPack(m.pack_nombre, m.pack_unidades, m.medida)))];
-    formas.push({ presentacion: 'pack', etiqueta: etiquetas.length === 1 ? etiquetas[0] : 'Caja o pack (la de cada marca)' });
-  }
-  return formas;
+// Precio normal del producto en esa forma (el de Caja y Stock): el del pack, o el de la unidad, el kg o el litro.
+const precioNormal = (producto, presentacion) => (presentacion === 'pack' ? producto.precio_pack : producto.precio_venta);
+
+// "por unidad", "por kg", "por pack".
+const porCadaForma = (producto, presentacion) =>
+  presentacion === 'pack' ? `por ${String(producto.pack_nombre || 'pack').toLowerCase()}` : porMedida(producto.medida);
+
+// Cantidad × precio (en kg o litro, la cantidad viene en gramos o mililitros).
+function subtotalDeForma(producto, presentacion, cantidad, precio) {
+  if (!cantidad || precio == null) return null;
+  return presentacion === 'pack' ? cantidad * precio : Math.round((cantidad * precio) / factorMedida(producto.medida));
 }
+
+const textoDePrecio = (precio) => (precio == null ? '' : String(precio));
 
 // "unidades", "kg", "cajas": lo que va al lado de la cantidad.
 function unidadDeCantidad(presentacion, medida, packNombre, cantidad) {
@@ -92,93 +99,37 @@ function CampoCantidad({ presentacion, medida, packNombre, texto, onTexto, etiqu
   );
 }
 
-// Buscador para sumar otra marca a un renglón: muestra todo lo que coincide y dice por qué no se
-// puede sumar lo que no va (otra forma de venta o se mide distinto).
-function SumarMarca({ renglon, combo, productos, ocupado, onAccion, onCerrar }) {
-  const [busqueda, setBusqueda] = useState('');
-  const yaEstan = new Set(renglon.productos.map((m) => m.producto_id));
-  const medida = renglon.productos[0]?.medida;
-  const encontrados = buscar(productos, busqueda).filter((p) => !yaEstan.has(p.id));
-  const porQueNo = (p) =>
-    renglon.presentacion === 'pack' && !tienePack(p)
-      ? 'No se vende por caja ni por pack'
-      : renglon.presentacion === 'unidad' && !vendeSuelto(p)
-        ? 'No se vende suelto'
-        : medida && p.medida !== medida
-          ? 'Se mide distinto que las otras marcas'
-          : null;
-
-  return (
-    <div className="promo-panel">
-      <div className="promo-panel-cabeza">
-        <input
-          type="search"
-          className="combo-control promo-panel-buscar"
-          aria-label={`Buscar una marca para ${renglon.nombre}`}
-          placeholder={`Buscar otra marca para "${renglon.nombre}"`}
-          value={busqueda}
-          autoFocus
-          onChange={(e) => setBusqueda(e.target.value)}
-        />
-        <button type="button" className="config-catalogo-accion" onClick={onCerrar}>
-          Cerrar
-        </button>
-      </div>
-      {busqueda.trim() && encontrados.length === 0 && <span className="promo-sumar-ayuda">No hay productos que coincidan.</span>}
-      {encontrados.map((p) => {
-        const motivo = porQueNo(p);
-        return (
-          <div className="promo-panel-fila" key={p.id}>
-            <span className="promo-fila-producto">
-              <strong>{p.nombre}</strong>
-              {motivo && <span className="promo-aviso">{motivo}</span>}
-            </span>
-            {!motivo && (
-              <button
-                type="button"
-                className="btn btn-primary promo-btn-chico"
-                disabled={ocupado}
-                onClick={() => onAccion(() => api.put(`/combos/${combo.id}/renglones/${renglon.id}/productos/${p.id}`), () => setBusqueda(''))}
-              >
-                Sumar
-              </button>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// Un renglón del combo: nombre, forma y cantidad se cambian acá mismo; las marcas se suman y se sacan.
-function FilaRenglon({ renglon, combo, productos, ocupado, onAccion }) {
-  const medida = renglon.productos[0]?.medida ?? 'unidad';
-  const [nombre, setNombre] = useState(renglon.nombre);
+// Un producto del combo: forma, cantidad y precio en la promo se cambian acá mismo. El precio vale
+// solo para el combo: el del producto en Caja y en Stock no cambia.
+function FilaProducto({ renglon, combo, ocupado, onAccion }) {
+  const producto = renglon.productos[0];
+  const medida = producto.medida;
   const [presentacion, setPresentacion] = useState(renglon.presentacion);
   const [cantidadTexto, setCantidadTexto] = useState(textoDeCantidad(renglon.cantidad, medidaDeCantidad(renglon.presentacion, medida)));
-  const [sumandoMarca, setSumandoMarca] = useState(false);
+  // Un precio por forma: al pasar de unidad a pack, el campo arranca con el precio normal del pack.
+  const [precios, setPrecios] = useState(() => ({
+    unidad: textoDePrecio(renglon.presentacion === 'unidad' ? renglon.precio : producto.precio_venta),
+    pack: textoDePrecio(renglon.presentacion === 'pack' ? renglon.precio : producto.precio_pack),
+  }));
   const cantidad = parsearCantidad(cantidadTexto, medidaDeCantidad(presentacion, medida));
-  const cambio = nombre.trim() !== renglon.nombre || presentacion !== renglon.presentacion || cantidad !== renglon.cantidad;
-  const packs = [...new Set(renglon.productos.filter(tienePack).map((m) => m.pack_nombre))];
-  const validas = renglon.productos.filter((m) => !m.problema).length;
-  const unica = renglon.productos.length === 1;
+  const precio = precios[presentacion] === '' ? null : Number(precios[presentacion]);
+  const normal = precioNormal(producto, presentacion);
+  const cambio = presentacion !== renglon.presentacion || cantidad !== renglon.cantidad || precio !== renglon.precio;
+  const subtotal = subtotalDeForma(producto, presentacion, cantidad, precio);
 
   return (
-    <div className="promo-fila promo-fila-renglon">
-      <input
-        className="combo-control combo-control-nombre"
-        aria-label="Nombre del renglón"
-        maxLength={60}
-        value={nombre}
-        onChange={(e) => setNombre(e.target.value)}
-      />
+    <div className="promo-fila promo-fila-combo">
+      <span className="promo-fila-producto">
+        <strong>{producto.producto_nombre}</strong>
+        {producto.problema && <span className="promo-aviso">{producto.problema}: el combo no se cobra hasta corregirlo.</span>}
+      </span>
       <select
         className="combo-control"
-        aria-label={`Cómo se vende ${renglon.nombre}`}
+        aria-label={`Cómo se vende ${producto.producto_nombre} en el combo`}
         value={presentacion}
         onChange={(e) => setPresentacion(e.target.value)}
       >
-        {formasDeRenglon(renglon).map((f) => (
+        {formasDeProducto(producto, renglon.presentacion).map((f) => (
           <option key={f.presentacion} value={f.presentacion}>
             {f.etiqueta}
           </option>
@@ -187,44 +138,33 @@ function FilaRenglon({ renglon, combo, productos, ocupado, onAccion }) {
       <CampoCantidad
         presentacion={presentacion}
         medida={medida}
-        packNombre={packs.length === 1 ? packs[0] : null}
+        packNombre={producto.pack_nombre}
         texto={cantidadTexto}
         onTexto={setCantidadTexto}
-        etiqueta={`Cantidad de ${renglon.nombre}`}
+        etiqueta={`Cantidad de ${producto.producto_nombre}`}
       />
-      <span className="promo-marcas">
-        {renglon.productos.map((m) => (
-          <span className={`promo-marca${m.problema ? ' con-problema' : ''}`} key={m.producto_id} title={m.problema ?? undefined}>
-            {m.producto_nombre}
-            {m.problema && ` · ${m.problema.toLowerCase()}`}
-            {!unica && (
-              <button
-                type="button"
-                className="promo-marca-x"
-                aria-label={`Sacar ${m.producto_nombre} de ${renglon.nombre}`}
-                disabled={ocupado}
-                onClick={() => onAccion(() => api.delete(`/combos/${combo.id}/renglones/${renglon.id}/productos/${m.producto_id}`))}
-              >
-                ×
-              </button>
-            )}
-          </span>
-        ))}
-        {!sumandoMarca && (
-          <button type="button" className="promo-sumar-marca" onClick={() => setSumandoMarca(true)}>
-            + Sumar marca
-          </button>
-        )}
+      <span className="combo-monto">
+        <span className="combo-precio-fila">
+          $
+          <input
+            className="combo-control combo-control-precio"
+            inputMode="numeric"
+            aria-label={`Precio en la promo de ${producto.producto_nombre} ${porCadaForma(producto, presentacion)}`}
+            value={precios[presentacion]}
+            onChange={(e) => setPrecios((p) => ({ ...p, [presentacion]: soloDigitos(e.target.value) }))}
+          />
+        </span>
+        <span className="combo-monto-por">{porCadaForma(producto, presentacion)}</span>
+        {normal != null && <span className="combo-monto-por">normal {formatearMonto(normal)}</span>}
       </span>
+      <span className="combo-monto combo-subtotal">{subtotal != null ? formatearMonto(subtotal) : '—'}</span>
       <span className="promo-fila-acciones">
         {cambio && (
           <button
             type="button"
             className="btn btn-primary promo-btn-chico"
-            disabled={ocupado || !cantidad || !nombre.trim()}
-            onClick={() =>
-              onAccion(() => api.patch(`/combos/${combo.id}/renglones/${renglon.id}`, { nombre: nombre.trim(), presentacion, cantidad }))
-            }
+            disabled={ocupado || !cantidad || precio == null}
+            onClick={() => onAccion(() => api.patch(`/combos/${combo.id}/renglones/${renglon.id}`, { presentacion, cantidad, precio }))}
           >
             Guardar
           </button>
@@ -238,24 +178,26 @@ function FilaRenglon({ renglon, combo, productos, ocupado, onAccion }) {
           Sacar
         </button>
       </span>
-      {validas > 1 && <span className="promo-nota">Valen mezcladas: cualquier combinación de estas marcas suma la cantidad.</span>}
-      {validas === 0 && <span className="promo-nota con-problema">Ninguna marca se puede vender así: el combo no se cobra hasta corregirlo.</span>}
-      {sumandoMarca && (
-        <SumarMarca
-          renglon={renglon}
-          combo={combo}
-          productos={productos}
-          ocupado={ocupado}
-          onAccion={onAccion}
-          onCerrar={() => setSumandoMarca(false)}
-        />
-      )}
     </div>
   );
 }
 
-// Un producto encontrado para un renglón nuevo: se elige la forma y la cantidad, y se agrega.
-function NuevoRenglon({ producto, combo, ocupado, onAccion, onAgregado }) {
+// Debajo de la tabla: el precio del combo, que es la suma de los subtotales.
+function TotalDelCombo({ combo }) {
+  return (
+    <div className="combo-precio-final">
+      <span className="combo-precio-final-rotulo">
+        Precio del combo
+        <span className="combo-monto-por">la suma de los productos</span>
+      </span>
+      <strong className="combo-precio-final-valor">{formatearMonto(combo.precio)}</strong>
+    </div>
+  );
+}
+
+// Un producto encontrado para sumar al combo: se elige la forma y la cantidad, y se agrega con su
+// precio normal (después se cambia en la tabla).
+function NuevoProducto({ producto, combo, ocupado, onAccion, onAgregado }) {
   const formas = formasDeProducto(producto);
   const [presentacion, setPresentacion] = useState(formas[0]?.presentacion ?? 'unidad');
   const [cantidadTexto, setCantidadTexto] = useState('1');
@@ -292,7 +234,16 @@ function NuevoRenglon({ producto, combo, ocupado, onAccion, onAgregado }) {
           className="btn btn-primary promo-btn-chico"
           disabled={ocupado || !cantidad || formas.length === 0}
           onClick={() =>
-            onAccion(() => api.post(`/combos/${combo.id}/renglones`, { producto_id: producto.id, presentacion, cantidad }), onAgregado)
+            onAccion(
+              () =>
+                api.post(`/combos/${combo.id}/renglones`, {
+                  producto_id: producto.id,
+                  presentacion,
+                  cantidad,
+                  precio: precioNormal(producto, presentacion),
+                }),
+              onAgregado
+            )
           }
         >
           Agregar
@@ -305,22 +256,20 @@ function NuevoRenglon({ producto, combo, ocupado, onAccion, onAgregado }) {
 function Combo({ combo, productos, abierta, onAlternar, ocupado, onAccion }) {
   const [editando, setEditando] = useState(false);
   const [nombre, setNombre] = useState(combo.nombre);
-  const [precioTexto, setPrecioTexto] = useState(String(combo.precio));
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
   const [agregando, setAgregando] = useState(false);
   const [busqueda, setBusqueda] = useState('');
 
   const n = combo.renglones.length;
-  const { min, max } = precioNormalCombo(combo.renglones);
-  const porSeparado = min === max ? formatearMonto(min) : `entre ${formatearMonto(min)} y ${formatearMonto(max)} según la marca`;
+  const { min: porSeparado } = precioNormalCombo(combo.renglones);
   const encontrados = buscar(productos, busqueda);
 
   function cancelarEdicion() {
     setEditando(false);
     setNombre(combo.nombre);
-    setPrecioTexto(String(combo.precio));
   }
 
+  // "Editar" cambia solo el nombre: el precio es la suma de los productos.
   const reemplazo = editando ? (
     <>
       <input
@@ -330,16 +279,6 @@ function Combo({ combo, productos, abierta, onAlternar, ocupado, onAccion }) {
         value={nombre}
         onChange={(e) => setNombre(e.target.value)}
       />
-      <span className="combo-precio-campo">
-        $
-        <input
-          className="config-catalogo-input-edicion"
-          inputMode="numeric"
-          aria-label="Precio del combo"
-          value={precioTexto}
-          onChange={(e) => setPrecioTexto(soloDigitos(e.target.value))}
-        />
-      </span>
       <div className="config-catalogo-botones">
         <button type="button" className="btn" onClick={cancelarEdicion}>
           Cancelar
@@ -347,8 +286,8 @@ function Combo({ combo, productos, abierta, onAlternar, ocupado, onAccion }) {
         <button
           type="button"
           className="btn btn-primary"
-          disabled={ocupado || !precioTexto}
-          onClick={() => onAccion(() => api.patch(`/combos/${combo.id}`, { nombre, precio: Number(precioTexto) }), () => setEditando(false))}
+          disabled={ocupado || !nombre.trim()}
+          onClick={() => onAccion(() => api.patch(`/combos/${combo.id}`, { nombre }), () => setEditando(false))}
         >
           Guardar
         </button>
@@ -379,8 +318,10 @@ function Combo({ combo, productos, abierta, onAlternar, ocupado, onAccion }) {
       onAlternar={onAlternar}
       titulo={combo.nombre}
       precio={formatearMonto(combo.precio)}
-      resumen={n === 0 ? 'Sin renglones todavía' : `${n} ${n === 1 ? 'renglón' : 'renglones'} · por separado ${porSeparado}`}
-      aviso={n > 0 && !combo.vigente ? 'No se cobra en Caja hasta que corrijas el renglón marcado.' : null}
+      resumen={
+        n === 0 ? 'Sin productos todavía' : `${n} ${n === 1 ? 'producto' : 'productos'} · por separado ${formatearMonto(porSeparado)}`
+      }
+      aviso={n > 0 && !combo.vigente ? 'No se cobra en Caja hasta que corrijas el producto marcado.' : null}
       reemplazo={reemplazo}
       acciones={
         <>
@@ -395,29 +336,30 @@ function Combo({ combo, productos, abierta, onAlternar, ocupado, onAccion }) {
     >
       <span className="promo-cuerpo-titulo">Lo que lleva el combo</span>
       {n === 0 ? (
-        <span className="promo-sumar-ayuda">Todavía no lleva nada: agregá el primer renglón.</span>
+        <span className="promo-sumar-ayuda">Todavía no lleva nada: agregá el primer producto.</span>
       ) : (
         <div className="promo-tabla">
-          <div className="promo-fila promo-fila-renglon promo-tabla-cabeza" aria-hidden="true">
-            <span>Renglón</span>
+          <div className="promo-fila promo-fila-combo promo-tabla-cabeza" aria-hidden="true">
+            <span>Producto</span>
             <span>Se vende por</span>
             <span>Cantidad</span>
-            <span>Marcas que valen</span>
+            <span className="combo-monto">Precio en la promo</span>
+            <span className="combo-monto">Subtotal</span>
             <span />
           </div>
           {combo.renglones.map((r) => (
             // La clave cambia al guardar: la fila vuelve a arrancar con lo guardado.
-            <FilaRenglon
-              key={`${r.id}-${r.nombre}-${r.presentacion}-${r.cantidad}`}
+            <FilaProducto
+              key={`${r.id}-${r.presentacion}-${r.cantidad}-${r.precio}`}
               renglon={r}
               combo={combo}
-              productos={productos}
               ocupado={ocupado}
               onAccion={onAccion}
             />
           ))}
         </div>
       )}
+      {n > 0 && <TotalDelCombo combo={combo} />}
 
       {agregando ? (
         <div className="promo-panel">
@@ -425,8 +367,8 @@ function Combo({ combo, productos, abierta, onAlternar, ocupado, onAccion }) {
             <input
               type="search"
               className="combo-control promo-panel-buscar"
-              aria-label={`Buscar un producto para un renglón nuevo de ${combo.nombre}`}
-              placeholder="Buscar el producto del renglón nuevo, por nombre o código"
+              aria-label={`Buscar un producto para sumar a ${combo.nombre}`}
+              placeholder="Buscar el producto, por nombre o código"
               value={busqueda}
               autoFocus
               onChange={(e) => setBusqueda(e.target.value)}
@@ -446,7 +388,7 @@ function Combo({ combo, productos, abierta, onAlternar, ocupado, onAccion }) {
           {encontrados.length > 0 && (
             <div className="promo-tabla">
               {encontrados.map((p) => (
-                <NuevoRenglon
+                <NuevoProducto
                   key={p.id}
                   producto={p}
                   combo={combo}
@@ -462,14 +404,14 @@ function Combo({ combo, productos, abierta, onAlternar, ocupado, onAccion }) {
           )}
           {!busqueda.trim() && (
             <span className="promo-sumar-ayuda">
-              El renglón se llama como el producto: después le cambiás el nombre (por ejemplo "Cola") y le sumás otras marcas.
+              Elegí si va por unidad, kg, caja o pack, y cuántos. Entra con su precio normal: después lo cambiás en la tabla.
             </span>
           )}
         </div>
       ) : (
         <div>
           <button type="button" className="btn promo-btn-chico" onClick={() => setAgregando(true)}>
-            + Agregar renglón
+            + Agregar producto
           </button>
         </div>
       )}
@@ -483,7 +425,6 @@ export default function SeccionCombos() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [nombreNuevo, setNombreNuevo] = useState('');
-  const [precioNuevo, setPrecioNuevo] = useState('');
   const [abiertos, setAbiertos] = useState(() => new Set());
   const [ocupado, setOcupado] = useState(false);
   // Guardia sincrónica contra el doble click: `disabled={ocupado}` no alcanza en el mismo tick.
@@ -519,14 +460,13 @@ export default function SeccionCombos() {
     }
   }
 
-  // El combo recién creado queda abierto, para agregarle los renglones.
+  // El combo recién creado queda abierto, para agregarle los productos.
   function crear(e) {
     e.preventDefault();
     accion(
-      () => api.post('/combos', { nombre: nombreNuevo, precio: Number(precioNuevo) }),
+      () => api.post('/combos', { nombre: nombreNuevo }),
       (combo) => {
         setNombreNuevo('');
-        setPrecioNuevo('');
         if (combo?.id) setAbiertos((prev) => new Set(prev).add(combo.id));
       }
     );
@@ -537,10 +477,10 @@ export default function SeccionCombos() {
       <div className="config-seccion-info">
         <h2 className="config-seccion-titulo">Combos</h2>
         <p className="config-seccion-desc">
-          Un combo lleva renglones, cada uno con su forma (unidad, kg, caja o pack), su cantidad y las marcas que valen: por
-          ejemplo 1 Fernet + 2 Cola (Coca, Pepsi o Manaos) a $15.000. En Caja se cobra solo cuando el carrito tiene todo lo del
-          combo, con cualquier marca de cada renglón, mezcladas; lo que sobra va a su precio normal. Vale solo en Caja. Las
-          ventas ya hechas no cambian.
+          Un combo lleva productos, cada uno con su forma (unidad, kg, caja o pack), su cantidad y su precio en la promo: por ejemplo
+          1 Fernet a $11.000 + 2 Coca-Cola a $3.250 = $17.500. Ese precio vale solo para el combo: el precio del producto en Caja y
+          en Stock no cambia. En Caja se cobra solo cuando el carrito tiene todo lo del combo; lo que sobra va a su precio normal, y el
+          stock se descuenta como en cualquier venta. Vale solo en Caja. Las ventas ya hechas no cambian.
         </p>
       </div>
       <div className="config-seccion-cuerpo">
@@ -551,21 +491,10 @@ export default function SeccionCombos() {
             required
             maxLength={60}
             aria-label="Nombre del nuevo combo"
-            placeholder="Nombre del combo, por ejemplo Fernet + Cola"
+            placeholder="Nombre del combo, por ejemplo Fernet + Coca"
             value={nombreNuevo}
             onChange={(e) => setNombreNuevo(e.target.value)}
           />
-          <span className="combo-precio-campo">
-            $
-            <input
-              required
-              inputMode="numeric"
-              aria-label="Precio del nuevo combo"
-              placeholder="Precio"
-              value={precioNuevo}
-              onChange={(e) => setPrecioNuevo(soloDigitos(e.target.value))}
-            />
-          </span>
           <button type="submit" className="btn btn-primary" disabled={ocupado}>
             Agregar
           </button>
@@ -578,7 +507,7 @@ export default function SeccionCombos() {
         ) : combos.length === 0 ? (
           <div className="config-catalogo-lista">
             <div className="config-catalogo-vacio">
-              Todavía no hay combos. Creá el primero con su nombre y su precio, y después agregale los renglones.
+              Todavía no hay combos. Creá el primero con su nombre y después agregale los productos con su precio en la promo.
             </div>
           </div>
         ) : (
