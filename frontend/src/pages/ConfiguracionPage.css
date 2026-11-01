@@ -38,6 +38,17 @@
   min-width: 0;
   max-width: 680px;
 }
+/* Promociones (2026-11-01, pedido del usuario: "como la maqueta, que ocupe el ancho disponible"):
+   el título y la descripción arriba y, debajo, los controles a todo el ancho. */
+.config-seccion-ancha {
+  grid-template-columns: minmax(0, 1fr);
+}
+.config-seccion-ancha .config-seccion-desc {
+  max-width: 75ch;
+}
+.config-seccion-ancha .config-seccion-cuerpo {
+  max-width: none;
+}
 
 /* ---------- Datos del negocio ---------- */
 .config-negocio-form {
@@ -322,6 +333,7 @@
   flex-direction: column;
   border: 1px solid var(--border-rule);
   border-radius: var(--radius-sm);
+  overflow-x: auto;
 }
 .promo-fila {
   display: grid;
@@ -339,7 +351,7 @@
   padding-bottom: 8px;
   background: var(--bg-hover);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-tertiary);
 }
 .promo-fila-producto {
@@ -490,15 +502,38 @@
   color: var(--text-secondary);
   white-space: nowrap;
 }
-/* Renglones del combo: nombre, forma, cantidad, marcas que valen y acciones. */
+/* Renglones del combo, como la maqueta: nombre, forma y cantidad de ancho fijo (así las columnas
+   quedan alineadas entre renglones), las marcas en el resto y las acciones al final. Si no entra, la
+   tabla se corre de costado. */
 .promo-fila-renglon {
-  grid-template-columns: minmax(110px, 0.9fr) minmax(130px, 0.9fr) auto minmax(0, 1.6fr) auto;
+  grid-template-columns: 150px 170px 180px minmax(0, 1fr) auto;
   align-items: start;
+  min-width: 760px;
 }
 .combo-control-nombre {
   width: 100%;
   min-width: 0;
   font-weight: 700;
+}
+/* El nombre del renglón se ve como texto, alineado con "Renglón"; el recuadro aparece al pasar o al
+   tocarlo para cambiarlo. */
+.promo-fila-renglon .combo-control-nombre {
+  width: calc(100% + 11px);
+  margin-left: -11px;
+  border-color: transparent;
+  background: transparent;
+  text-overflow: ellipsis;
+}
+.promo-fila-renglon .combo-control-nombre:hover {
+  border-color: var(--border-control);
+  background: var(--bg-surface);
+}
+.promo-fila-renglon .combo-control-nombre:focus {
+  border-color: var(--color-primary);
+  background: var(--bg-surface);
+}
+.config-catalogo-accion.promo-sacar {
+  color: var(--danger-ink);
 }
 .promo-marcas {
   display: flex;
@@ -568,6 +603,9 @@
 }
 .promo-nota.con-problema {
   color: var(--danger-ink);
+}
+.promo-fila-renglon .promo-nota {
+  grid-column: 4 / -1;
 }
 /* Buscador de una marca o de un renglón nuevo: un recuadro aparte, debajo. */
 .promo-panel {
@@ -660,6 +698,19 @@
   .promo-fila,
   .promo-fila-grupo {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  /* En el celular el renglón va en dos columnas, sin correrse, y el nombre se ve como campo. */
+  .promo-fila-renglon {
+    min-width: 0;
+  }
+  .promo-fila-renglon .promo-nota {
+    grid-column: 1 / -1;
+  }
+  .promo-fila-renglon .combo-control-nombre {
+    width: 100%;
+    margin-left: 0;
+    border-color: var(--border-control);
+    background: var(--bg-surface);
   }
   .promo-fila-producto,
   .promo-fila-acciones,

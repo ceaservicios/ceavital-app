@@ -249,7 +249,7 @@ function Grupo({ grupo, productos, nombreDeGrupo, abierta, onAlternar, ocupado, 
                 <strong>{p.nombre}</strong>
                 <button
                   type="button"
-                  className="config-catalogo-accion config-catalogo-accion-danger"
+                  className="config-catalogo-accion config-catalogo-accion-danger promo-sacar"
                   disabled={ocupado}
                   onClick={() => onAccion(() => api.delete(`/grupos-promocion/${grupo.id}/productos/${p.id}`))}
                 >
@@ -379,7 +379,7 @@ export default function SeccionPromociones() {
   const nombreDeGrupo = (id) => nombres.get(id) ?? 'otro grupo';
 
   return (
-    <section className="card config-seccion">
+    <section className="card config-seccion config-seccion-ancha">
       <div className="config-seccion-info">
         <h2 className="config-seccion-titulo">Grupos de promoción</h2>
         <p className="config-seccion-desc">

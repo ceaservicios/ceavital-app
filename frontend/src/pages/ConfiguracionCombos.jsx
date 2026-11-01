@@ -231,7 +231,7 @@ function FilaRenglon({ renglon, combo, productos, ocupado, onAccion }) {
         )}
         <button
           type="button"
-          className="config-catalogo-accion config-catalogo-accion-danger"
+          className="config-catalogo-accion config-catalogo-accion-danger promo-sacar"
           disabled={ocupado}
           onClick={() => onAccion(() => api.delete(`/combos/${combo.id}/renglones/${renglon.id}`))}
         >
@@ -533,7 +533,7 @@ export default function SeccionCombos() {
   }
 
   return (
-    <section className="card config-seccion">
+    <section className="card config-seccion config-seccion-ancha">
       <div className="config-seccion-info">
         <h2 className="config-seccion-titulo">Combos</h2>
         <p className="config-seccion-desc">
