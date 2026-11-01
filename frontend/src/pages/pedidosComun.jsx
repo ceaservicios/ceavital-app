@@ -24,7 +24,8 @@ export function IconoDesplegar() {
 // Tabla de líneas de un pedido, igual para el negocio y para el cliente. Con la venta por
 // pack (2026-10-11), la cantidad se muestra como se pidió ("2 Pack x 24") y el precio es el
 // de esa presentación. Si llegó al precio por cantidad con su grupo de promoción (2026-11-01),
-// la marca dice cuál.
+// la marca dice cuál. En una venta, la línea que entró en un combo lo dice (el precio es su parte
+// del precio del combo).
 export function ItemsPedido({ items, total }) {
   return (
     <table className="pedido-items">
@@ -50,6 +51,7 @@ export function ItemsPedido({ items, total }) {
                   {i.precio_cantidad_grupo && ` · ${i.precio_cantidad_grupo}`})
                 </span>
               )}
+              {i.combo_nombre && <span className="pedido-cantidad-pack">En el combo {i.combo_nombre}</span>}
             </td>
             <td className="num">{describirCantidadLinea(i)}</td>
             <td className="num">

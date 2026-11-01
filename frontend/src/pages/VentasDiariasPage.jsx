@@ -62,12 +62,13 @@ function rangosRapidos(hoy) {
 const textoPeriodo = (desde, hasta) => (desde === hasta ? formatearFecha(desde) : `${formatearFecha(desde)} al ${formatearFecha(hasta)}`);
 
 // Las líneas de una venta se guardan una por lote (FEFO): se juntan las del mismo producto,
-// forma de venta y precio para mostrarlas como se cobraron.
+// forma de venta, precio y combo para mostrarlas como se cobraron.
 function juntarLineas(items) {
   const lineas = new Map();
   for (const i of items) {
     const clave = [
       i.producto_id, i.pack_nombre ?? '', i.pack_unidades ?? '', i.precio_unitario, i.precio_cantidad_desde ?? '', i.precio_cantidad_grupo ?? '',
+      i.combo_id ?? '',
     ].join('|');
     const previa = lineas.get(clave);
     if (previa) {

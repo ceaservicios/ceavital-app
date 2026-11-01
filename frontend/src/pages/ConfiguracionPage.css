@@ -304,6 +304,58 @@
   box-shadow: none;
 }
 
+/* ---------- Combos (2026-11-01): precio al lado del nombre y, en cada producto, forma y cantidad ---------- */
+.combo-precio-campo {
+  display: flex;
+  flex: 0 0 150px;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.combo-precio-campo input {
+  width: 100%;
+}
+.combo-sugerencia {
+  flex-wrap: wrap;
+}
+.combo-sugerencia .promo-sugerencia-texto {
+  min-width: 160px;
+}
+.combo-sugerencia-controles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.promo-sumar .combo-control,
+.combo-control {
+  width: auto;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-control);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+.promo-sumar .combo-control-cantidad {
+  width: 72px;
+  text-align: right;
+}
+.combo-control:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+.combo-forma-unica,
+.combo-unidad {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
 /* Tablet vertical y celular: la descripción va arriba de los controles. */
 @media (max-width: 900px) {
   .config-seccion {
@@ -334,5 +386,15 @@
   }
   .config-catalogo-fila .config-catalogo-botones {
     margin-left: auto;
+  }
+  /* Combos: el nombre arriba y, abajo, el precio con el botón. */
+  .config-catalogo-nuevo:has(.combo-precio-campo) {
+    flex-wrap: wrap;
+  }
+  .config-catalogo-nuevo:has(.combo-precio-campo) > input {
+    flex-basis: 100%;
+  }
+  .combo-precio-campo {
+    flex: 1 1 120px;
   }
 }

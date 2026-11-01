@@ -5,6 +5,7 @@ import Hero from '../components/Hero.jsx';
 import Pestanas from '../components/Pestanas.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { COLOR, colorDe } from '../utils/colores.js';
+import SeccionCombos from './ConfiguracionCombos.jsx';
 import SeccionPromociones from './ConfiguracionPromociones.jsx';
 import './ConfiguracionPage.css';
 
@@ -396,7 +397,8 @@ const SECCIONES = [
     endpoint: '/condiciones-pago',
     singular: 'condición de pago',
   },
-  // Grupos de promoción (2026-11-01): tienen su propia sección (ConfiguracionPromociones.jsx).
+  // Combos y grupos de promoción (2026-11-01): sus propias secciones (ConfiguracionCombos.jsx y
+  // ConfiguracionPromociones.jsx).
   { clave: 'promociones', texto: 'Promociones', icono: 'rayo', color: COLOR.naranja },
 ];
 
@@ -446,7 +448,10 @@ export default function ConfiguracionPage() {
           <SeccionStockEn />
         </>
       ) : seccion.clave === 'promociones' ? (
-        <SeccionPromociones />
+        <>
+          <SeccionCombos />
+          <SeccionPromociones />
+        </>
       ) : (
         <SeccionCatalogo
           key={seccion.clave}

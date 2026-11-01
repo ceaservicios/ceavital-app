@@ -7,8 +7,10 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { COLOR_MEDIO, COLOR_MEDIO_CLARO, ICONO_MEDIO, colorDe } from '../utils/colores.js';
 import { formatearMonto, fechaHoyISO } from '../utils/format.js';
 import {
+  aplicarCombos,
   claveDeSuma,
   cuentasPorGrupo,
+  describirItemCombo,
   describirStockLargo,
   esFraccionable,
   etiquetaPack,
@@ -172,6 +174,8 @@ export default function CajaPage() {
   // Filtros por categoría y proveedor (pedido del usuario, 2026-10-30): con uno elegido, la lista
   // muestra sus productos sin escribir nada. Los ven los tres roles.
   const [catalogo, setCatalogo] = useState([]);
+  // Combos vigentes (2026-11-01): se aplican solos cuando el carrito tiene todo lo de uno.
+  const [combos, setCombos] = useState([]);
   const [filtroCategoria, setFiltroCategoria] = useState('');
   const [filtroProveedor, setFiltroProveedor] = useState('');
   const hayFiltro = Boolean(filtroCategoria || filtroProveedor);
@@ -226,6 +230,18 @@ export default function CajaPage() {
       .then((data) => setCatalogo(data.productos))
       .catch(() => setCatalogo([])); // sin opciones no se muestran los filtros; la búsqueda sigue
   }, []);
+  // Se vuelven a pedir después de cada venta, por si el Administrador cambió alguno. El que cobra es
+  // el servidor: si no coinciden, la venta sale con el total real.
+  const cargarCombos = useCallback(() => {
+    api
+      .get('/combos')
+      .then((data) => setCombos(data.items.filter((c) => c.vigente)))
+      .catch(() => setCombos([]));
+  }, []);
+  useEffect(() => {
+    cargarCombos();
+  }, [cargarCombos]);
+
   const opcionesCategoria = useMemo(() => nombresDe(catalogo, 'categoria'), [catalogo]);
   const opcionesProveedor = useMemo(() => nombresDe(catalogo, 'proveedor'), [catalogo]);
 
@@ -485,16 +501,32 @@ export default function CajaPage() {
     setCarrito((prev) => prev.filter((item) => item.clave !== clave));
   }
 
-  // Grupos de promoción (2026-11-01): para el precio por cantidad cuenta todo el grupo del carrito.
-  const cuentas = cuentasPorGrupo(carrito);
-  const cuentaDe = (item) => cuentas.get(claveDeSuma(item.producto, item.presentacion)) ?? item.cantidad;
-  const precioDe = (item) => precioLinea(item.producto, item.cantidad, item.presentacion, cuentaDe(item));
+  // Combos (2026-11-01): primero sale lo que entra en un combo, a su precio; lo que queda de cada
+  // línea (`resto`) se cobra como siempre. Igual que el servidor (aplicarCombos).
+  const { aplicados: combosAplicados, resto } = aplicarCombos(carrito, combos);
+  const cobradaSuelta = new Map(resto.map((item) => [item.clave, item.cantidad]));
+  const cantidadSuelta = (item) => cobradaSuelta.get(item.clave) ?? 0;
+  // De cada línea, qué combos se llevaron una parte: clave → [{ nombre, cantidad }].
+  const enCombos = new Map();
+  for (const { combo, veces } of combosAplicados) {
+    for (const ci of combo.items) {
+      const clave = `${ci.producto_id}:${ci.presentacion}`;
+      enCombos.set(clave, [...(enCombos.get(clave) ?? []), { nombre: combo.nombre, cantidad: ci.cantidad * veces }]);
+    }
+  }
+  // Grupos de promoción (2026-11-01): para el precio por cantidad cuenta todo el grupo del carrito,
+  // sin lo que entró en combos.
+  const cuentas = cuentasPorGrupo(resto);
+  const cuentaDe = (item) => cuentas.get(claveDeSuma(item.producto, item.presentacion)) ?? cantidadSuelta(item);
+  const precioDe = (item) => precioLinea(item.producto, cantidadSuelta(item), item.presentacion, cuentaDe(item));
   // Unidades pedidas de cada producto, sumando sus líneas por unidad y por pack.
   const unidadesPorProducto = carrito.reduce((mapa, item) => {
     const unidades = unidadesDeLinea(item.producto, item.cantidad, item.presentacion);
     return mapa.set(item.producto_id, (mapa.get(item.producto_id) ?? 0) + unidades);
   }, new Map());
-  const total = carrito.reduce((acc, item) => acc + subtotalLinea(item.producto, item.cantidad, item.presentacion, cuentaDe(item)), 0);
+  const total =
+    resto.reduce((acc, item) => acc + subtotalLinea(item.producto, item.cantidad, item.presentacion, cuentaDe(item)), 0) +
+    combosAplicados.reduce((acc, { combo, veces }) => acc + combo.precio * veces, 0);
   // Un producto pesado cuenta como 1 artículo; sin peso, la venta no se puede cobrar.
   const articulos = carrito.reduce((acc, item) => acc + (esLineaPorPeso(item) ? (item.cantidad > 0 ? 1 : 0) : item.cantidad), 0);
   const faltaPeso = carrito.some((item) => esLineaPorPeso(item) && !(item.cantidad > 0));
@@ -566,6 +598,7 @@ export default function CajaPage() {
       setVariosMedios(false);
       setMontos({});
       cargarVentasHoy();
+      cargarCombos();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo registrar la venta. Probá de nuevo.');
     } finally {
@@ -977,6 +1010,9 @@ export default function CajaPage() {
               </div>
               {carrito.map((item) => {
                 const { precio, aplicaPrecioCantidad } = precioDe(item);
+                // Lo que se cobra suelto (sin lo que entró en combos) y los combos que se llevaron una parte.
+                const suelta = cantidadSuelta(item);
+                const combosDeLinea = enCombos.get(item.clave) ?? [];
                 const porPack = item.presentacion === 'pack';
                 const porPeso = esLineaPorPeso(item);
                 const medida = item.producto.medida;
@@ -1015,13 +1051,19 @@ export default function CajaPage() {
                         </span>
                       )}
                       {porPeso && !(item.cantidad > 0) && <span className="caja-cart-warning">Ingresá el peso</span>}
-                      {aplicaPrecioCantidad && (
+                      {combosDeLinea.map((c) => (
+                        <span className="caja-cart-promo" key={c.nombre}>
+                          {cantidadTexto(c.cantidad)} en el combo {c.nombre}
+                        </span>
+                      ))}
+                      {suelta > 0 && aplicaPrecioCantidad && (
                         <span className="caja-cart-promo">
                           Precio por cantidad (desde {cantidadTexto(precioCantidadDe(item.producto, item.presentacion).desde)}
                           {grupo && ` · ${grupo}`})
                         </span>
                       )}
-                      {!aplicaPrecioCantidad &&
+                      {suelta > 0 &&
+                        !aplicaPrecioCantidad &&
                         tienePrecioCantidad(item.producto, item.presentacion) &&
                         faltan <= (porPack ? 5 : 5 * factorMedida(medida)) && (
                         <span className="caja-cart-promo-hint">
@@ -1064,12 +1106,19 @@ export default function CajaPage() {
                       </span>
                     )}
                   </span>
-                  <span style={{ flex: 1, textAlign: 'right' }} className="caja-cart-precio">
-                    {formatearMonto(precio)}
-                    {!porPack && sufijoPrecio(medida)}
+                  {/* Si toda la línea entró en combos, su precio va en la fila del combo. */}
+                  <span style={{ flex: 1, textAlign: 'right' }} className={`caja-cart-precio${suelta > 0 ? '' : ' vacio'}`}>
+                    {suelta > 0 && (
+                      <>
+                        {formatearMonto(precio)}
+                        {!porPack && sufijoPrecio(medida)}
+                      </>
+                    )}
                   </span>
                   <span style={{ flex: 1, textAlign: 'right' }} className="caja-cart-subtotal">
-                    {formatearMonto(subtotalLinea(item.producto, item.cantidad, item.presentacion, cuentaDe(item)))}
+                    {suelta > 0 || combosDeLinea.length === 0
+                      ? formatearMonto(subtotalLinea(item.producto, suelta, item.presentacion, cuentaDe(item)))
+                      : 'En combo'}
                   </span>
                   <span style={{ width: 32, display: 'flex', justifyContent: 'center' }} className="caja-cart-quitar">
                     <button
@@ -1088,6 +1137,30 @@ export default function CajaPage() {
                 </div>
                 );
               })}
+              {/* Combos aplicados (2026-11-01): una fila por combo, con lo que lleva y su precio. */}
+              {combosAplicados.map(({ combo, veces }) => (
+                <div className="caja-cart-row caja-cart-row-combo" key={`combo-${combo.id}`}>
+                  <span style={{ flex: 2.4 }} className="caja-cart-nombre">
+                    <IconoFila icono="rayo" color={colorDe(combo.id)} />
+                    <span className="caja-cart-nombre-col">
+                      <span className="caja-cart-nombre-texto">Combo {combo.nombre}</span>
+                      <span className="caja-cart-promo-hint">
+                        {combo.items.map((ci) => `${describirItemCombo(ci)} ${ci.producto_nombre}`).join(' + ')}
+                      </span>
+                    </span>
+                  </span>
+                  <span style={{ flex: 1.2 }} className="caja-cart-cantidad caja-cart-combo-veces">
+                    {veces} {veces === 1 ? 'combo' : 'combos'}
+                  </span>
+                  <span style={{ flex: 1, textAlign: 'right' }} className="caja-cart-precio">
+                    {formatearMonto(combo.precio)}
+                  </span>
+                  <span style={{ flex: 1, textAlign: 'right' }} className="caja-cart-subtotal">
+                    {formatearMonto(combo.precio * veces)}
+                  </span>
+                  <span style={{ width: 32 }} className="caja-cart-quitar" />
+                </div>
+              ))}
             </>
           )}
         </div>

@@ -4,7 +4,16 @@ import { existeClienteActivo, registrarAjustePorAnulacion, registrarCargoPorVent
 import { stockDisponible } from './reservas.service.js';
 import { esDiaValido, sqlDiaNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
 import { mediosPagoPermitidos } from './modulos.service.js';
-import { armarLineas, COLUMNAS_PRESENTACION, describirCantidad, juntarLineas, validarPresentacion } from './presentacion.js';
+import {
+  aplicarCombos,
+  armarLineas,
+  COLUMNAS_PRESENTACION,
+  describirCantidad,
+  juntarLineas,
+  lineasDeCombo,
+  validarPresentacion,
+} from './presentacion.js';
+import { combosVigentes } from './combos.service.js';
 
 // 'cta_cte' (B2B Fase 1) es distinto de 'fiado' -- 'fiado' sigue siendo la
 // venta fiada informal, sin cliente ni ledger (decisión confirmada con el
@@ -290,6 +299,10 @@ async function validarClienteEmpresa(medioPago, clienteEmpresaId) {
 //
 // Varios medios (2026-11-01): con `pagos` en vez de `medio_pago`, la venta queda 'mixto' y cada parte
 // en venta_pagos. Las partes tienen que sumar el total que calcula el servidor.
+//
+// Combos (2026-11-01, solo Caja): antes de ponerle precio a las líneas se saca lo que entra en los
+// combos vigentes (aplicarCombos); eso va en líneas propias con el precio del combo repartido y el
+// resto se cobra como siempre. Al aprobar un pedido (lineasCongeladas) no se aplican.
 export async function registrarVentaEnTransaccion(
   { medio_pago, pagos, items, cliente_empresa_id },
   { usuarioId, pedidoId = null, lineasCongeladas = null }
@@ -309,8 +322,14 @@ export async function registrarVentaEnTransaccion(
     for (const item of validados) {
       if (!productos.has(item.producto_id)) productos.set(item.producto_id, await obtenerProductoActivo(item.producto_id));
     }
-    for (const linea of armarLineas(validados, productos)) {
+    const { aplicados, resto } = aplicarCombos(validados, await combosVigentes());
+    for (const linea of armarLineas(resto, productos)) {
       lineas.push({ ...linea, producto: productos.get(linea.producto_id) });
+    }
+    for (const { combo, veces } of aplicados) {
+      for (const linea of lineasDeCombo(combo, veces, productos)) {
+        lineas.push({ ...linea, producto: productos.get(linea.producto_id) });
+      }
     }
   }
 
@@ -354,12 +373,13 @@ export async function registrarVentaEnTransaccion(
         .prepare(
           `INSERT INTO venta_items
              (venta_id, producto_id, lote_id, cantidad, precio_unitario, subtotal, pack_nombre, pack_unidades,
-              precio_cantidad_desde, precio_cantidad_grupo)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+              precio_cantidad_desde, precio_cantidad_grupo, combo_id, combo_nombre)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           ventaId, producto_id, lote.id, tomar, linea.precio_unitario, subtotal,
-          linea.pack_nombre, linea.pack_unidades, linea.precio_cantidad_desde, linea.precio_cantidad_grupo ?? null
+          linea.pack_nombre, linea.pack_unidades, linea.precio_cantidad_desde, linea.precio_cantidad_grupo ?? null,
+          linea.combo_id ?? null, linea.combo_nombre ?? null
         );
 
       total += subtotal;

@@ -148,6 +148,35 @@ const CATALOGO = {
     titulo: 'Sacó un producto de un grupo de promoción',
     detalle: (d) => `${d.producto} · ${d.grupo}`,
   },
+  // Combos (2026-11-01): productos con su forma y cantidad a un precio total, en Caja.
+  'combo-creado': { categoria: 'instalacion', titulo: 'Creó un combo', detalle: (d) => `${d.combo} · ${pesos(d.precio)}` },
+  'combo-editado': {
+    categoria: 'instalacion',
+    titulo: 'Cambió un combo',
+    detalle: (d) =>
+      [
+        d.anterior.nombre !== d.combo.nombre && `${d.anterior.nombre} → ${d.combo.nombre}`,
+        d.anterior.precio !== d.combo.precio && `${pesos(d.anterior.precio)} → ${pesos(d.combo.precio)}`,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+  },
+  'combo-eliminado': { categoria: 'instalacion', titulo: 'Eliminó un combo', detalle: (d) => d.combo },
+  'combo-producto-agregado': {
+    categoria: 'instalacion',
+    titulo: 'Sumó un producto a un combo',
+    detalle: (d) => `${d.lleva} de ${d.producto} → ${d.combo}`,
+  },
+  'combo-producto-cambiado': {
+    categoria: 'instalacion',
+    titulo: 'Cambió la cantidad de un producto en un combo',
+    detalle: (d) => `${d.producto} · ${d.antes} → ${d.lleva} · ${d.combo}`,
+  },
+  'combo-producto-sacado': {
+    categoria: 'instalacion',
+    titulo: 'Sacó un producto de un combo',
+    detalle: (d) => `${d.lleva} de ${d.producto} · ${d.combo}`,
+  },
   'plan-cambiado': { categoria: 'instalacion', titulo: 'Cambió el plan', detalle: (d) => `${d.de} → ${d.a}` },
   'instalacion-suspendida': {
     categoria: 'instalacion',

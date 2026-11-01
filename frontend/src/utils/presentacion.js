@@ -143,6 +143,53 @@ export function subtotalLinea(producto, cantidad, presentacion, cuenta = cantida
   return Math.round((cantidad * precio) / factorMedida(producto.medida));
 }
 
+// Combos (2026-11-01): productos con su forma (suelto o su pack) y su cantidad, a un precio total.
+// La misma regla que el servidor (src/services/presentacion.js → aplicarCombos), que es el que cobra.
+
+const claveDeLinea = (productoId, presentacion) => `${productoId}:${presentacion}`;
+
+/**
+ * Saca de las líneas [{ producto_id, presentacion, cantidad, ... }] lo que entra en combos: cada
+ * combo, en orden, las veces que entre completo con lo que va quedando. Devuelve { aplicados:
+ * [{ combo, veces }], resto }: `resto`, las mismas líneas con lo que no entró (sin las que quedaron
+ * en 0), que se cobran como siempre.
+ */
+export function aplicarCombos(lineas, combos) {
+  const quedan = new Map(lineas.map((l) => [claveDeLinea(l.producto_id, l.presentacion), Number(l.cantidad) || 0]));
+  const aplicados = [];
+  for (const combo of combos) {
+    if (combo.items.length === 0) continue;
+    const veces = Math.min(
+      ...combo.items.map((ci) => Math.floor((quedan.get(claveDeLinea(ci.producto_id, ci.presentacion)) ?? 0) / ci.cantidad))
+    );
+    if (!(veces >= 1)) continue;
+    for (const ci of combo.items) {
+      const clave = claveDeLinea(ci.producto_id, ci.presentacion);
+      quedan.set(clave, quedan.get(clave) - veces * ci.cantidad);
+    }
+    aplicados.push({ combo, veces });
+  }
+  const resto = lineas
+    .map((l) => ({ ...l, cantidad: quedan.get(claveDeLinea(l.producto_id, l.presentacion)) }))
+    .filter((l) => l.cantidad > 0);
+  return { aplicados, resto };
+}
+
+/** Lo que lleva un combo de un producto: "2", "0,5 kg", "1 Caja x 12". `item` trae los datos del producto. */
+export function describirItemCombo(item) {
+  if (item.presentacion === 'pack') return `${item.cantidad} ${etiquetaPack(item.pack_nombre, item.pack_unidades, item.medida)}`;
+  return formatearCantidad(item.cantidad, item.medida, { corta: true });
+}
+
+/** Cuánto sale lo del combo por separado, a precio normal (sin precio por cantidad). */
+export function precioNormalCombo(items) {
+  return items.reduce(
+    (acc, i) =>
+      acc + (i.presentacion === 'pack' ? i.cantidad * (i.precio_pack ?? 0) : Math.round((i.cantidad * (i.precio_venta ?? 0)) / factorMedida(i.medida))),
+    0
+  );
+}
+
 /** Cuánto falta para el precio por cantidad (0 si ya llegó o no tiene): en la medida chica, o en packs. */
 export function faltanParaPrecioCantidad(producto, cuenta, presentacion = 'unidad') {
   if (!tienePrecioCantidad(producto, presentacion)) return 0;

@@ -656,6 +656,14 @@ export async function pasarAPack(id, datos, { rol }) {
          WHERE producto_id = ? AND pack_nombre IS NULL`
       )
       .run(n, packNombre, n, id);
+    // Combos (migración 036): lo que llevaban "suelto" eran cajas, así que pasan a la misma cantidad
+    // de packs. No puede haber ya una fila por pack: el producto no tenía.
+    await db
+      .prepare(
+        `UPDATE combo_items SET presentacion = 'pack', actualizado_en = CURRENT_TIMESTAMP
+         WHERE producto_id = ? AND presentacion = 'unidad' AND eliminado_en IS NULL`
+      )
+      .run(id);
     await db
       .prepare(
         `UPDATE productos SET unidad_medida_id = ?, codigo_barras = ?, precio_venta = ?, precio_costo = ?,

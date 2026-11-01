@@ -470,6 +470,15 @@ button.caja-search-item:hover {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+/* Combos aplicados (2026-11-01): su fila va al final del carrito, con un fondo verde claro. */
+.caja-cart-row-combo {
+  background: var(--ok-bg);
+}
+.caja-cart-combo-veces {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ok-ink);
+}
 .caja-cart-remove {
   width: 32px;
   height: 32px;
@@ -897,6 +906,10 @@ button.caja-search-item:hover {
   .caja-cart-precio::before {
     content: '× ';
     color: var(--text-muted);
+  }
+  /* Línea que entró entera en un combo: sin precio propio. */
+  .caja-cart-precio.vacio::before {
+    content: none;
   }
   .caja-cart-subtotal {
     grid-area: subtotal;

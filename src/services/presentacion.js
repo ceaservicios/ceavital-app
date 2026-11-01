@@ -11,6 +11,7 @@ import { ApiError } from '../utils/api-error.js';
 // - Grupos de promocion (2026-11-01, migracion 035): los productos de un mismo grupo suman juntos
 //   para llegar, sueltos con sueltos y packs con packs (decision del usuario); sin grupo cuenta solo
 //   ese producto. Cada producto usa su propio "desde" y su precio contra el total del grupo.
+// - Combos (2026-11-01, migracion 036): ver aplicarCombos y lineasDeCombo, mas abajo.
 
 export const PRESENTACIONES = ['unidad', 'pack'];
 
@@ -128,6 +129,76 @@ export function armarLineas(items, productos) {
   return items.map((item) => {
     const producto = productos.get(item.producto_id);
     return armarLinea(producto, item, cuentas.get(claveDeSuma(producto, item.presentacion)));
+  });
+}
+
+// Combos (2026-11-01, migracion 036): un conjunto fijo de productos, cada uno con su forma (suelto o
+// su pack) y su cantidad, con un precio total. Solo Caja. La misma regla esta en
+// frontend/src/utils/presentacion.js, para mostrar el total antes de cobrar.
+
+const claveDeLinea = (productoId, presentacion) => `${productoId}:${presentacion}`;
+
+/**
+ * Saca de las lineas lo que entra en combos: cada combo, en orden, las veces que entre completo con
+ * lo que va quedando. `items`: lineas juntadas [{ producto_id, presentacion, cantidad }]; `combos`:
+ * [{ id, nombre, precio, items: [{ producto_id, presentacion, cantidad }] }], ordenados por id.
+ * Devuelve { aplicados: [{ combo, veces }], resto }: `resto` son las lineas con lo que no entro en
+ * ningun combo (sin las que quedaron en 0), que se cobran como siempre (armarLineas).
+ */
+export function aplicarCombos(items, combos) {
+  const quedan = new Map(items.map((i) => [claveDeLinea(i.producto_id, i.presentacion), i.cantidad]));
+  const aplicados = [];
+  for (const combo of combos) {
+    if (combo.items.length === 0) continue;
+    const veces = Math.min(
+      ...combo.items.map((ci) => Math.floor((quedan.get(claveDeLinea(ci.producto_id, ci.presentacion)) ?? 0) / ci.cantidad))
+    );
+    if (!(veces >= 1)) continue;
+    for (const ci of combo.items) {
+      const clave = claveDeLinea(ci.producto_id, ci.presentacion);
+      quedan.set(clave, quedan.get(clave) - veces * ci.cantidad);
+    }
+    aplicados.push({ combo, veces });
+  }
+  const resto = items
+    .map((i) => ({ ...i, cantidad: quedan.get(claveDeLinea(i.producto_id, i.presentacion)) }))
+    .filter((i) => i.cantidad > 0);
+  return { aplicados, resto };
+}
+
+/**
+ * Las lineas de un combo cobrado `veces` veces: cada producto con su cantidad, y el precio del combo
+ * repartido entre ellos en proporcion a su precio normal, redondeando sobre lo acumulado (asi suman
+ * justo el precio del combo). Sin precio por cantidad; guardan el combo y una copia de su nombre.
+ * `productos`: Map producto_id -> fila con COLUMNAS_PRESENTACION.
+ */
+export function lineasDeCombo(combo, veces, productos) {
+  const partes = combo.items.map((ci) => {
+    const producto = productos.get(ci.producto_id);
+    const cantidad = ci.cantidad * veces;
+    // Con cuenta 0 nunca llega al precio por cantidad: da el precio normal, que se usa para repartir.
+    return { producto, cantidad, presentacion: ci.presentacion, linea: armarLinea(producto, { cantidad, presentacion: ci.presentacion }, 0) };
+  });
+  const total = combo.precio * veces;
+  const sumaNormal = partes.reduce((acc, p) => acc + p.linea.subtotal, 0);
+  let acumulado = 0;
+  let asignado = 0;
+  return partes.map(({ producto, cantidad, presentacion, linea }) => {
+    acumulado += sumaNormal > 0 ? linea.subtotal : 1;
+    const subtotal = Math.round((total * acumulado) / (sumaNormal > 0 ? sumaNormal : partes.length)) - asignado;
+    asignado += subtotal;
+    // Precio de referencia de la linea: por pack, por unidad, o por kg/litro.
+    const precio =
+      presentacion === 'pack' ? Math.round(subtotal / cantidad) : Math.round((subtotal * factorMedida(producto.medida)) / cantidad);
+    return {
+      ...linea,
+      precio_unitario: precio,
+      precio_cantidad_desde: null,
+      precio_cantidad_grupo: null,
+      subtotal,
+      combo_id: combo.id,
+      combo_nombre: combo.nombre,
+    };
   });
 }
 

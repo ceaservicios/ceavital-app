@@ -35,21 +35,23 @@ function Grupo({ grupo, productos, nombreDeGrupo, ocupado, onAccion }) {
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
   const [busqueda, setBusqueda] = useState('');
 
-  // Para sumar: los que tienen precio por cantidad, no están ya en este grupo y se miden igual que
-  // los del grupo (un kg no suma con una unidad; el servidor también lo controla).
+  // Al tipear aparecen todos los que coinciden y no están ya en este grupo (pedido del usuario,
+  // 2026-11-01: "si voy tipeando debe traer los productos que coinciden"). Solo se suman los que
+  // tienen precio por cantidad y se miden igual que los del grupo (un kg no suma con una unidad; el
+  // servidor también lo controla); los demás dicen por qué.
   const medida = grupo.productos[0]?.medida ?? null;
   const texto = busqueda.trim().toLowerCase();
   const sugerencias = texto
     ? productos
-        .filter(
-          (p) =>
-            tienePrecioPorCantidad(p) &&
-            p.grupo_promocion_id !== grupo.id &&
-            (!medida || p.medida === medida) &&
-            p.nombre.toLowerCase().includes(texto)
-        )
+        .filter((p) => p.grupo_promocion_id !== grupo.id && p.nombre.toLowerCase().includes(texto))
         .slice(0, MAX_SUGERENCIAS)
     : [];
+  const porQueNo = (p) =>
+    !tienePrecioPorCantidad(p)
+      ? 'No tiene precio por cantidad: cargalo en su ficha (Stock) y después sumalo.'
+      : medida && p.medida !== medida
+        ? 'Se mide distinto que los productos del grupo.'
+        : null;
   const n = grupo.productos.length;
 
   return (
@@ -165,30 +167,39 @@ function Grupo({ grupo, productos, nombreDeGrupo, ocupado, onAccion }) {
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
         />
-        {texto && sugerencias.length === 0 && (
-          <span className="promo-sumar-ayuda">Sin productos con precio por cantidad que coincidan.</span>
-        )}
-        {sugerencias.map((p) => (
-          <div className="promo-sugerencia" key={p.id}>
-            <span className="promo-sugerencia-texto">
-              <strong>{p.nombre}</strong>
-              <span>
-                {[preciosPorCantidad(p), p.grupo_promocion_id && `hoy en ${nombreDeGrupo(p.grupo_promocion_id)}`].filter(Boolean).join(' · ')}
+        {texto && sugerencias.length === 0 && <span className="promo-sumar-ayuda">No hay productos que coincidan.</span>}
+        {sugerencias.map((p) => {
+          const motivo = porQueNo(p);
+          return (
+            <div className="promo-sugerencia" key={p.id}>
+              <span className="promo-sugerencia-texto">
+                <strong>{p.nombre}</strong>
+                {motivo ? (
+                  <span className="promo-aviso">{motivo}</span>
+                ) : (
+                  <span>
+                    {[preciosPorCantidad(p), p.grupo_promocion_id && `hoy en ${nombreDeGrupo(p.grupo_promocion_id)}`]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                )}
               </span>
-            </span>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={ocupado}
-              onClick={() => onAccion(() => api.put(`/grupos-promocion/${grupo.id}/productos/${p.id}`), () => setBusqueda(''))}
-            >
-              Sumar
-            </button>
-          </div>
-        ))}
+              {!motivo && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={ocupado}
+                  onClick={() => onAccion(() => api.put(`/grupos-promocion/${grupo.id}/productos/${p.id}`), () => setBusqueda(''))}
+                >
+                  Sumar
+                </button>
+              )}
+            </div>
+          );
+        })}
         {!texto && (
           <span className="promo-sumar-ayuda">
-            Solo aparecen los productos con precio por cantidad{medida ? ' que se miden igual que los del grupo' : ''}. Si ya está en
+            Se suman los productos con precio por cantidad{medida ? ' que se miden igual que los del grupo' : ''}. Si ya está en
             otro grupo, pasa a este.
           </span>
         )}
