@@ -504,11 +504,12 @@
   white-space: nowrap;
 }
 /* Productos del combo (2026-11-01, maqueta aprobada): uno por fila, con su forma, su cantidad, su
-   precio en la promo y el subtotal. Columnas fijas (salvo el producto) para que queden alineadas
-   entre filas; entran desde 1280 px de ancho y, si no, la tabla se corre de costado. */
+   precio normal, su precio en la promo y el subtotal, una línea por celda. Columnas fijas (salvo el
+   producto) para que queden alineadas entre filas; entran desde 1366 px de ancho y, si no, la tabla
+   se corre de costado. */
 .promo-fila-combo {
-  grid-template-columns: minmax(140px, 1fr) 140px 145px 120px 95px 146px;
-  min-width: 870px;
+  grid-template-columns: minmax(140px, 1fr) 140px 145px 95px 115px 95px 146px;
+  min-width: 950px;
 }
 .combo-monto {
   display: flex;
@@ -529,11 +530,15 @@
   font-weight: 500;
   color: var(--text-tertiary);
 }
+.combo-normal {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
 .combo-subtotal {
   font-weight: 700;
   color: var(--text-primary);
 }
-/* Precio en la promo, editable en la fila: "$" y el campo, con "por unidad" y el normal abajo. */
+/* Precio en la promo, editable en la fila: "$" y el campo. */
 .combo-precio-fila {
   display: flex;
   align-items: center;
@@ -654,7 +659,7 @@
   .promo-fila-grupo {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
-  /* En el celular cada producto del combo va en dos columnas, sin correrse; el subtotal dice qué es. */
+  /* En el celular cada producto del combo va en dos columnas, sin correrse; cada precio dice qué es. */
   .promo-fila-combo {
     min-width: 0;
   }
@@ -662,11 +667,21 @@
     align-items: flex-start;
     text-align: left;
   }
+  .combo-normal::before,
+  .combo-promo::before,
   .combo-subtotal::before {
-    content: "Subtotal";
     font-size: 12px;
     font-weight: 500;
     color: var(--text-tertiary);
+  }
+  .combo-normal::before {
+    content: "Precio normal";
+  }
+  .combo-promo::before {
+    content: "Precio en la promo";
+  }
+  .combo-subtotal::before {
+    content: "Subtotal";
   }
   .combo-precio-final {
     align-self: stretch;

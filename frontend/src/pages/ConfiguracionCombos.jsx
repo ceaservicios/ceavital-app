@@ -10,6 +10,7 @@ import {
   porMedida,
   precioNormalCombo,
   simboloMedida,
+  sufijoPrecio,
   textoDeCantidad,
   tienePack,
   vendeSuelto,
@@ -143,7 +144,12 @@ function FilaProducto({ renglon, combo, ocupado, onAccion }) {
         onTexto={setCantidadTexto}
         etiqueta={`Cantidad de ${producto.producto_nombre}`}
       />
-      <span className="combo-monto">
+      {/* Una línea por celda (pedido del usuario: "que quede la fila simétricamente bien"): la forma ya
+          la dice "Se vende por"; en kg o litro el precio normal lleva "/kg" o "/L". */}
+      <span className="combo-monto combo-normal">
+        {normal != null ? `${formatearMonto(normal)}${presentacion === 'pack' ? '' : sufijoPrecio(medida)}` : '—'}
+      </span>
+      <span className="combo-monto combo-promo">
         <span className="combo-precio-fila">
           $
           <input
@@ -154,8 +160,6 @@ function FilaProducto({ renglon, combo, ocupado, onAccion }) {
             onChange={(e) => setPrecios((p) => ({ ...p, [presentacion]: soloDigitos(e.target.value) }))}
           />
         </span>
-        <span className="combo-monto-por">{porCadaForma(producto, presentacion)}</span>
-        {normal != null && <span className="combo-monto-por">normal {formatearMonto(normal)}</span>}
       </span>
       <span className="combo-monto combo-subtotal">{subtotal != null ? formatearMonto(subtotal) : '—'}</span>
       <span className="promo-fila-acciones">
@@ -343,6 +347,7 @@ function Combo({ combo, productos, abierta, onAlternar, ocupado, onAccion }) {
             <span>Producto</span>
             <span>Se vende por</span>
             <span>Cantidad</span>
+            <span className="combo-monto">Precio normal</span>
             <span className="combo-monto">Precio en la promo</span>
             <span className="combo-monto">Subtotal</span>
             <span />
