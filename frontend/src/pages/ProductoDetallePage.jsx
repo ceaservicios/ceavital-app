@@ -402,6 +402,13 @@ export default function ProductoDetallePage() {
               medidaBloqueada={detalle.lotes.length > 0 ? 'No se puede cambiar: el producto ya tiene lotes cargados.' : null}
             />
           )}
+          {/* Grupo de promoción (2026-11-01): se arma en Configuración → Promociones, solo el Admin. */}
+          {detalle.grupo_promocion && (
+            <span className="stock-hint">
+              Grupo de promoción: <strong>{detalle.grupo_promocion}</strong>. Suma con los otros productos del grupo para llegar al
+              precio por cantidad{esAdmin ? '; se cambia en Configuración → Promociones' : ''}.
+            </span>
+          )}
         </section>
 
         {puedeEditar && (

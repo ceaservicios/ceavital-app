@@ -4,6 +4,8 @@ import { IconoFila } from '../components/ConAvatar.jsx';
 import { colorDe } from '../utils/colores.js';
 import { formatearMonto } from '../utils/format.js';
 import {
+  claveDeSuma,
+  cuentasPorGrupo,
   esFraccionable,
   etiquetaPack,
   formatearCantidad,
@@ -137,7 +139,12 @@ export default function PortalComprar({ onSesionVencida, onPedidoEnviado }) {
       .filter((presentacion) => cantidadDe(p, presentacion) > 0)
       .map((presentacion) => ({ producto: p, presentacion, cantidad: cantidadDe(p, presentacion) }))
   );
-  const total = lineas.reduce((acc, l) => acc + subtotalLinea(l.producto, l.cantidad, l.presentacion), 0);
+  // Grupos de promoción (2026-11-01): el precio por cantidad mira el total del grupo en el pedido,
+  // igual que el servidor. Un producto que todavía no está en el pedido ya muestra el precio con
+  // que entraría.
+  const cuentas = cuentasPorGrupo(lineas);
+  const cuentaDe = (p, presentacion) => cuentas.get(claveDeSuma(p, presentacion)) ?? cantidadDe(p, presentacion);
+  const total = lineas.reduce((acc, l) => acc + subtotalLinea(l.producto, l.cantidad, l.presentacion, cuentaDe(l.producto, l.presentacion)), 0);
   const cantidadProductos = new Set(lineas.map((l) => l.producto.id)).size;
 
   function fijarCantidad(producto, presentacion, cantidad) {
@@ -246,21 +253,24 @@ export default function PortalComprar({ onSesionVencida, onPedidoEnviado }) {
                 `${formatearCantidad(p.stock_disponible, p.medida)} disponibles`
               );
               const meta = p.categoria;
+              // Con grupo de promoción: "sumando Gaseosas" (se cuentan juntos los productos del grupo).
+              const sumando = p.grupo_promocion ? ` sumando ${p.grupo_promocion}` : '';
               const precioCantidad = tienePrecioCantidad(p) && (
                 <span className="portal-prod-promo">
-                  Desde {formatearCantidad(p.precio_cantidad_desde, p.medida, { corta: true })}:{' '}
-                  {formatearMonto(p.precio_cantidad)}
+                  Desde {formatearCantidad(p.precio_cantidad_desde, p.medida, { corta: true })}
+                  {sumando}: {formatearMonto(p.precio_cantidad)}
                   {esFraccionable(p.medida) ? sufijoPrecio(p.medida) : ' c/u'}
                 </span>
               );
-              const precioSuelto = `${formatearMonto(precioLinea(p, cantidadDe(p, 'unidad'), 'unidad').precio)}${sufijoPrecio(p.medida)}`;
+              const precioSuelto = `${formatearMonto(precioLinea(p, cantidadDe(p, 'unidad'), 'unidad', cuentaDe(p, 'unidad')).precio)}${sufijoPrecio(p.medida)}`;
               // Precio por cantidad del pack (migración 020): desde N packs.
               const precioCantidadPack = tienePrecioCantidad(p, 'pack') && (
                 <span className="portal-prod-promo">
-                  Desde {p.pack_cantidad_desde} {plural(p.pack_nombre, p.pack_cantidad_desde)}: {formatearMonto(p.precio_pack_cantidad)} c/u
+                  Desde {p.pack_cantidad_desde} {plural(p.pack_nombre, p.pack_cantidad_desde)}
+                  {sumando}: {formatearMonto(p.precio_pack_cantidad)} c/u
                 </span>
               );
-              const precioPack = tienePack(p) ? formatearMonto(precioLinea(p, cantidadDe(p, 'pack'), 'pack').precio) : '';
+              const precioPack = tienePack(p) ? formatearMonto(precioLinea(p, cantidadDe(p, 'pack'), 'pack', cuentaDe(p, 'pack')).precio) : '';
               const formas = [vendeSuelto(p) && 'unidad', tienePack(p) && 'pack'].filter(Boolean);
               const etiquetaPackP = tienePack(p) ? etiquetaPack(p.pack_nombre, p.pack_unidades, p.medida) : '';
 

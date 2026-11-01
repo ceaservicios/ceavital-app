@@ -4,7 +4,7 @@ import { existeClienteActivo, registrarAjustePorAnulacion, registrarCargoPorVent
 import { stockDisponible } from './reservas.service.js';
 import { esDiaValido, sqlDiaNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
 import { mediosPagoPermitidos } from './modulos.service.js';
-import { armarLinea, COLUMNAS_PRESENTACION, describirCantidad, juntarLineas, validarPresentacion } from './presentacion.js';
+import { armarLineas, COLUMNAS_PRESENTACION, describirCantidad, juntarLineas, validarPresentacion } from './presentacion.js';
 
 // 'cta_cte' (B2B Fase 1) es distinto de 'fiado' -- 'fiado' sigue siendo la
 // venta fiada informal, sin cliente ni ledger (decisión confirmada con el
@@ -19,6 +19,47 @@ async function validarMedioPago(valor) {
   }
   return valor;
 }
+
+// Varios medios en una venta (pedido del usuario, 2026-11-01): la venta guarda 'mixto' y cada parte
+// va en venta_pagos (migración 034). Se reparte entre los medios que se cobran en el momento y Pago
+// pendiente (decisión del usuario); Cuenta corriente no, porque carga el total a la deuda del cliente.
+const MEDIOS_REPARTIBLES = ['efectivo', 'tarjeta', 'transferencia_qr', 'mercado_pago', 'fiado'];
+const MAX_MONTO = 1_000_000_000;
+
+const pesos = (n) => `$${n.toLocaleString('es-AR')}`;
+
+// Las partes llegan como [{ medio_pago, monto }]: dos o más medios distintos, cada uno con pesos
+// enteros. Que sumen el total se controla al registrar, cuando ya se sabe el total.
+function validarPagos(pagos) {
+  if (!Array.isArray(pagos) || pagos.length < 2) {
+    throw new ApiError(400, 'Para cobrar con varios medios cargá el monto de al menos dos.');
+  }
+  const vistos = new Set();
+  return pagos.map((pago, i) => {
+    const medio = pago?.medio_pago;
+    if (!MEDIOS_REPARTIBLES.includes(medio)) {
+      throw new ApiError(400, `pagos[${i}].medio_pago tiene que ser uno de: ${MEDIOS_REPARTIBLES.join(', ')}`);
+    }
+    if (vistos.has(medio)) throw new ApiError(400, 'Cada medio de pago va una sola vez.');
+    vistos.add(medio);
+    // Solo número o texto numérico: Number(true) vale 1 (ver caja.service.js).
+    if (typeof pago.monto !== 'number' && typeof pago.monto !== 'string') {
+      throw new ApiError(400, `pagos[${i}].monto tiene que ser un número entero`);
+    }
+    const monto = validarEntero(pago.monto, `pagos[${i}].monto`, { minimo: 1 });
+    if (monto > MAX_MONTO) throw new ApiError(400, `pagos[${i}].monto no puede superar ${pesos(MAX_MONTO)}`);
+    return { medio_pago: medio, monto };
+  });
+}
+
+// Las partes de cada venta, para sumar por medio (Cierre de caja y Ventas): la de un solo medio es
+// una parte por el total; la de varios, sus filas de venta_pagos. Va después de "FROM ventas v" y da
+// pago.medio y pago.monto.
+export const SQL_PARTES_DE_LA_VENTA = `JOIN LATERAL (
+    SELECT v.medio_pago AS medio, v.total AS monto WHERE v.medio_pago <> 'mixto'
+    UNION ALL
+    SELECT vp.medio_pago, vp.monto FROM venta_pagos vp WHERE vp.venta_id = v.id
+  ) pago ON TRUE`;
 
 function validarEntero(valor, campo, { minimo = null } = {}) {
   const n = Number(valor);
@@ -65,8 +106,16 @@ function lotesVendiblesFefo(productoId) {
     .all(productoId);
 }
 
+// `pagos`: las partes de una venta con varios medios ([{ medio_pago, monto }]); null en las de uno.
 async function obtenerVentaConItems(ventaId) {
-  const venta = await db.prepare('SELECT * FROM ventas WHERE id = ?').get(ventaId);
+  const venta = await db
+    .prepare(
+      `SELECT v.*,
+              (SELECT json_agg(json_build_object('medio_pago', vp.medio_pago, 'monto', vp.monto) ORDER BY vp.id)
+                 FROM venta_pagos vp WHERE vp.venta_id = v.id) AS pagos
+       FROM ventas v WHERE v.id = ?`
+    )
+    .get(ventaId);
   if (!venta) throw new ApiError(404, 'Venta no encontrada');
 
   const items = await db
@@ -97,7 +146,9 @@ export function listarVentas({ fecha } = {}) {
 // totales son siempre de las ventas registradas (las anuladas no suman, como en Caja y en el
 // cierre), aunque la lista muestre las anuladas. El cliente es el de Cuenta Corriente: las
 // demás ventas no guardan cliente (decisión del usuario).
-const MEDIOS_FILTRO = ['efectivo', 'tarjeta', 'transferencia_qr', 'mercado_pago', 'fiado', 'cta_cte'];
+// Una venta con varios medios (2026-11-01) suma cada parte en su medio, y aparece al filtrar por
+// cualquiera de ellos o por 'mixto'.
+const MEDIOS_FILTRO = ['efectivo', 'tarjeta', 'transferencia_qr', 'mercado_pago', 'fiado', 'cta_cte', 'mixto'];
 const ESTADOS_FILTRO = ['registrada', 'anulada', 'todas'];
 const TOPE_LISTADO = 1000;
 
@@ -126,9 +177,12 @@ export async function buscarVentas({ desde, hasta, medio_pago, cliente_empresa_i
   const params = [dia1, dia2];
   if (medio_pago) {
     if (!MEDIOS_FILTRO.includes(medio_pago)) throw new ApiError(400, `medio_pago tiene que ser uno de: ${MEDIOS_FILTRO.join(', ')}`);
-    condiciones.push('v.medio_pago = ?');
-    params.push(medio_pago);
+    condiciones.push('(v.medio_pago = ? OR EXISTS (SELECT 1 FROM venta_pagos vp WHERE vp.venta_id = v.id AND vp.medio_pago = ?))');
+    params.push(medio_pago, medio_pago);
   }
+  // Filtrando por un medio, los totales son solo lo cobrado por ese medio (de una venta con varios,
+  // su parte); con 'mixto', todas las partes de esas ventas.
+  const medioDeLaParte = medio_pago && medio_pago !== 'mixto' ? medio_pago : null;
   const clienteId = idFiltro(cliente_empresa_id, 'cliente_empresa_id');
   if (clienteId) {
     condiciones.push('v.cliente_empresa_id = ?');
@@ -159,13 +213,19 @@ export async function buscarVentas({ desde, hasta, medio_pago, cliente_empresa_i
 
   const porMedio = await db
     .prepare(
-      `SELECT v.medio_pago, COUNT(*) AS cantidad, COALESCE(SUM(v.total), 0) AS total
-       FROM ventas v WHERE ${filtros} AND v.estado = 'registrada'
-       GROUP BY v.medio_pago`
+      `SELECT pago.medio, COUNT(*) AS cantidad, COALESCE(SUM(pago.monto), 0) AS total
+       FROM ventas v ${SQL_PARTES_DE_LA_VENTA}
+       WHERE ${filtros} AND v.estado = 'registrada'${medioDeLaParte ? ' AND pago.medio = ?' : ''}
+       GROUP BY pago.medio`
     )
-    .all(...params);
-  const anuladas = await db
-    .prepare(`SELECT COUNT(*) AS cantidad FROM ventas v WHERE ${filtros} AND v.estado = 'anulada'`)
+    .all(...params, ...(medioDeLaParte ? [medioDeLaParte] : []));
+  // Los tickets se cuentan por venta: una con varios medios cuenta en cada uno, pero es un ticket.
+  const cuenta = await db
+    .prepare(
+      `SELECT COUNT(*) FILTER (WHERE v.estado = 'registrada') AS tickets,
+              COUNT(*) FILTER (WHERE v.estado = 'anulada') AS anuladas
+       FROM ventas v WHERE ${filtros}`
+    )
     .get(...params);
   // Para el filtro "Cobró": quienes vendieron en esas fechas (sin mirar los otros filtros).
   const vendedores = await db
@@ -175,12 +235,11 @@ export async function buscarVentas({ desde, hasta, medio_pago, cliente_empresa_i
     )
     .all(dia1, dia2);
 
-  const totales = { total: 0, tickets: 0, anuladas: Number(anuladas.cantidad), por_medio: {} };
+  const totales = { total: 0, tickets: Number(cuenta.tickets), anuladas: Number(cuenta.anuladas), por_medio: {} };
   for (const fila of porMedio) {
     const cantidad = Number(fila.cantidad);
     const total = Number(fila.total);
-    totales.por_medio[fila.medio_pago] = { cantidad, total };
-    totales.tickets += cantidad;
+    totales.por_medio[fila.medio] = { cantidad, total };
     totales.total += total;
   }
   return {
@@ -223,15 +282,20 @@ async function validarClienteEmpresa(medioPago, clienteEmpresaId) {
 // de quien la llama (registrarVenta, o la aprobación de un pedido, que además
 // de la venta tiene que actualizar el pedido en la misma transacción).
 //
-// Venta por pack (2026-10-11): cada línea se arma con armarLinea (presentacion.js): las
-// unidades de stock que mueve, el precio de esa presentación (unidad, pack o precio por
-// cantidad) y la copia del pack. `lineasCongeladas`: al aprobar un pedido, las líneas tal
-// como quedaron al pedir (presentación, precio y unidades), en vez de armarlas de nuevo.
+// Venta por pack (2026-10-11): las líneas se arman con armarLineas (presentacion.js): las
+// unidades de stock que mueve cada una, el precio de esa presentación (unidad, pack o precio por
+// cantidad, que mira el total de su grupo de promoción) y la copia del pack. `lineasCongeladas`:
+// al aprobar un pedido, las líneas tal como quedaron al pedir (presentación, precio y unidades),
+// en vez de armarlas de nuevo.
+//
+// Varios medios (2026-11-01): con `pagos` en vez de `medio_pago`, la venta queda 'mixto' y cada parte
+// en venta_pagos. Las partes tienen que sumar el total que calcula el servidor.
 export async function registrarVentaEnTransaccion(
-  { medio_pago, items, cliente_empresa_id },
+  { medio_pago, pagos, items, cliente_empresa_id },
   { usuarioId, pedidoId = null, lineasCongeladas = null }
 ) {
-  const medioPago = await validarMedioPago(medio_pago);
+  const partes = pagos != null ? validarPagos(pagos) : null;
+  const medioPago = partes ? 'mixto' : await validarMedioPago(medio_pago);
   const clienteEmpresaId = await validarClienteEmpresa(medioPago, cliente_empresa_id);
 
   const lineas = [];
@@ -240,9 +304,13 @@ export async function registrarVentaEnTransaccion(
       lineas.push({ ...linea, producto: await obtenerProductoActivo(linea.producto_id) });
     }
   } else {
-    for (const item of validarItems(items)) {
-      const producto = await obtenerProductoActivo(item.producto_id);
-      lineas.push({ ...armarLinea(producto, item), producto });
+    const validados = validarItems(items);
+    const productos = new Map();
+    for (const item of validados) {
+      if (!productos.has(item.producto_id)) productos.set(item.producto_id, await obtenerProductoActivo(item.producto_id));
+    }
+    for (const linea of armarLineas(validados, productos)) {
+      lineas.push({ ...linea, producto: productos.get(linea.producto_id) });
     }
   }
 
@@ -285,12 +353,13 @@ export async function registrarVentaEnTransaccion(
       await db
         .prepare(
           `INSERT INTO venta_items
-             (venta_id, producto_id, lote_id, cantidad, precio_unitario, subtotal, pack_nombre, pack_unidades, precio_cantidad_desde)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+             (venta_id, producto_id, lote_id, cantidad, precio_unitario, subtotal, pack_nombre, pack_unidades,
+              precio_cantidad_desde, precio_cantidad_grupo)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           ventaId, producto_id, lote.id, tomar, linea.precio_unitario, subtotal,
-          linea.pack_nombre, linea.pack_unidades, linea.precio_cantidad_desde
+          linea.pack_nombre, linea.pack_unidades, linea.precio_cantidad_desde, linea.precio_cantidad_grupo ?? null
         );
 
       total += subtotal;
@@ -303,6 +372,18 @@ export async function registrarVentaEnTransaccion(
   }
 
   await db.prepare('UPDATE ventas SET total = ? WHERE id = ?').run(total, ventaId);
+
+  if (partes) {
+    const cargado = partes.reduce((acc, parte) => acc + parte.monto, 0);
+    if (cargado !== total) {
+      throw new ApiError(409, `Los montos suman ${pesos(cargado)} y la venta es de ${pesos(total)}. Revisá los montos y volvé a cobrar.`);
+    }
+    for (const parte of partes) {
+      await db
+        .prepare('INSERT INTO venta_pagos (venta_id, medio_pago, monto) VALUES (?, ?, ?)')
+        .run(ventaId, parte.medio_pago, parte.monto);
+    }
+  }
 
   // CARGO automático en la cuenta corriente del cliente (B2B Fase 1,
   // decisión confirmada con el usuario) -- misma transacción que el resto
@@ -354,6 +435,10 @@ export async function editarMedioPago(id, { medio_pago }) {
     const venta = await db.prepare('SELECT id, estado, medio_pago FROM ventas WHERE id = ?').get(id);
     if (!venta) throw new ApiError(404, 'Venta no encontrada');
     if (venta.estado === 'anulada') throw new ApiError(409, 'No se puede editar una venta anulada');
+    // Una venta con varios medios no se pasa a uno solo: se anula y se vuelve a cobrar (2026-11-01).
+    if (venta.medio_pago === 'mixto') {
+      throw new ApiError(409, 'Esta venta se cobró con varios medios: para corregirla, anulala y volvé a cobrarla');
+    }
     if (venta.medio_pago === 'cta_cte' || medioPago === 'cta_cte') {
       throw new ApiError(409, 'No se puede cambiar el medio de pago a ni desde Cuenta Corriente: anulá la venta y volvé a cobrarla');
     }

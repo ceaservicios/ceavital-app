@@ -105,27 +105,48 @@ export function etiquetaPack(nombre, unidades, medida = 'unidad') {
   return `${nombre} x ${unidades}`;
 }
 
+// Grupos de promoción (2026-11-01): los productos de un mismo grupo suman juntos para llegar al
+// precio por cantidad de cada uno, sueltos con sueltos y packs con packs. `cuenta` es lo que se
+// mira para llegar: el total del grupo en el carrito (cuentasPorGrupo), o la cantidad de la línea.
+
+/** Con qué suma una línea: su grupo (misma presentación y medida) o, sin grupo, el producto solo. */
+export function claveDeSuma(producto, presentacion) {
+  return producto.grupo_promocion_id != null
+    ? `grupo:${producto.grupo_promocion_id}:${producto.medida}:${presentacion}`
+    : `producto:${producto.id}:${presentacion}`;
+}
+
+/** Total de cada grupo (o producto sin grupo) en las líneas [{ producto, cantidad, presentacion }]. */
+export function cuentasPorGrupo(lineas) {
+  const cuentas = new Map();
+  for (const l of lineas) {
+    const clave = claveDeSuma(l.producto, l.presentacion);
+    cuentas.set(clave, (cuentas.get(clave) ?? 0) + (Number(l.cantidad) || 0));
+  }
+  return cuentas;
+}
+
 /**
- * Precio de una línea: por pack, el del pack; suelto, el normal o, desde N inclusive, el
- * precio por cantidad para toda la línea. En kg/litro el precio es por kg/litro.
+ * Precio de una línea: por pack, el del pack; suelto, el normal o, desde N inclusive (contando
+ * `cuenta`), el precio por cantidad para toda la línea. En kg/litro el precio es por kg/litro.
  */
-export function precioLinea(producto, cantidad, presentacion) {
-  const aplica = tienePrecioCantidad(producto, presentacion) && cantidad >= precioCantidadDe(producto, presentacion).desde;
+export function precioLinea(producto, cantidad, presentacion, cuenta = cantidad) {
+  const aplica = tienePrecioCantidad(producto, presentacion) && cuenta >= precioCantidadDe(producto, presentacion).desde;
   const normal = presentacion === 'pack' ? producto.precio_pack : producto.precio_venta;
   return { precio: aplica ? precioCantidadDe(producto, presentacion).precio : normal, aplicaPrecioCantidad: aplica };
 }
 
 /** Subtotal de una línea: packs × precio del pack; suelto, cantidad × precio (÷1000 en kg/litro). */
-export function subtotalLinea(producto, cantidad, presentacion) {
-  const { precio } = precioLinea(producto, cantidad, presentacion);
+export function subtotalLinea(producto, cantidad, presentacion, cuenta = cantidad) {
+  const { precio } = precioLinea(producto, cantidad, presentacion, cuenta);
   if (presentacion === 'pack') return precio * cantidad;
   return Math.round((cantidad * precio) / factorMedida(producto.medida));
 }
 
 /** Cuánto falta para el precio por cantidad (0 si ya llegó o no tiene): en la medida chica, o en packs. */
-export function faltanParaPrecioCantidad(producto, cantidad, presentacion = 'unidad') {
+export function faltanParaPrecioCantidad(producto, cuenta, presentacion = 'unidad') {
   if (!tienePrecioCantidad(producto, presentacion)) return 0;
-  return Math.max(0, precioCantidadDe(producto, presentacion).desde - cantidad);
+  return Math.max(0, precioCantidadDe(producto, presentacion).desde - cuenta);
 }
 
 export function unidadesDeLinea(producto, cantidad, presentacion) {

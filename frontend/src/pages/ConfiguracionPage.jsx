@@ -5,6 +5,7 @@ import Hero from '../components/Hero.jsx';
 import Pestanas from '../components/Pestanas.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { COLOR, colorDe } from '../utils/colores.js';
+import SeccionPromociones from './ConfiguracionPromociones.jsx';
 import './ConfiguracionPage.css';
 
 // Rediseño 2026-10-29: cada sección es una tarjeta con el título y la descripción a la izquierda
@@ -395,6 +396,8 @@ const SECCIONES = [
     endpoint: '/condiciones-pago',
     singular: 'condición de pago',
   },
+  // Grupos de promoción (2026-11-01): tienen su propia sección (ConfiguracionPromociones.jsx).
+  { clave: 'promociones', texto: 'Promociones', icono: 'rayo', color: COLOR.naranja },
 ];
 
 export default function ConfiguracionPage() {
@@ -442,6 +445,8 @@ export default function ConfiguracionPage() {
           <SeccionDatosNegocio onCambio={cargarResumen} />
           <SeccionStockEn />
         </>
+      ) : seccion.clave === 'promociones' ? (
+        <SeccionPromociones />
       ) : (
         <SeccionCatalogo
           key={seccion.clave}

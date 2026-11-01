@@ -126,6 +126,28 @@ const CATALOGO = {
         .filter(Boolean)
         .join(' · '),
   },
+  // Grupos de promoción (2026-11-01): cambian lo que se cobra en Caja y en el portal.
+  'grupo-promocion-creado': { categoria: 'instalacion', titulo: 'Creó un grupo de promoción', detalle: (d) => d.grupo },
+  'grupo-promocion-renombrado': {
+    categoria: 'instalacion',
+    titulo: 'Cambió el nombre de un grupo de promoción',
+    detalle: (d) => `${d.anterior} → ${d.grupo}`,
+  },
+  'grupo-promocion-eliminado': {
+    categoria: 'instalacion',
+    titulo: 'Eliminó un grupo de promoción',
+    detalle: (d) => [d.grupo, d.productos?.length && `quedaron sin grupo: ${d.productos.join(', ')}`].filter(Boolean).join(' · '),
+  },
+  'grupo-promocion-producto-agregado': {
+    categoria: 'instalacion',
+    titulo: 'Sumó un producto a un grupo de promoción',
+    detalle: (d) => `${d.producto} → ${d.grupo}${d.anterior ? ` (estaba en ${d.anterior})` : ''}`,
+  },
+  'grupo-promocion-producto-sacado': {
+    categoria: 'instalacion',
+    titulo: 'Sacó un producto de un grupo de promoción',
+    detalle: (d) => `${d.producto} · ${d.grupo}`,
+  },
   'plan-cambiado': { categoria: 'instalacion', titulo: 'Cambió el plan', detalle: (d) => `${d.de} → ${d.a}` },
   'instalacion-suspendida': {
     categoria: 'instalacion',

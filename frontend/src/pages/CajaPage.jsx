@@ -7,6 +7,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { COLOR_MEDIO, COLOR_MEDIO_CLARO, ICONO_MEDIO, colorDe } from '../utils/colores.js';
 import { formatearMonto, fechaHoyISO } from '../utils/format.js';
 import {
+  claveDeSuma,
+  cuentasPorGrupo,
   describirStockLargo,
   esFraccionable,
   etiquetaPack,
@@ -123,6 +125,10 @@ const MEDIOS_PAGO = [
   },
 ];
 
+// Cobrar con varios medios (pedido del usuario, 2026-11-01): todos menos Cuenta corriente, que carga
+// el total a la deuda del cliente. Una parte puede quedar como Pago pendiente (decisión del usuario).
+const MEDIOS_REPARTIBLES = MEDIOS_PAGO.filter((m) => m.valor !== 'cta_cte');
+
 const PUEDE_ANULAR = new Set(['admin', 'encargado']);
 // Caja es solo para cobrar (pedido del usuario, 2026-10-16): los números del turno y los gastos
 // y pagos a proveedores pasaron a la pantalla "Ventas diarias" (VentasDiariasPage.jsx).
@@ -147,6 +153,9 @@ export default function CajaPage() {
   const [carrito, setCarrito] = useState([]);
   const [focoPeso, setFocoPeso] = useState(null); // clave de la línea por peso a enfocar
   const [medioPago, setMedioPago] = useState('efectivo');
+  // Varios medios: el monto de cada uno, como se tipea (solo dígitos).
+  const [variosMedios, setVariosMedios] = useState(false);
+  const [montos, setMontos] = useState({});
   const [clientesEmpresa, setClientesEmpresa] = useState([]);
   const [clienteEmpresaId, setClienteEmpresaId] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -476,16 +485,52 @@ export default function CajaPage() {
     setCarrito((prev) => prev.filter((item) => item.clave !== clave));
   }
 
-  const precioDe = (item) => precioLinea(item.producto, item.cantidad, item.presentacion);
+  // Grupos de promoción (2026-11-01): para el precio por cantidad cuenta todo el grupo del carrito.
+  const cuentas = cuentasPorGrupo(carrito);
+  const cuentaDe = (item) => cuentas.get(claveDeSuma(item.producto, item.presentacion)) ?? item.cantidad;
+  const precioDe = (item) => precioLinea(item.producto, item.cantidad, item.presentacion, cuentaDe(item));
   // Unidades pedidas de cada producto, sumando sus líneas por unidad y por pack.
   const unidadesPorProducto = carrito.reduce((mapa, item) => {
     const unidades = unidadesDeLinea(item.producto, item.cantidad, item.presentacion);
     return mapa.set(item.producto_id, (mapa.get(item.producto_id) ?? 0) + unidades);
   }, new Map());
-  const total = carrito.reduce((acc, item) => acc + subtotalLinea(item.producto, item.cantidad, item.presentacion), 0);
+  const total = carrito.reduce((acc, item) => acc + subtotalLinea(item.producto, item.cantidad, item.presentacion, cuentaDe(item)), 0);
   // Un producto pesado cuenta como 1 artículo; sin peso, la venta no se puede cobrar.
   const articulos = carrito.reduce((acc, item) => acc + (esLineaPorPeso(item) ? (item.cantidad > 0 ? 1 : 0) : item.cantidad), 0);
   const faltaPeso = carrito.some((item) => esLineaPorPeso(item) && !(item.cantidad > 0));
+
+  // Varios medios: las partes con monto y cuánto falta para el total (negativo: sobra). El servidor
+  // vuelve a controlar que sumen el total.
+  const partes = MEDIOS_REPARTIBLES.map((m) => ({ medio_pago: m.valor, monto: Number(montos[m.valor] || 0) })).filter(
+    (p) => p.monto > 0
+  );
+  const cargado = partes.reduce((acc, p) => acc + p.monto, 0);
+  const falta = total - cargado;
+  const puedeCobrar =
+    carrito.length > 0 &&
+    !faltaPeso &&
+    !enviando &&
+    (variosMedios ? partes.length > 0 && falta === 0 : !(medioPago === 'cta_cte' && !clienteEmpresaId));
+  const deTotal = `Cargado ${formatearMonto(cargado)} de ${formatearMonto(total)}`;
+  const estadoPartes =
+    carrito.length === 0
+      ? { tono: 'neutro', corto: 'Sin productos', texto: 'Sumá productos al carrito y cargá cuánto se paga con cada medio.' }
+      : partes.length === 0
+        ? { tono: 'neutro', corto: 'Cargá los montos', texto: `Cargá cuánto se paga con cada medio. Total: ${formatearMonto(total)}.` }
+        : falta > 0
+          ? { tono: 'falta', corto: `Faltan ${formatearMonto(falta)}`, texto: `${deTotal} · Faltan ${formatearMonto(falta)}` }
+          : falta < 0
+            ? { tono: 'sobra', corto: `Sobran ${formatearMonto(-falta)}`, texto: `${deTotal} · Sobran ${formatearMonto(-falta)}` }
+            : { tono: 'ok', corto: 'Completo', texto: `${deTotal} · Listo para cobrar` };
+
+  function alternarVariosMedios() {
+    setVariosMedios((antes) => !antes);
+    setMontos({});
+  }
+
+  function cambiarMonto(medio, texto) {
+    setMontos((prev) => ({ ...prev, [medio]: texto.replace(/\D/g, '') }));
+  }
 
   async function confirmarVenta() {
     if (confirmandoVentaRef.current) return;
@@ -494,9 +539,11 @@ export default function CajaPage() {
     setExito(null);
     setEnviando(true);
     try {
+      // Con varios medios y un solo monto cargado (el total), va como una venta de ese medio.
+      const unMedio = variosMedios ? (partes.length === 1 ? partes[0].medio_pago : null) : medioPago;
       const venta = await api.post('/ventas', {
-        medio_pago: medioPago,
-        ...(medioPago === 'cta_cte' ? { cliente_empresa_id: Number(clienteEmpresaId) } : {}),
+        ...(unMedio ? { medio_pago: unMedio } : { pagos: partes }),
+        ...(unMedio === 'cta_cte' ? { cliente_empresa_id: Number(clienteEmpresaId) } : {}),
         items: carrito.map((item) => ({
           producto_id: item.producto_id,
           cantidad: item.cantidad,
@@ -507,9 +554,17 @@ export default function CajaPage() {
       const quedan = (venta.stock_despues ?? [])
         .map((s) => `${s.nombre}: ${describirStockLargo(s.stock_disponible, s, stockEnPacks)}`)
         .join(' · ');
-      setExito(`Venta #${venta.id} registrada por ${formatearMonto(venta.total)}.${quedan ? ` Stock restante — ${quedan}.` : ''}`);
+      const cobradoCon = (venta.pagos ?? []).map((p) => `${etiquetaMedio(p.medio_pago)} ${formatearMonto(p.monto)}`).join(' + ');
+      setExito(
+        `Venta #${venta.id} registrada por ${formatearMonto(venta.total)}${cobradoCon ? ` (${cobradoCon})` : ''}.${
+          quedan ? ` Stock restante — ${quedan}.` : ''
+        }`
+      );
       setCarrito([]);
       setClienteEmpresaId('');
+      // La venta siguiente arranca con un solo medio, como la mayoría.
+      setVariosMedios(false);
+      setMontos({});
       cargarVentasHoy();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo registrar la venta. Probá de nuevo.');
@@ -547,8 +602,10 @@ export default function CajaPage() {
   useEffect(() => {
     setCambiandoMedio(false);
   }, [idUltimaVenta]);
-  const puedeCambiarMedio = Boolean(ultimaVentaRegistrada) && ultimaVentaRegistrada.medio_pago !== 'cta_cte';
-  const etiquetaMedio = (valor) => MEDIOS_PAGO.find((m) => m.valor === valor)?.label ?? valor;
+  // Una venta con varios medios tampoco: se anula y se vuelve a cobrar (2026-11-01).
+  const puedeCambiarMedio =
+    Boolean(ultimaVentaRegistrada) && ultimaVentaRegistrada.medio_pago !== 'cta_cte' && ultimaVentaRegistrada.medio_pago !== 'mixto';
+  const etiquetaMedio = (valor) => (valor === 'mixto' ? 'Varios medios' : MEDIOS_PAGO.find((m) => m.valor === valor)?.label ?? valor);
 
   function abrirCambioMedio() {
     setNuevoMedio(ultimaVentaRegistrada.medio_pago);
@@ -584,12 +641,20 @@ export default function CajaPage() {
         valor={formatearMonto(total)}
         sub={articulos === 0 ? 'Sin productos: buscá o escaneá uno para empezar.' : articulos === 1 ? '1 artículo' : `${articulos} artículos`}
         minis={[
-          {
-            etiqueta: 'Medio de cobro',
-            valor: etiquetaMedio(medioPago),
-            icono: ICONO_MEDIO[medioPago],
-            color: COLOR_MEDIO_CLARO[medioPago],
-          },
+          variosMedios
+            ? {
+                etiqueta: 'Medio de cobro',
+                valor: etiquetaMedio('mixto'),
+                sub: estadoPartes.corto,
+                icono: ICONO_MEDIO.mixto,
+                color: COLOR_MEDIO_CLARO.mixto,
+              }
+            : {
+                etiqueta: 'Medio de cobro',
+                valor: etiquetaMedio(medioPago),
+                icono: ICONO_MEDIO[medioPago],
+                color: COLOR_MEDIO_CLARO[medioPago],
+              },
           ultimaVentaRegistrada
             ? {
                 etiqueta: 'Último ticket',
@@ -606,9 +671,14 @@ export default function CajaPage() {
           una fila y "Cobrar venta" al lado. Al bajar con un carrito largo queda fija arriba. */}
       <section className="card caja-cobro" aria-label="Cobro" ref={cobroRef}>
         <div className="caja-cobro-cabeza">
-          <span className="caja-section-label" id="caja-medios-label">
-            Medio de cobro
-          </span>
+          <div className="caja-cobro-titulo">
+            <span className="caja-section-label" id="caja-medios-label">
+              {variosMedios ? 'Cuánto se paga con cada medio' : 'Medio de cobro'}
+            </span>
+            <button type="button" className="caja-anular-link" onClick={alternarVariosMedios} disabled={enviando}>
+              {variosMedios ? 'Cobrar con un solo medio' : 'Cobrar con varios medios'}
+            </button>
+          </div>
           {/* El monto y el medio del último ticket están en el panel verde; acá, lo que se le puede hacer. */}
           {puedeAnular && ultimaVentaRegistrada && !cambiandoMedio && !confirmandoAnulacion && (
             <div className="caja-anular-links">
@@ -625,36 +695,85 @@ export default function CajaPage() {
         </div>
 
         <div className="caja-cobro-fila">
-          <div
-            className={`caja-medios-grid${mediosVisibles.length > 5 ? ' caja-medios-dos-filas' : ''}`}
-            role="group"
-            aria-labelledby="caja-medios-label"
-          >
-            {mediosVisibles.map((medio) => (
-              <button
-                type="button"
-                key={medio.valor}
-                className={`caja-medio-btn${medioPago === medio.valor ? ' caja-medio-btn-active' : ''}`}
-                style={{ '--c': COLOR_MEDIO[medio.valor] }}
-                aria-pressed={medioPago === medio.valor}
-                onClick={() => setMedioPago(medio.valor)}
-              >
-                {medio.icono}
-                <span>{medio.label}</span>
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="btn btn-primary caja-cobrar"
-            disabled={carrito.length === 0 || faltaPeso || enviando || (medioPago === 'cta_cte' && !clienteEmpresaId)}
-            onClick={confirmarVenta}
-          >
+          {variosMedios ? (
+            // Un monto por medio, en el mismo lugar que los botones. "Resto" completa ese medio con lo
+            // que falta para el total.
+            <div className="caja-medios-grid caja-medios-partes" role="group" aria-labelledby="caja-medios-label">
+              {MEDIOS_REPARTIBLES.map((medio) => {
+                const monto = montos[medio.valor] ?? '';
+                const conMonto = Number(monto) > 0;
+                return (
+                  <div
+                    key={medio.valor}
+                    className={`caja-medio-parte${conMonto ? ' caja-medio-parte-con-monto' : ''}`}
+                    style={{ '--c': COLOR_MEDIO[medio.valor] }}
+                  >
+                    <label className="caja-medio-parte-nombre" htmlFor={`caja-parte-${medio.valor}`}>
+                      {medio.icono}
+                      <span>{medio.label}</span>
+                    </label>
+                    <span className="caja-medio-parte-monto">
+                      <span aria-hidden="true">$</span>
+                      <input
+                        id={`caja-parte-${medio.valor}`}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={10}
+                        placeholder="0"
+                        autoComplete="off"
+                        value={monto}
+                        onChange={(e) => cambiarMonto(medio.valor, e.target.value)}
+                        disabled={enviando}
+                      />
+                      {!conMonto && falta > 0 && (
+                        <button
+                          type="button"
+                          className="caja-medio-parte-resto"
+                          title={`Completar con lo que falta: ${formatearMonto(falta)}`}
+                          onClick={() => cambiarMonto(medio.valor, String(falta))}
+                          disabled={enviando}
+                        >
+                          Resto
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div
+              className={`caja-medios-grid${mediosVisibles.length > 5 ? ' caja-medios-dos-filas' : ''}`}
+              role="group"
+              aria-labelledby="caja-medios-label"
+            >
+              {mediosVisibles.map((medio) => (
+                <button
+                  type="button"
+                  key={medio.valor}
+                  className={`caja-medio-btn${medioPago === medio.valor ? ' caja-medio-btn-active' : ''}`}
+                  style={{ '--c': COLOR_MEDIO[medio.valor] }}
+                  aria-pressed={medioPago === medio.valor}
+                  onClick={() => setMedioPago(medio.valor)}
+                >
+                  {medio.icono}
+                  <span>{medio.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <button type="button" className="btn btn-primary caja-cobrar" disabled={!puedeCobrar} onClick={confirmarVenta}>
             {enviando ? 'Registrando…' : 'Cobrar venta'}
           </button>
         </div>
 
-        {medioPago === 'cta_cte' && (
+        {variosMedios && (
+          <div className={`caja-partes-estado caja-partes-${estadoPartes.tono}`} role="status">
+            {estadoPartes.texto}
+          </div>
+        )}
+
+        {!variosMedios && medioPago === 'cta_cte' && (
           <div className="field caja-cliente">
             <label htmlFor="caja-cliente-empresa">Cliente</label>
             {clientesEmpresa.length === 0 ? (
@@ -861,7 +980,8 @@ export default function CajaPage() {
                 const porPack = item.presentacion === 'pack';
                 const porPeso = esLineaPorPeso(item);
                 const medida = item.producto.medida;
-                const faltan = faltanParaPrecioCantidad(item.producto, item.cantidad, item.presentacion);
+                const faltan = faltanParaPrecioCantidad(item.producto, cuentaDe(item), item.presentacion);
+                const grupo = item.producto.grupo_promocion;
                 // "desde 10 cajas" / "desde 3 kg" / "desde 6": el del pack se cuenta en packs.
                 const cantidadTexto = (n) =>
                   porPack ? `${n} ${plural(item.producto.pack_nombre, n)}` : formatearCantidad(n, medida, { corta: true });
@@ -897,14 +1017,15 @@ export default function CajaPage() {
                       {porPeso && !(item.cantidad > 0) && <span className="caja-cart-warning">Ingresá el peso</span>}
                       {aplicaPrecioCantidad && (
                         <span className="caja-cart-promo">
-                          Precio por cantidad (desde {cantidadTexto(precioCantidadDe(item.producto, item.presentacion).desde)})
+                          Precio por cantidad (desde {cantidadTexto(precioCantidadDe(item.producto, item.presentacion).desde)}
+                          {grupo && ` · ${grupo}`})
                         </span>
                       )}
                       {!aplicaPrecioCantidad &&
                         tienePrecioCantidad(item.producto, item.presentacion) &&
                         faltan <= (porPack ? 5 : 5 * factorMedida(medida)) && (
                         <span className="caja-cart-promo-hint">
-                          Llevando {cantidadTexto(faltan)} más:{' '}
+                          Llevando {cantidadTexto(faltan)} más{grupo && ` de ${grupo}`}:{' '}
                           {formatearMonto(precioCantidadDe(item.producto, item.presentacion).precio)}
                           {porPeso ? sufijoPrecio(medida) : ' c/u'}
                         </span>
@@ -948,7 +1069,7 @@ export default function CajaPage() {
                     {!porPack && sufijoPrecio(medida)}
                   </span>
                   <span style={{ flex: 1, textAlign: 'right' }} className="caja-cart-subtotal">
-                    {formatearMonto(subtotalLinea(item.producto, item.cantidad, item.presentacion))}
+                    {formatearMonto(subtotalLinea(item.producto, item.cantidad, item.presentacion, cuentaDe(item)))}
                   </span>
                   <span style={{ width: 32, display: 'flex', justifyContent: 'center' }} className="caja-cart-quitar">
                     <button

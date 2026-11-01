@@ -14,6 +14,7 @@ import pedidosClienteRoutes from './pedidos-cliente.routes.js';
 import portalRoutes from './portal.routes.js';
 import superadminRoutes from './superadmin.routes.js';
 import negocioRoutes from './negocio.routes.js';
+import gruposPromocionRoutes from './grupos-promocion.routes.js';
 import { requireModulo } from '../middleware/modulo.middleware.js';
 import { asyncHandler } from '../utils/async-handler.js';
 import { modulosActivos } from '../services/modulos.service.js';
@@ -44,6 +45,8 @@ router.use('/proveedores', proveedoresRoutes);
 router.use('/saldos', saldosRoutes);
 router.use('/usuarios', usuariosRoutes);
 router.use('/negocio', negocioRoutes);
+// Grupos de promoción (2026-11-01): suman juntos para el precio por cantidad. Solo el Administrador.
+router.use('/grupos-promocion', gruposPromocionRoutes);
 // Módulos apagados por el plan de la instalación: 404 antes de autenticar.
 router.use('/clientes-empresa', requireModulo('clientes_empresa'), clientesEmpresaRoutes);
 router.use('/pedidos-cliente', requireModulo('pedidos'), pedidosClienteRoutes);

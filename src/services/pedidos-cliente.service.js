@@ -3,7 +3,7 @@ import { ApiError } from '../utils/api-error.js';
 import { existeClienteActivo } from './clientes-empresa.service.js';
 import { stockDisponible } from './reservas.service.js';
 import { obtenerVentaConItems, registrarVentaEnTransaccion } from './ventas.service.js';
-import { armarLinea, COLUMNAS_PRESENTACION, describirCantidad, juntarLineas, validarPresentacion } from './presentacion.js';
+import { armarLineas, COLUMNAS_PRESENTACION, describirCantidad, juntarLineas, validarPresentacion } from './presentacion.js';
 
 // Pedidos de clientes-empresa (B2B Fase 2). Los arma el cliente desde su
 // portal; el negocio (Admin + Encargado) los aprueba o rechaza.
@@ -61,7 +61,7 @@ function itemsDe(pedidoId) {
   return db
     .prepare(
       `SELECT i.id, i.producto_id, p.nombre AS producto_nombre, p.medida, i.cantidad, i.precio_unitario, i.subtotal,
-              i.pack_nombre, i.pack_unidades, i.precio_cantidad_desde,
+              i.pack_nombre, i.pack_unidades, i.precio_cantidad_desde, i.precio_cantidad_grupo,
               CASE WHEN i.pack_unidades IS NULL THEN i.cantidad ELSE i.cantidad / i.pack_unidades END AS cantidad_presentacion
        FROM pedido_cliente_items i
        JOIN productos p ON p.id = i.producto_id
@@ -137,6 +137,7 @@ export async function aprobarPedido(id, { usuarioId }) {
           pack_nombre: i.pack_nombre,
           pack_unidades: i.pack_unidades,
           precio_cantidad_desde: i.precio_cantidad_desde,
+          precio_cantidad_grupo: i.precio_cantidad_grupo,
         })),
       }
     );
@@ -197,24 +198,23 @@ export async function crearPedidoDelCliente(clienteId, { items, observaciones })
       );
     }
 
-    let total = 0;
-    const armadas = [];
     const productos = new Map();
-    const unidadesPorProducto = new Map();
     for (const linea of lineas) {
-      let producto = productos.get(linea.producto_id);
-      if (!producto) {
-        producto = await db
-          .prepare(`SELECT id, nombre, precio_venta, ${COLUMNAS_PRESENTACION} FROM productos WHERE id = ? AND eliminado_en IS NULL`)
-          .get(linea.producto_id);
-        if (!producto) throw new ApiError(404, `El producto ${linea.producto_id} ya no está disponible`);
-        productos.set(linea.producto_id, producto);
-      }
+      if (productos.has(linea.producto_id)) continue;
+      const producto = await db
+        .prepare(`SELECT id, nombre, precio_venta, ${COLUMNAS_PRESENTACION} FROM productos WHERE id = ? AND eliminado_en IS NULL`)
+        .get(linea.producto_id);
+      if (!producto) throw new ApiError(404, `El producto ${linea.producto_id} ya no está disponible`);
+      productos.set(linea.producto_id, producto);
+    }
 
-      const armada = armarLinea(producto, linea);
+    // El precio por cantidad mira el total de cada grupo de promoción (2026-11-01), como en Caja.
+    let total = 0;
+    const armadas = armarLineas(lineas, productos);
+    const unidadesPorProducto = new Map();
+    for (const armada of armadas) {
       total += armada.subtotal;
-      armadas.push(armada);
-      unidadesPorProducto.set(linea.producto_id, (unidadesPorProducto.get(linea.producto_id) ?? 0) + armada.unidades);
+      unidadesPorProducto.set(armada.producto_id, (unidadesPorProducto.get(armada.producto_id) ?? 0) + armada.unidades);
     }
 
     // El stock se mira por producto, sumando las unidades de sus líneas (unidad y pack).
@@ -232,13 +232,14 @@ export async function crearPedidoDelCliente(clienteId, { items, observaciones })
 
     const insertarItem = db.prepare(
       `INSERT INTO pedido_cliente_items
-         (pedido_id, producto_id, cantidad, precio_unitario, subtotal, pack_nombre, pack_unidades, precio_cantidad_desde)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+         (pedido_id, producto_id, cantidad, precio_unitario, subtotal, pack_nombre, pack_unidades,
+          precio_cantidad_desde, precio_cantidad_grupo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     for (const l of armadas) {
       await insertarItem.run(
         lastInsertRowid, l.producto_id, l.unidades, l.precio_unitario, l.subtotal,
-        l.pack_nombre, l.pack_unidades, l.precio_cantidad_desde
+        l.pack_nombre, l.pack_unidades, l.precio_cantidad_desde, l.precio_cantidad_grupo
       );
     }
 
@@ -268,6 +269,7 @@ function soloParaElCliente(pedido) {
         pack_nombre: i.pack_nombre,
         pack_unidades: i.pack_unidades,
         precio_cantidad_desde: i.precio_cantidad_desde,
+        precio_cantidad_grupo: i.precio_cantidad_grupo,
         precio_unitario: i.precio_unitario,
         subtotal: i.subtotal,
       })),

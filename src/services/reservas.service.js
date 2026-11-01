@@ -41,20 +41,22 @@ export async function stockDisponible(productoId, opciones = {}) {
 
 // Catálogo que ve el cliente en su portal: solo lo que puede pedir. Nunca
 // expone costo ni ningún dato interno del producto (tampoco los códigos de barras).
-// Con el pack y el precio por cantidad (2026-10-11), igual que en Caja.
+// Con el pack y el precio por cantidad (2026-10-11), igual que en Caja, y el grupo de promoción con
+// que suma cada producto (2026-11-01): el portal calcula el total del pedido igual que el servidor.
 export async function catalogoConDisponibilidad() {
   const productos = await db
     .prepare(
       `SELECT p.id, p.nombre, p.precio_venta, c.nombre AS categoria, u.nombre AS unidad_medida,
          p.medida, p.vende_suelto, p.pack_nombre, p.pack_unidades, p.precio_pack, p.precio_cantidad_desde, p.precio_cantidad,
-         p.pack_cantidad_desde, p.precio_pack_cantidad,
+         p.pack_cantidad_desde, p.precio_pack_cantidad, gp.id AS grupo_promocion_id, gp.nombre AS grupo_promocion,
          COALESCE(SUM(CASE WHEN l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= ${SQL_HOY_NEGOCIO} THEN l.cantidad ELSE 0 END), 0) AS stock_vendible
        FROM productos p
        LEFT JOIN lotes l ON l.producto_id = p.id AND l.eliminado_en IS NULL
        LEFT JOIN categorias c ON c.id = p.categoria_id
        LEFT JOIN unidades_medida u ON u.id = p.unidad_medida_id
+       LEFT JOIN grupos_promocion gp ON gp.id = p.grupo_promocion_id AND gp.eliminado_en IS NULL
        WHERE p.eliminado_en IS NULL
-       GROUP BY p.id, c.id, u.id
+       GROUP BY p.id, c.id, u.id, gp.id
        ORDER BY LOWER(p.nombre)`
     )
     .all();

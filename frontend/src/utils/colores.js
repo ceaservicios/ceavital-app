@@ -1,5 +1,6 @@
 // Colores del estilo "panel protagonista" (2026-10-29): uno por medio de pago (sobre blanco y,
 // más claro, sobre el panel verde) y una paleta para los íconos con iniciales de las listas.
+// `mixto`: una venta cobrada con varios medios (2026-11-01).
 
 export const COLOR_MEDIO = {
   efectivo: '#1f8f66',
@@ -8,6 +9,7 @@ export const COLOR_MEDIO = {
   mercado_pago: '#0891b2',
   fiado: '#e09a00',
   cta_cte: '#c03d86',
+  mixto: '#e4662c',
 };
 
 export const COLOR_MEDIO_CLARO = {
@@ -17,6 +19,7 @@ export const COLOR_MEDIO_CLARO = {
   mercado_pago: '#8fdcf0',
   fiado: '#f3c043',
   cta_cte: '#f5a3cf',
+  mixto: '#f8b48c',
 };
 
 export const ICONO_MEDIO = {
@@ -26,6 +29,7 @@ export const ICONO_MEDIO = {
   mercado_pago: 'celular',
   fiado: 'reloj',
   cta_cte: 'ticket',
+  mixto: 'mitad',
 };
 
 const PALETA = ['#2d6cdf', '#0f8b7d', '#e4662c', '#6b4bd8', '#c03d86', '#0891b2', '#e09a00'];

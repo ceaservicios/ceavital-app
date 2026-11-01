@@ -593,6 +593,123 @@ button.caja-search-item:hover {
   color: #ffffff;
 }
 
+/* Cobrar con varios medios (2026-11-01): el rótulo con el link para pasar de un modo al otro, y en
+   lugar de los botones, una tarjeta por medio con su monto. Con monto, el borde y el fondo de su
+   color, como el medio elegido. Van en la misma grilla que los botones (una fila, tres columnas o
+   dos, según el ancho). */
+.caja-cobro-titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+}
+.caja-medio-parte {
+  --c: var(--color-primary);
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border-control);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.caja-medio-parte.caja-medio-parte-con-monto {
+  border-color: var(--c);
+  box-shadow: inset 0 0 0 1px var(--c);
+  background: color-mix(in srgb, var(--c) 8%, #ffffff);
+}
+.caja-medio-parte-nombre {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.caja-medio-parte-nombre svg {
+  flex: none;
+  box-sizing: content-box;
+  padding: 5px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--c) 14%, #ffffff);
+  color: var(--c);
+}
+.caja-medio-parte-con-monto .caja-medio-parte-nombre svg {
+  background: var(--c);
+  color: #ffffff;
+}
+.caja-medio-parte-monto {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.caja-medio-parte-monto input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.caja-medio-parte-monto input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+.caja-medio-parte-resto {
+  flex: none;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--c) 40%, #ffffff);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--c) 10%, #ffffff);
+  color: color-mix(in srgb, var(--c) 80%, #000000);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.caja-medio-parte-resto:hover {
+  background: color-mix(in srgb, var(--c) 18%, #ffffff);
+}
+/* Debajo de las tarjetas: cuánto se cargó, cuánto falta o sobra. */
+.caja-partes-estado {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.caja-partes-neutro {
+  color: var(--text-secondary);
+}
+.caja-partes-falta {
+  color: var(--warn-ink);
+}
+.caja-partes-sobra {
+  color: var(--danger-ink);
+}
+.caja-partes-ok {
+  color: var(--ok-ink);
+}
+
 .caja-cliente-vacio {
   font-size: 13px;
   line-height: 1.45;

@@ -25,8 +25,15 @@ const MEDIOS = [
   { valor: 'mercado_pago', label: 'Mercado Pago' },
   { valor: 'fiado', label: 'Pago pendiente' },
   { valor: 'cta_cte', label: 'Cuenta corriente' },
+  // Una venta cobrada con varios medios (2026-11-01). En los totales cada parte suma en su medio.
+  { valor: 'mixto', label: 'Varios medios' },
 ];
 const etiquetaMedio = (valor) => MEDIOS.find((m) => m.valor === valor)?.label ?? valor;
+// En el detalle, una venta con varios medios dice cuánto se pagó con cada uno.
+const medioDeLaVenta = (venta) =>
+  venta.pagos?.length
+    ? venta.pagos.map((p) => `${etiquetaMedio(p.medio_pago)} ${formatearMonto(p.monto)}`).join(' + ')
+    : etiquetaMedio(venta.medio_pago);
 
 const ESTADOS = [
   { valor: 'registrada', label: 'Cobradas' },
@@ -59,7 +66,9 @@ const textoPeriodo = (desde, hasta) => (desde === hasta ? formatearFecha(desde) 
 function juntarLineas(items) {
   const lineas = new Map();
   for (const i of items) {
-    const clave = [i.producto_id, i.pack_nombre ?? '', i.pack_unidades ?? '', i.precio_unitario, i.precio_cantidad_desde ?? ''].join('|');
+    const clave = [
+      i.producto_id, i.pack_nombre ?? '', i.pack_unidades ?? '', i.precio_unitario, i.precio_cantidad_desde ?? '', i.precio_cantidad_grupo ?? '',
+    ].join('|');
     const previa = lineas.get(clave);
     if (previa) {
       previa.cantidad += i.cantidad;
@@ -489,7 +498,7 @@ export default function VentasDiariasPage() {
                                     Cobrado por: <strong>{v.usuario_nombre}</strong>
                                   </span>
                                   <span>
-                                    Medio de pago: <strong>{etiquetaMedio(v.medio_pago)}</strong>
+                                    Medio de pago: <strong>{medioDeLaVenta(detalle)}</strong>
                                   </span>
                                   {v.cliente_razon_social && (
                                     <span>

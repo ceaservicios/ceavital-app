@@ -245,6 +245,7 @@ async function obtenerLoteActivo(productoId, loteId) {
 // categoría que después se desactivó sigue mostrando su nombre real, no un "—"
 // (mismo espíritu del proyecto: nunca perder historial). `proveedor` es solo el nombre, para el
 // filtro de Caja, que usan los tres roles (usuario, 2026-10-30): el Cajero no ve los proveedores.
+// grupo_promocion_id / grupo_promocion: con qué suma para el precio por cantidad (2026-11-01).
 const SELECT_PRODUCTOS_CON_STOCK = `
   SELECT
     p.id, p.nombre, p.codigo_barras, p.precio_costo, p.precio_venta,
@@ -256,6 +257,7 @@ const SELECT_PRODUCTOS_CON_STOCK = `
     p.pack_nombre, p.pack_unidades, p.precio_pack, p.codigo_barras_pack,
     p.pack_cantidad_desde, p.precio_pack_cantidad,
     p.precio_cantidad_desde, p.precio_cantidad,
+    gp.id AS grupo_promocion_id, gp.nombre AS grupo_promocion,
     COALESCE(SUM(l.cantidad), 0) AS stock_total,
     COALESCE(SUM(CASE WHEN l.fecha_vencimiento IS NULL OR l.fecha_vencimiento >= ${SQL_HOY_NEGOCIO} THEN l.cantidad ELSE 0 END), 0) AS stock_vendible,
     COALESCE((
@@ -268,6 +270,7 @@ const SELECT_PRODUCTOS_CON_STOCK = `
   LEFT JOIN categorias c ON c.id = p.categoria_id
   LEFT JOIN unidades_medida u ON u.id = p.unidad_medida_id
   LEFT JOIN proveedores pr ON pr.id = p.proveedor_id
+  LEFT JOIN grupos_promocion gp ON gp.id = p.grupo_promocion_id AND gp.eliminado_en IS NULL
 `;
 
 export async function listarProductos({ rol, buscar, codigoBarras }) {
@@ -282,7 +285,7 @@ export async function listarProductos({ rol, buscar, codigoBarras }) {
     params.push(`%${buscar}%`, `%${buscar}%`, `%${buscar}%`);
   }
 
-  const sql = `${SELECT_PRODUCTOS_CON_STOCK} WHERE ${condiciones.join(' AND ')} GROUP BY p.id, c.id, u.id, pr.id ORDER BY LOWER(p.nombre)`;
+  const sql = `${SELECT_PRODUCTOS_CON_STOCK} WHERE ${condiciones.join(' AND ')} GROUP BY p.id, c.id, u.id, pr.id, gp.id ORDER BY LOWER(p.nombre)`;
   const productos = await db.prepare(sql).all(...params);
 
   // coincide_codigo: si lo buscado es exactamente el código de la unidad o el del pack.
@@ -301,7 +304,7 @@ export async function listarProductos({ rol, buscar, codigoBarras }) {
 
 export async function obtenerProducto(id, { rol }) {
   const producto = await db
-    .prepare(`${SELECT_PRODUCTOS_CON_STOCK} WHERE p.id = ? AND p.eliminado_en IS NULL GROUP BY p.id, c.id, u.id, pr.id`)
+    .prepare(`${SELECT_PRODUCTOS_CON_STOCK} WHERE p.id = ? AND p.eliminado_en IS NULL GROUP BY p.id, c.id, u.id, pr.id, gp.id`)
     .get(id);
   if (!producto) throw new ApiError(404, 'Producto no encontrado');
 
@@ -350,7 +353,7 @@ export async function obtenerProducto(id, { rol }) {
 export async function listarProductosDeProveedor(proveedorId, { rol }) {
   const productos = await db
     .prepare(
-      `${SELECT_PRODUCTOS_CON_STOCK} WHERE p.proveedor_id = ? AND p.eliminado_en IS NULL GROUP BY p.id, c.id, u.id, pr.id ORDER BY LOWER(p.nombre)`
+      `${SELECT_PRODUCTOS_CON_STOCK} WHERE p.proveedor_id = ? AND p.eliminado_en IS NULL GROUP BY p.id, c.id, u.id, pr.id, gp.id ORDER BY LOWER(p.nombre)`
     )
     .all(proveedorId);
   return productos.map((p) => ocultarCosto(conAlerta(p), rol));

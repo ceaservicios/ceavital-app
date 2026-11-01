@@ -1,9 +1,11 @@
 import db from '../db/connection.js';
 import { hoyNegocio, sqlDiaNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
 import { ApiError } from '../utils/api-error.js';
+import { SQL_PARTES_DE_LA_VENTA } from './ventas.service.js';
 
 // Se suman todos los medios que existan en los datos, aunque el plan actual no
-// ofrezca 'cta_cte': una venta ya registrada nunca se descarta del total.
+// ofrezca 'cta_cte': una venta ya registrada nunca se descarta del total. Una venta
+// con varios medios (2026-11-01) suma cada parte en el suyo.
 const MEDIOS_PAGO = ['efectivo', 'tarjeta', 'transferencia_qr', 'mercado_pago', 'fiado', 'cta_cte'];
 
 // Tope de un monto en pesos, el mismo de los gastos (gastos.service.js): Number.isInteger(9e15)
@@ -77,14 +79,14 @@ export async function calcularResumenDelTurno() {
 
   const filas = await db
     .prepare(
-      `SELECT medio_pago, COALESCE(SUM(total), 0) AS total
-       FROM ventas
-       WHERE estado = 'registrada' AND ${ventasTurno.sql}
-       GROUP BY medio_pago`
+      `SELECT pago.medio, COALESCE(SUM(pago.monto), 0) AS total
+       FROM ventas v ${SQL_PARTES_DE_LA_VENTA}
+       WHERE v.estado = 'registrada' AND ${ventasTurno.sql}
+       GROUP BY pago.medio`
     )
     .all(...ventasTurno.params);
   const totales = Object.fromEntries(MEDIOS_PAGO.map((m) => [m, 0]));
-  for (const fila of filas) totales[fila.medio_pago] = Number(fila.total);
+  for (const fila of filas) totales[fila.medio] = Number(fila.total);
 
   const gastos = await db
     .prepare(`SELECT COALESCE(SUM(monto), 0) AS total FROM gastos_caja WHERE eliminado_en IS NULL AND ${gastosTurno.sql}`)
