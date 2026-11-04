@@ -11,7 +11,7 @@ import './CierreCajaPage.css';
 // Cierre de Caja por turno (rediseño aprobado por el usuario sobre una maqueta, 2026-10-16): cada
 // cierre cuenta lo que pasó desde el cierre anterior, aunque sea del mismo día. A la izquierda,
 // las ventas del turno agrupadas por dónde está la plata; a la derecha, el arqueo como una cuenta
-// a la vista (fondo + ventas en efectivo − gastos = lo que tiene que haber en la caja).
+// a la vista (fondo + ventas en efectivo − gastos en efectivo = lo que tiene que haber en la caja).
 
 const PUEDE_CERRAR = new Set(['admin', 'encargado']);
 
@@ -345,7 +345,7 @@ export default function CierreCajaPage() {
         sub={resumen?.desde ? `Vendido desde el cierre (${cuandoFueElCierreCorto(resumen.desde)}).` : 'Vendido desde el inicio del día.'}
         minis={[
           { etiqueta: 'Efectivo esperado', valor: formatearMonto(esperado), icono: 'billete', tono: esperado < 0 ? 'rojo' : 'verde' },
-          { etiqueta: 'Gastos y pagos', valor: formatearMonto(gastos), icono: 'billetera', tono: 'amarillo' },
+          { etiqueta: 'Gastos y pagos', valor: formatearMonto(gastos), sub: 'En efectivo', icono: 'billetera', tono: 'amarillo' },
           { etiqueta: 'Fondo inicial', valor: formatearMonto(fondo), icono: 'caja', tono: 'azul' },
         ]}
       />
@@ -436,7 +436,7 @@ export default function CierreCajaPage() {
               <span>{formatearMonto(ventasEfectivo)}</span>
             </div>
             <div className="cierre-cuenta-fila">
-              <span>− Gastos y pagos a proveedores</span>
+              <span>− Gastos y pagos en efectivo</span>
               <span>{gastos > 0 ? `− ${formatearMonto(gastos)}` : formatearMonto(0)}</span>
             </div>
             <div className={`cierre-cuenta-total${esperado < 0 ? ' cierre-cuenta-negativa' : ''}`}>

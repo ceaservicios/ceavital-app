@@ -175,6 +175,19 @@
 button.caja-search-item:hover {
   background: var(--bg-hover);
 }
+/* Una promo (2026-11-03): a todo el ancho, arriba de los productos, con el verde de la fila del
+   combo en el carrito. */
+.caja-search-item.caja-search-item-combo {
+  grid-column: 1 / -1;
+  background: var(--ok-bg);
+}
+button.caja-search-item.caja-search-item-combo:hover {
+  background: #d3eadc;
+}
+.caja-search-item-combo .caja-search-item-pack-label {
+  color: var(--ok-ink);
+  font-weight: 700;
+}
 .caja-search-cabeza {
   display: flex;
   align-items: center;
@@ -470,9 +483,32 @@ button.caja-search-item:hover {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-/* Combos aplicados (2026-11-01): su fila va al final del carrito, con un fondo verde claro. */
+/* Promos elegidas (2026-11-03): arriba del carrito, la fila de la promo en verde claro y debajo sus
+   productos, más bajos, corridos a la derecha y en un verde más suave, con los números en verde. */
 .caja-cart-row-combo {
   background: var(--ok-bg);
+}
+.caja-cart-row.caja-cart-row-en-promo {
+  min-height: 44px;
+  padding: 6px 0;
+  background: color-mix(in srgb, var(--ok-bg) 50%, #ffffff);
+}
+.caja-cart-row-en-promo .caja-cart-nombre {
+  padding-left: 44px;
+}
+.caja-cart-row-en-promo .caja-cart-nombre-texto {
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.caja-cart-en-promo-cantidad,
+.caja-cart-en-promo-subtotal {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ok-ink);
+}
+.caja-cart-row-en-promo .caja-cart-precio {
+  font-size: 13px;
+  color: var(--ok-ink);
 }
 .caja-cart-combo-veces {
   font-size: 14px;
@@ -988,9 +1024,8 @@ button.caja-search-item:hover {
     content: '× ';
     color: var(--text-muted);
   }
-  /* Línea que entró entera en un combo: sin precio propio. */
-  .caja-cart-precio.vacio::before {
-    content: none;
+  .caja-cart-row-en-promo .caja-cart-nombre {
+    padding-left: 24px;
   }
   .caja-cart-subtotal {
     grid-area: subtotal;

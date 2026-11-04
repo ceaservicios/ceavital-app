@@ -69,8 +69,8 @@ function condicionDelTurno(anterior, columnaHasta) {
 // ven los 3 roles en Cierre de Caja antes de que Admin/Encargado confirmen el cierre.
 //
 // Efectivo que tiene que haber en la caja = fondo inicial del turno (el que dejó el cierre anterior
-// o el cargado a mano) + ventas en efectivo del turno − gastos y pagos a proveedores del turno (se
-// asumen en efectivo: salen del cajón, ver gastos.service.js).
+// o el cargado a mano) + ventas en efectivo del turno − gastos y pagos a proveedores del turno en
+// efectivo (los que salen del cajón; los de otro medio no cuentan, migración 039).
 export async function calcularResumenDelTurno() {
   const anterior = await ultimoCierre();
   const cargado = await fondoCargado(anterior);
@@ -89,7 +89,10 @@ export async function calcularResumenDelTurno() {
   for (const fila of filas) totales[fila.medio] = Number(fila.total);
 
   const gastos = await db
-    .prepare(`SELECT COALESCE(SUM(monto), 0) AS total FROM gastos_caja WHERE eliminado_en IS NULL AND ${gastosTurno.sql}`)
+    .prepare(
+      `SELECT COALESCE(SUM(monto), 0) AS total FROM gastos_caja
+       WHERE eliminado_en IS NULL AND medio_pago = 'efectivo' AND ${gastosTurno.sql}`
+    )
     .get(...gastosTurno.params);
 
   const total_general = MEDIOS_PAGO.reduce((acc, m) => acc + totales[m], 0);

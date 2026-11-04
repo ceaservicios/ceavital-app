@@ -6,6 +6,8 @@ const MAX_CONCEPTO = 200;
 // Tope de un monto en pesos (Number.isInteger(1e21) es true): sin él un gasto
 // absurdo corrompía el efectivo esperado del día.
 const MAX_MONTO = 1_000_000_000;
+// Medio de pago del gasto (migración 039, 2026-11-03). Solo 'efectivo' sale de la caja.
+const MEDIOS_PAGO = ['efectivo', 'mercado_pago', 'transferencia', 'tarjeta', 'cheque'];
 
 function validarConcepto(valor) {
   if (typeof valor !== 'string' || valor.trim() === '') throw new ApiError(400, 'concepto es requerido');
@@ -23,17 +25,53 @@ function validarMonto(valor) {
   return n;
 }
 
+// Sin medio: efectivo, como antes de la 039.
+function validarMedioPago(valor) {
+  if (valor === undefined || valor === null || valor === '') return 'efectivo';
+  if (!MEDIOS_PAGO.includes(valor)) throw new ApiError(400, 'Medio de pago inválido');
+  return valor;
+}
+
+// Sin proveedor: null.
+function validarProveedorId(valor) {
+  if (valor === undefined || valor === null || valor === '') return null;
+  const n = Number(valor);
+  if (typeof valor === 'boolean' || !Number.isInteger(n) || n <= 0) throw new ApiError(400, 'proveedor_id inválido');
+  return n;
+}
+
 async function verificarProveedorActivo(proveedorId) {
   if (proveedorId === null) return;
   const proveedor = await db.prepare('SELECT id FROM proveedores WHERE id = ? AND eliminado_en IS NULL').get(proveedorId);
   if (!proveedor) throw new ApiError(400, 'El proveedor indicado no existe o está eliminado');
 }
 
-// Gastos y pagos a proveedores en Caja (corrección pedida 2026-09-15) -- se
-// asumen SIEMPRE en efectivo (es lo que motiva registrarlos acá: afectan el
-// arqueo físico del cajón, ver caja.service.calcularResumenDelTurno). Si algún
-// día hace falta un gasto no-efectivo, sumar un campo medio_pago recién ahí --
-// no se anticipa acá sin un caso real.
+// Un pago a un proveedor o de una cuenta de Saldos pendientes que salió de la caja se anula desde
+// donde se registró: si se tocara acá, el pago seguiría descontando lo que se debe con el monto viejo.
+async function verificarQueNoEsUnPago(id) {
+  const pago = await db
+    .prepare(
+      `SELECT pr.nombre FROM pagos_proveedor pp JOIN proveedores pr ON pr.id = pp.proveedor_id
+       WHERE pp.gasto_caja_id = ? AND pp.anulado_en IS NULL`
+    )
+    .get(id);
+  if (pago) throw new ApiError(409, `Es un pago a ${pago.nombre}: se anula desde Proveedores, en su perfil (pestaña Pagos).`);
+  const pagoCuenta = await db
+    .prepare(
+      `SELECT cp.concepto FROM pagos_cuenta pc JOIN cuentas_pagar cp ON cp.id = pc.cuenta_id
+       WHERE pc.gasto_caja_id = ? AND pc.anulado_en IS NULL`
+    )
+    .get(id);
+  if (pagoCuenta) throw new ApiError(409, `Es el pago de «${pagoCuenta.concepto}»: se anula desde Saldos pendientes, en su ficha.`);
+}
+
+const SQL_GASTO_CON_PROVEEDOR = `SELECT g.id, g.concepto, g.monto, g.medio_pago, g.proveedor_id, p.nombre AS proveedor_nombre
+  FROM gastos_caja g LEFT JOIN proveedores p ON p.id = g.proveedor_id
+  WHERE g.id = ? AND g.eliminado_en IS NULL`;
+
+// Gastos y pagos a proveedores en Caja (corrección pedida 2026-09-15). Desde el 2026-11-03 cada
+// gasto lleva su medio de pago (migración 039): solo los de efectivo salen del cajón y cuentan en
+// el arqueo (caja.service.calcularResumenDelTurno); los demás quedan anotados sin tocar la caja.
 // Con desde/hasta: los gastos de un período (pantalla "Ventas diarias", 2026-10-16), con quién
 // lo cargó y el proveedor.
 export function listarGastos({ fecha, desde, hasta } = {}) {
@@ -71,17 +109,42 @@ export function listarGastos({ fecha, desde, hasta } = {}) {
 // Crear: los 3 roles (decisión 2026-09-18 -- cualquiera en caja puede
 // registrar un gasto en el momento en que ocurre, ej. un cajero que paga un
 // flete en efectivo a media tarde).
-export async function registrarGasto({ concepto, monto, proveedor_id }, { usuarioId }) {
+export async function registrarGasto({ concepto, monto, proveedor_id, medio_pago }, { usuarioId }) {
   const conceptoValido = validarConcepto(concepto);
   const montoValido = validarMonto(monto);
-  const proveedorId = proveedor_id != null ? Number(proveedor_id) : null;
+  const medioValido = validarMedioPago(medio_pago);
+  const proveedorId = validarProveedorId(proveedor_id);
 
   // Leer-decidir-escribir en una transacción: el proveedor no puede darse de baja entre el chequeo y el alta.
   return db.transaction(async () => {
     await verificarProveedorActivo(proveedorId);
     return db
-      .prepare(`INSERT INTO gastos_caja (usuario_id, concepto, monto, proveedor_id) VALUES (?, ?, ?, ?) RETURNING *`)
-      .get(usuarioId, conceptoValido, montoValido, proveedorId);
+      .prepare(`INSERT INTO gastos_caja (usuario_id, concepto, monto, proveedor_id, medio_pago) VALUES (?, ?, ?, ?, ?) RETURNING *`)
+      .get(usuarioId, conceptoValido, montoValido, proveedorId, medioValido);
+  });
+}
+
+// Corregir un gasto ya anotado (pedido del usuario, 2026-11-03: "en gastos podamos editar los
+// métodos de pago y todo eso. Todo el gasto hecho"): concepto, monto, medio de pago y proveedor.
+// Admin+Encargado, como eliminarlo. La fecha y quién lo anotó no cambian. Un cierre ya hecho no
+// cambia (es una foto); el turno abierto sí. Devuelve el gasto como quedó y como estaba (para el registro).
+export async function editarGasto(id, { concepto, monto, proveedor_id, medio_pago }) {
+  const conceptoValido = validarConcepto(concepto);
+  const montoValido = validarMonto(monto);
+  const medioValido = validarMedioPago(medio_pago);
+  const proveedorId = validarProveedorId(proveedor_id);
+
+  return db.transaction(async () => {
+    const antes = await db.prepare(SQL_GASTO_CON_PROVEEDOR).get(id);
+    if (!antes) throw new ApiError(404, 'Gasto no encontrado');
+    await verificarQueNoEsUnPago(id);
+    // Si el proveedor no cambia, se deja aunque se haya dado de baja después.
+    if (proveedorId !== antes.proveedor_id) await verificarProveedorActivo(proveedorId);
+    await db
+      .prepare('UPDATE gastos_caja SET concepto = ?, monto = ?, medio_pago = ?, proveedor_id = ? WHERE id = ?')
+      .run(conceptoValido, montoValido, medioValido, proveedorId, id);
+    const gasto = await db.prepare(SQL_GASTO_CON_PROVEEDOR).get(id);
+    return { gasto, antes };
   });
 }
 
@@ -92,22 +155,7 @@ export async function eliminarGasto(id) {
   await db.transaction(async () => {
     const gasto = await db.prepare('SELECT id FROM gastos_caja WHERE id = ? AND eliminado_en IS NULL').get(id);
     if (!gasto) throw new ApiError(404, 'Gasto no encontrado');
-    // Un pago a un proveedor que salió de la caja se anula desde su perfil: si se borrara acá,
-    // el pago seguiría descontando lo que se le debe.
-    const pago = await db
-      .prepare(
-        `SELECT pr.nombre FROM pagos_proveedor pp JOIN proveedores pr ON pr.id = pp.proveedor_id
-         WHERE pp.gasto_caja_id = ? AND pp.anulado_en IS NULL`
-      )
-      .get(id);
-    if (pago) throw new ApiError(409, `Es un pago a ${pago.nombre}: se anula desde Proveedores, en su perfil (pestaña Pagos).`);
-    const pagoCuenta = await db
-      .prepare(
-        `SELECT cp.concepto FROM pagos_cuenta pc JOIN cuentas_pagar cp ON cp.id = pc.cuenta_id
-         WHERE pc.gasto_caja_id = ? AND pc.anulado_en IS NULL`
-      )
-      .get(id);
-    if (pagoCuenta) throw new ApiError(409, `Es el pago de «${pagoCuenta.concepto}»: se anula desde Saldos pendientes, en su ficha.`);
+    await verificarQueNoEsUnPago(id);
     await db.prepare('UPDATE gastos_caja SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
   });
 }

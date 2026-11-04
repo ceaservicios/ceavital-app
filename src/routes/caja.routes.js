@@ -10,6 +10,7 @@ import {
   registrarCierreController,
 } from '../controllers/caja.controller.js';
 import {
+  editarGastoController,
   eliminarGastoController,
   listarGastosController,
   registrarGastoController,
@@ -36,9 +37,11 @@ router.put('/fondo', requireAuth(['admin', 'encargado']), cargarFondoController)
 // Gastos y pagos a proveedores (corrección pedida 2026-09-15, decisiones
 // confirmadas 2026-09-18). Crear/Ver: los 3 roles (cualquiera en caja puede
 // registrar un gasto en el momento en que ocurre). Eliminar (corregir un
-// gasto mal cargado): Admin+Encargado, mismo criterio que anular una venta.
+// gasto mal cargado): Admin+Encargado, mismo criterio que anular una venta. Corregirlo (concepto,
+// monto, medio de pago y proveedor, 2026-11-03): los mismos.
 router.get('/gastos', requireAuth(), listarGastosController);
 router.post('/gastos', requireAuth(), registrarGastoController);
+router.patch('/gastos/:id', requireAuth(['admin', 'encargado']), editarGastoController);
 router.delete('/gastos/:id', requireAuth(['admin', 'encargado']), eliminarGastoController);
 
 export default router;

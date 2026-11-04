@@ -5,7 +5,6 @@ import { stockDisponible } from './reservas.service.js';
 import { esDiaValido, sqlDiaNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
 import { mediosPagoPermitidos } from './modulos.service.js';
 import {
-  aplicarCombos,
   armarLineas,
   COLUMNAS_PRESENTACION,
   describirCantidad,
@@ -77,9 +76,11 @@ function validarEntero(valor, campo, { minimo = null } = {}) {
   return n;
 }
 
-function validarItems(items) {
-  if (!Array.isArray(items) || items.length === 0) {
-    throw new ApiError(400, 'items es requerido y tiene que tener al menos un producto');
+// Con promos elegidas (`hayPromos`), la venta puede no tener productos sueltos.
+function validarItems(items, { hayPromos = false } = {}) {
+  if (hayPromos && (items === undefined || items === null)) return [];
+  if (!Array.isArray(items) || (items.length === 0 && !hayPromos)) {
+    throw new ApiError(400, 'items es requerido y tiene que tener al menos un producto o una promo');
   }
   // presentacion: 'unidad' (por defecto) o 'pack' (venta por pack, 2026-10-11). Las líneas
   // repetidas del mismo producto y presentación se juntan (el precio por cantidad mira el total).
@@ -90,6 +91,25 @@ function validarItems(items) {
       presentacion: validarPresentacion(item?.presentacion, `items[${i}].presentacion`),
     }))
   );
+}
+
+// Promos elegidas en Caja (pedido del usuario, 2026-11-03): [{ combo_id, veces }]. La misma promo
+// dos veces se junta.
+const MAX_VECES_PROMO = 10_000;
+
+function validarPromos(combos) {
+  if (combos === undefined || combos === null) return [];
+  if (!Array.isArray(combos)) throw new ApiError(400, 'combos tiene que ser una lista');
+  const vecesPorCombo = new Map();
+  combos.forEach((elegido, i) => {
+    const comboId = validarEntero(elegido?.combo_id, `combos[${i}].combo_id`, { minimo: 1 });
+    const veces = validarEntero(elegido?.veces, `combos[${i}].veces`, { minimo: 1 });
+    vecesPorCombo.set(comboId, (vecesPorCombo.get(comboId) ?? 0) + veces);
+  });
+  return [...vecesPorCombo].map(([comboId, veces]) => {
+    if (veces > MAX_VECES_PROMO) throw new ApiError(400, `No se pueden cobrar más de ${MAX_VECES_PROMO} veces la misma promo`);
+    return { combo_id: comboId, veces };
+  });
 }
 
 async function obtenerProductoActivo(productoId) {
@@ -300,11 +320,12 @@ async function validarClienteEmpresa(medioPago, clienteEmpresaId) {
 // Varios medios (2026-11-01): con `pagos` en vez de `medio_pago`, la venta queda 'mixto' y cada parte
 // en venta_pagos. Las partes tienen que sumar el total que calcula el servidor.
 //
-// Combos (2026-11-01, solo Caja): antes de ponerle precio a las líneas se saca lo que entra en los
-// combos vigentes (aplicarCombos); eso va en líneas propias, cada una a su precio en la promo, y el
-// resto se cobra como siempre. Al aprobar un pedido (lineasCongeladas) no se aplican.
+// Combos (solo Caja): se cobran solo las promos elegidas en el buscador (`combos`, con las veces de
+// cada una; pedido del usuario, 2026-11-03), en líneas propias a su precio en la promo
+// (lineasDeCombo). Los productos de `items` se cobran siempre a su precio, aunque completen una promo.
+// Al aprobar un pedido (lineasCongeladas) no hay promos.
 export async function registrarVentaEnTransaccion(
-  { medio_pago, pagos, items, cliente_empresa_id },
+  { medio_pago, pagos, items, combos, cliente_empresa_id },
   { usuarioId, pedidoId = null, lineasCongeladas = null }
 ) {
   const partes = pagos != null ? validarPagos(pagos) : null;
@@ -317,17 +338,29 @@ export async function registrarVentaEnTransaccion(
       lineas.push({ ...linea, producto: await obtenerProductoActivo(linea.producto_id) });
     }
   } else {
-    const validados = validarItems(items);
+    const elegidas = validarPromos(combos);
+    const validados = validarItems(items, { hayPromos: elegidas.length > 0 });
+    const vigentes = elegidas.length > 0 ? await combosVigentes() : [];
+    const promos = elegidas.map(({ combo_id, veces }) => {
+      const combo = vigentes.find((c) => c.id === combo_id);
+      if (!combo) {
+        throw new ApiError(409, 'Una promo del carrito ya no está vigente (se cambió o se borró en Promociones). Sacala y volvé a elegirla.');
+      }
+      return { combo, veces };
+    });
     const productos = new Map();
-    for (const item of validados) {
-      if (!productos.has(item.producto_id)) productos.set(item.producto_id, await obtenerProductoActivo(item.producto_id));
+    const productoIds = [
+      ...validados.map((item) => item.producto_id),
+      ...promos.flatMap(({ combo }) => combo.renglones.map((r) => r.productos[0])),
+    ];
+    for (const productoId of productoIds) {
+      if (!productos.has(productoId)) productos.set(productoId, await obtenerProductoActivo(productoId));
     }
-    const { aplicados, resto } = aplicarCombos(validados, await combosVigentes());
-    for (const linea of armarLineas(resto, productos)) {
+    for (const linea of armarLineas(validados, productos)) {
       lineas.push({ ...linea, producto: productos.get(linea.producto_id) });
     }
-    for (const { combo, veces, partes } of aplicados) {
-      for (const linea of lineasDeCombo(combo, veces, partes, productos)) {
+    for (const { combo, veces } of promos) {
+      for (const linea of lineasDeCombo(combo, veces, productos)) {
         lineas.push({ ...linea, producto: productos.get(linea.producto_id) });
       }
     }

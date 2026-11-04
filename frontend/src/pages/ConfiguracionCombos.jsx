@@ -484,8 +484,9 @@ export default function SeccionCombos() {
         <p className="config-seccion-desc">
           Un combo lleva productos, cada uno con su forma (unidad, kg, caja o pack), su cantidad y su precio en la promo: por ejemplo
           1 Fernet a $11.000 + 2 Coca-Cola a $3.250 = $17.500. Ese precio vale solo para el combo: el precio del producto en Caja y
-          en Stock no cambia. En Caja se cobra solo cuando el carrito tiene todo lo del combo; lo que sobra va a su precio normal, y el
-          stock se descuenta como en cualquier venta. Vale solo en Caja. Las ventas ya hechas no cambian.
+          en Stock no cambia. En Caja se cobra cuando se lo elige en el buscador, las veces que se pida; los productos que se
+          escanean sueltos van a su precio normal aunque completen el combo. El stock se descuenta como en cualquier venta. Vale
+          solo en Caja. Las ventas ya hechas no cambian.
         </p>
       </div>
       <div className="config-seccion-cuerpo">

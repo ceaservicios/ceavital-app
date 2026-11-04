@@ -7,7 +7,6 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { COLOR_MEDIO, COLOR_MEDIO_CLARO, ICONO_MEDIO, colorDe } from '../utils/colores.js';
 import { formatearMonto, fechaHoyISO } from '../utils/format.js';
 import {
-  aplicarCombos,
   claveDeSuma,
   combosParaCobrar,
   cuentasPorGrupo,
@@ -24,6 +23,7 @@ import {
   precioLinea,
   simboloMedida,
   subtotalLinea,
+  subtotalRenglon,
   sufijoPrecio,
   textoDeCantidad,
   tienePack,
@@ -56,6 +56,9 @@ function opcionesDeVenta(producto) {
 
 // Una línea suelta de un producto por kg o litro: la cantidad es el peso que se tipea.
 const esLineaPorPeso = (item) => item.presentacion === 'unidad' && esFraccionable(item.producto.medida);
+
+// Para buscar promos por nombre: sin mayúsculas ni acentos.
+const normalizar = (texto) => texto.toLocaleLowerCase('es').normalize('NFD').replace(/\p{Diacritic}/gu, '');
 
 // Opciones de los filtros (categoría o proveedor): solo las que tienen productos.
 const nombresDe = (productos, campo) =>
@@ -175,8 +178,12 @@ export default function CajaPage() {
   // Filtros por categoría y proveedor (pedido del usuario, 2026-10-30): con uno elegido, la lista
   // muestra sus productos sin escribir nada. Los ven los tres roles.
   const [catalogo, setCatalogo] = useState([]);
-  // Combos vigentes (2026-11-01): se aplican solos cuando el carrito tiene todo lo de uno.
+  // Combos vigentes (2026-11-01): se buscan por nombre en el buscador.
   const [combos, setCombos] = useState([]);
+  // Promos elegidas en el buscador (pedido del usuario, 2026-11-03: "que se arme solo si eligen la
+  // promo en el buscador"): [{ combo_id, veces }], aparte de los productos. Lo que se escanea suelto
+  // nunca arma una promo.
+  const [promos, setPromos] = useState([]);
   const [filtroCategoria, setFiltroCategoria] = useState('');
   const [filtroProveedor, setFiltroProveedor] = useState('');
   const hayFiltro = Boolean(filtroCategoria || filtroProveedor);
@@ -195,6 +202,7 @@ export default function CajaPage() {
   const confirmandoVentaRef = useRef(false);
   const enterEnCursoRef = useRef(new Set());
   const guardandoMedioRef = useRef(false);
+  const agregandoComboRef = useRef(false);
   const rafagasPesoRef = useRef(new Map()); // clave de línea → { antes, ultima }, ver teclaEnPeso
 
   const puedeAnular = PUEDE_ANULAR.has(usuario?.rol);
@@ -306,6 +314,14 @@ export default function CajaPage() {
   const resultadosVisibles = resultados.filter(
     (p) => (!filtroCategoria || p.categoria === filtroCategoria) && (!filtroProveedor || p.proveedor === filtroProveedor)
   );
+  // Promos en el buscador (pedido del usuario, 2026-11-03: "se puedan buscar las promo (por nombre) y
+  // traiga los productos a la lista. Y se pueda seguir agregando productos"): los combos vigentes
+  // cuyo nombre tiene lo escrito van arriba de los productos.
+  const combosQueCoinciden = (texto) => {
+    const buscado = normalizar(texto.trim());
+    return buscado ? combos.filter((c) => normalizar(c.nombre).includes(buscado)) : [];
+  };
+  const combosVisibles = combosQueCoinciden(query);
   const listaAbierta = mostrarResultados && (query.trim().length > 0 || hayFiltro);
 
   function cambiarFiltro(setFiltro, valor) {
@@ -363,6 +379,52 @@ export default function CajaPage() {
       setMostrarResultados(false);
     }
     if (!porPeso) searchInputRef.current?.focus();
+  }
+
+  // Elegir una promo la suma al carrito como un ítem propio, con sus productos adentro; si ya estaba,
+  // suma una más. Se siguen agregando productos aparte. Los productos se piden de nuevo para tener el
+  // stock al día (el aviso de "Solo hay…"), como en la búsqueda.
+  async function agregarCombo(combo) {
+    if (agregandoComboRef.current) return;
+    agregandoComboRef.current = true;
+    setError(null);
+    try {
+      const { productos } = await api.get('/productos');
+      setCatalogo(productos);
+      const aLaVenta = new Set(productos.map((p) => p.id));
+      if (combo.renglones.some((r) => !aLaVenta.has(r.productos[0]))) {
+        setError(`La promo ${combo.nombre} tiene un producto que ya no está a la venta. Revisala en Configuración → Promociones.`);
+        return;
+      }
+      setPromos((prev) =>
+        prev.some((p) => p.combo_id === combo.id)
+          ? prev.map((p) => (p.combo_id === combo.id ? { ...p, veces: p.veces + 1 } : p))
+          : [...prev, { combo_id: combo.id, veces: 1 }]
+      );
+      setQuery('');
+      if (!hayFiltro) {
+        setResultados([]);
+        setResultadosDe('');
+        setMostrarResultados(false);
+      }
+      searchInputRef.current?.focus();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo sumar la promo. Probá de nuevo en unos segundos.');
+    } finally {
+      agregandoComboRef.current = false;
+    }
+  }
+
+  // Cuántas promos (pedido del usuario, 2026-11-03: "editar cantidad de promos 1 o +"): el − y el +
+  // de la fila de la promo; en cero sale del carrito. Sus productos la siguen solos.
+  function cambiarVecesPromo(comboId, delta) {
+    setPromos((prev) =>
+      prev.map((p) => (p.combo_id === comboId ? { ...p, veces: p.veces + delta } : p)).filter((p) => p.veces > 0)
+    );
+  }
+
+  function quitarPromo(comboId) {
+    setPromos((prev) => prev.filter((p) => p.combo_id !== comboId));
   }
 
   // Foco en el campo de peso de la línea recién agregada (después de que se dibuja).
@@ -435,6 +497,12 @@ export default function CajaPage() {
         enterEnCursoRef.current.delete(texto);
       }
     }
+    // Ningún producto y una sola promo con ese nombre: Enter suma la promo.
+    if (lista.length === 0) {
+      const coinciden = combosQueCoinciden(texto);
+      if (coinciden.length === 1) await agregarCombo(coinciden[0]);
+      return;
+    }
     const porCodigo = lista.filter((p) => p.coincide_codigo);
     const candidatos = porCodigo.length === 1 ? porCodigo : lista;
     if (candidatos.length !== 1) return;
@@ -502,37 +570,127 @@ export default function CajaPage() {
     setCarrito((prev) => prev.filter((item) => item.clave !== clave));
   }
 
-  // Combos (2026-11-01): primero sale lo que entra en un combo, a su precio; lo que queda de cada
-  // línea (`resto`) se cobra como siempre. Igual que el servidor (aplicarCombos).
-  const { aplicados: combosAplicados, resto } = aplicarCombos(carrito, combos);
-  const cobradaSuelta = new Map(resto.map((item) => [item.clave, item.cantidad]));
-  const cantidadSuelta = (item) => cobradaSuelta.get(item.clave) ?? 0;
-  // De cada línea, qué combos se llevaron una parte: clave → [{ nombre, cantidad }].
-  const enCombos = new Map();
-  for (const { combo, partes } of combosAplicados) {
-    for (const p of partes) {
-      const clave = `${p.producto_id}:${p.presentacion}`;
-      enCombos.set(clave, [...(enCombos.get(clave) ?? []), { nombre: combo.nombre, cantidad: p.cantidad }]);
-    }
-  }
-  // "1 Fernet Branca 750 ml + 2 Coca-Cola 2,25 L": cada producto del combo con lo que llevó.
+  // Promos elegidas (2026-11-03), cada una con su combo (si dejó de estar vigente, no se muestra): se
+  // cobran a su precio, las veces elegidas, y los productos del carrito siempre a su precio. Igual que
+  // el servidor (lineasDeCombo), que es el que cobra.
+  const promosDelCarrito = promos
+    .map((p) => ({ ...p, combo: combos.find((c) => c.id === p.combo_id) }))
+    .filter((p) => p.combo);
+  const carritoVacio = carrito.length === 0 && promosDelCarrito.length === 0;
+  // "1 Fernet Branca 750 ml + 2 Coca-Cola 2,25 L": cada producto del combo con lo que lleva.
   const detalleCombo = (combo, veces) =>
     combo.renglones.map((r) => `${describirCantidadRenglon(r.presentacion, r.cantidad * veces, r.marcas)} ${r.nombre}`).join(' + ');
-  // Grupos de promoción (2026-11-01): para el precio por cantidad cuenta todo el grupo del carrito,
-  // sin lo que entró en combos.
-  const cuentas = cuentasPorGrupo(resto);
-  const cuentaDe = (item) => cuentas.get(claveDeSuma(item.producto, item.presentacion)) ?? cantidadSuelta(item);
-  const precioDe = (item) => precioLinea(item.producto, cantidadSuelta(item), item.presentacion, cuentaDe(item));
-  // Unidades pedidas de cada producto, sumando sus líneas por unidad y por pack.
+  // Unidades pedidas de cada producto: sus líneas por unidad y por pack, más lo que va en promos.
   const unidadesPorProducto = carrito.reduce((mapa, item) => {
     const unidades = unidadesDeLinea(item.producto, item.cantidad, item.presentacion);
     return mapa.set(item.producto_id, (mapa.get(item.producto_id) ?? 0) + unidades);
   }, new Map());
+  for (const { combo, veces } of promosDelCarrito) {
+    for (const r of combo.renglones) {
+      const unidades = unidadesDeLinea(r.marcas[0], r.cantidad * veces, r.presentacion);
+      unidadesPorProducto.set(r.productos[0], (unidadesPorProducto.get(r.productos[0]) ?? 0) + unidades);
+    }
+  }
+  // El stock de los productos de una promo sale del catálogo (se pide de nuevo al elegirla).
+  const stockDe = new Map(catalogo.map((p) => [p.id, p.stock_disponible]));
+  // La fila de una promo (2026-11-03, maqueta aprobada por el usuario): cuántas con − / +, su precio
+  // y su subtotal; debajo, cada producto con lo que lleva por las veces, su precio en la promo y su
+  // subtotal. Los productos de la promo no se tocan sueltos: siguen al − / + de la promo.
+  const filaDePromo = ({ combo, veces }) => (
+    <div className="caja-cart-promo-bloque" key={`combo-${combo.id}`}>
+      <div className="caja-cart-row caja-cart-row-combo">
+        <span style={{ flex: 2.4 }} className="caja-cart-nombre">
+          <IconoFila icono="rayo" color={colorDe(combo.id)} />
+          <span className="caja-cart-nombre-col">
+            <span className="caja-cart-nombre-texto">Combo {combo.nombre}</span>
+            <span className="caja-cart-promo-hint">Cada promo: {detalleCombo(combo, 1)}</span>
+          </span>
+        </span>
+        <span style={{ flex: 1.2 }} className="caja-cart-cantidad caja-cart-combo-veces">
+          <span className="caja-cart-stepper">
+            <button type="button" onClick={() => cambiarVecesPromo(combo.id, -1)} aria-label={`Restar una promo ${combo.nombre}`}>
+              –
+            </button>
+            <span>{veces}</span>
+            <button type="button" onClick={() => cambiarVecesPromo(combo.id, 1)} aria-label={`Sumar una promo ${combo.nombre}`}>
+              +
+            </button>
+          </span>
+        </span>
+        <span style={{ flex: 1, textAlign: 'right' }} className="caja-cart-precio">
+          {formatearMonto(combo.precio)}
+        </span>
+        <span style={{ flex: 1, textAlign: 'right' }} className="caja-cart-subtotal">
+          {formatearMonto(combo.precio * veces)}
+        </span>
+        <span style={{ width: 32, display: 'flex', justifyContent: 'center' }} className="caja-cart-quitar">
+          <button type="button" className="caja-cart-remove" onClick={() => quitarPromo(combo.id)} title="Quitar la promo">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 6h18" />
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            </svg>
+          </button>
+        </span>
+      </div>
+      {combo.renglones.map((r) => {
+        const producto = r.marcas[0];
+        const cantidad = r.cantidad * veces;
+        const stock = stockDe.get(producto.producto_id);
+        return (
+          <div className="caja-cart-row caja-cart-row-en-promo" key={r.id}>
+            <span style={{ flex: 2.4 }} className="caja-cart-nombre">
+              <IconoFila icono="paquete" color={colorDe(producto.producto_id)} />
+              <span className="caja-cart-nombre-col">
+                <span className="caja-cart-nombre-texto">{producto.producto_nombre}</span>
+                {r.presentacion === 'pack' && (
+                  <span className="caja-cart-descuenta">
+                    {etiquetaPack(producto.pack_nombre, producto.pack_unidades, producto.medida)} · Descuenta{' '}
+                    {formatearCantidad(cantidad * producto.pack_unidades, producto.medida)} del stock
+                  </span>
+                )}
+                {stock != null && unidadesPorProducto.get(producto.producto_id) > stock && (
+                  <span className="caja-cart-warning">Solo hay {formatearCantidad(stock, producto.medida)} disponibles</span>
+                )}
+              </span>
+            </span>
+            <span style={{ flex: 1.2 }} className="caja-cart-cantidad caja-cart-en-promo-cantidad">
+              {r.presentacion === 'pack' ? cantidad : formatearCantidad(cantidad, producto.medida, { corta: true })}
+            </span>
+            <span style={{ flex: 1, textAlign: 'right' }} className="caja-cart-precio">
+              {formatearMonto(r.precio)}
+              {r.presentacion === 'unidad' && sufijoPrecio(producto.medida)}
+            </span>
+            <span style={{ flex: 1, textAlign: 'right' }} className="caja-cart-subtotal caja-cart-en-promo-subtotal">
+              {formatearMonto(subtotalRenglon(r, producto.medida) * veces)}
+            </span>
+            <span style={{ width: 32 }} className="caja-cart-quitar" />
+          </div>
+        );
+      })}
+    </div>
+  );
+  // Grupos de promoción (2026-11-01): para el precio por cantidad cuenta todo el grupo del carrito
+  // (lo de las promos va aparte, a su precio en la promo).
+  const cuentas = cuentasPorGrupo(carrito);
+  const cuentaDe = (item) => cuentas.get(claveDeSuma(item.producto, item.presentacion)) ?? item.cantidad;
+  const precioDe = (item) => precioLinea(item.producto, item.cantidad, item.presentacion, cuentaDe(item));
   const total =
-    resto.reduce((acc, item) => acc + subtotalLinea(item.producto, item.cantidad, item.presentacion, cuentaDe(item)), 0) +
-    combosAplicados.reduce((acc, { combo, veces }) => acc + combo.precio * veces, 0);
-  // Un producto pesado cuenta como 1 artículo; sin peso, la venta no se puede cobrar.
-  const articulos = carrito.reduce((acc, item) => acc + (esLineaPorPeso(item) ? (item.cantidad > 0 ? 1 : 0) : item.cantidad), 0);
+    carrito.reduce((acc, item) => acc + subtotalLinea(item.producto, item.cantidad, item.presentacion, cuentaDe(item)), 0) +
+    promosDelCarrito.reduce((acc, { combo, veces }) => acc + combo.precio * veces, 0);
+  // Un producto pesado cuenta como 1 artículo; sin peso, la venta no se puede cobrar. En una promo
+  // cuenta lo que lleva cada producto (uno por peso, 1).
+  const articulos =
+    carrito.reduce((acc, item) => acc + (esLineaPorPeso(item) ? (item.cantidad > 0 ? 1 : 0) : item.cantidad), 0) +
+    promosDelCarrito.reduce(
+      (acc, { combo, veces }) =>
+        acc +
+        combo.renglones.reduce(
+          (suma, r) => suma + (r.presentacion === 'unidad' && esFraccionable(r.marcas[0].medida) ? 1 : r.cantidad * veces),
+          0
+        ),
+      0
+    );
   const faltaPeso = carrito.some((item) => esLineaPorPeso(item) && !(item.cantidad > 0));
 
   // Varios medios: las partes con monto y cuánto falta para el total (negativo: sobra). El servidor
@@ -543,14 +701,14 @@ export default function CajaPage() {
   const cargado = partes.reduce((acc, p) => acc + p.monto, 0);
   const falta = total - cargado;
   const puedeCobrar =
-    carrito.length > 0 &&
+    !carritoVacio &&
     !faltaPeso &&
     !enviando &&
     (variosMedios ? partes.length > 0 && falta === 0 : !(medioPago === 'cta_cte' && !clienteEmpresaId));
   // Debajo de los medios: lo que importa en negrita y de su color (destacado) y, al lado, el detalle.
   const deTotal = `Cargado ${formatearMonto(cargado)} de ${formatearMonto(total)}`;
   const estadoPartes =
-    carrito.length === 0
+    carritoVacio
       ? { tono: 'neutro', corto: 'Sin productos', detalle: 'Sumá productos al carrito y cargá cuánto se paga con cada medio.' }
       : partes.length === 0
         ? { tono: 'neutro', corto: 'Cargá los montos', detalle: `Cargá cuánto se paga con cada medio · Total ${formatearMonto(total)}` }
@@ -593,6 +751,7 @@ export default function CajaPage() {
           cantidad: item.cantidad,
           presentacion: item.presentacion,
         })),
+        combos: promosDelCarrito.map(({ combo_id, veces }) => ({ combo_id, veces })),
       });
       // Cuánto stock queda de lo que se vendió (2026-10-11): así se ve el efecto de cada venta.
       const quedan = (venta.stock_despues ?? [])
@@ -605,6 +764,7 @@ export default function CajaPage() {
         }`
       );
       setCarrito([]);
+      setPromos([]);
       setClienteEmpresaId('');
       // La venta siguiente arranca con un solo medio, como la mayoría.
       setVariosMedios(false);
@@ -924,7 +1084,7 @@ export default function CajaPage() {
               <input
                 ref={searchInputRef}
                 type="text"
-                placeholder="Buscá o escaneá un producto…"
+                placeholder="Buscá o escaneá un producto, o buscá una promo…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
@@ -977,7 +1137,27 @@ export default function CajaPage() {
                     {` · ${resultadosVisibles.length === 1 ? '1 producto' : `${resultadosVisibles.length} productos`}. Tocá uno para sumarlo al carrito.`}
                   </div>
                 )}
-                {resultadosVisibles.length === 0 && (
+                {combosVisibles.map((combo) => (
+                  <button
+                    type="button"
+                    key={`combo-${combo.id}`}
+                    className="caja-search-item caja-search-item-combo"
+                    onClick={() => agregarCombo(combo)}
+                  >
+                    <span className="caja-search-cabeza">
+                      <IconoFila icono="rayo" color={colorDe(combo.id)} />
+                      <span className="caja-search-nombre">
+                        {combo.nombre}
+                        <span className="caja-search-stock">{detalleCombo(combo, 1)}</span>
+                      </span>
+                    </span>
+                    <span className="caja-search-item-precio">
+                      <span className="caja-search-item-pack-label">Promo</span>
+                      {formatearMonto(combo.precio)}
+                    </span>
+                  </button>
+                ))}
+                {resultadosVisibles.length === 0 && combosVisibles.length === 0 && (
                   <div className="caja-search-empty">
                     {errorBusqueda
                       ? 'No se pudo conectar con el servidor. Probá de nuevo en unos segundos.'
@@ -1030,7 +1210,7 @@ export default function CajaPage() {
         </div>
 
         <div className="caja-cart-list">
-          {carrito.length === 0 ? (
+          {carritoVacio ? (
             <div className="caja-cart-empty">
               <span className="caja-cart-empty-icono">
                 <Icono nombre="carrito" tam={26} />
@@ -1047,11 +1227,10 @@ export default function CajaPage() {
                 <span style={{ flex: 1, textAlign: 'right' }}>Subtotal</span>
                 <span style={{ width: 32 }} />
               </div>
+              {/* Las promos arriba, en el orden en que se eligieron; después los productos (maqueta aprobada, 2026-11-03). */}
+              {promosDelCarrito.map(filaDePromo)}
               {carrito.map((item) => {
                 const { precio, aplicaPrecioCantidad } = precioDe(item);
-                // Lo que se cobra suelto (sin lo que entró en combos) y los combos que se llevaron una parte.
-                const suelta = cantidadSuelta(item);
-                const combosDeLinea = enCombos.get(item.clave) ?? [];
                 const porPack = item.presentacion === 'pack';
                 const porPeso = esLineaPorPeso(item);
                 const medida = item.producto.medida;
@@ -1060,6 +1239,7 @@ export default function CajaPage() {
                 // "desde 10 cajas" / "desde 3 kg" / "desde 6": el del pack se cuenta en packs.
                 const cantidadTexto = (n) =>
                   porPack ? `${n} ${plural(item.producto.pack_nombre, n)}` : formatearCantidad(n, medida, { corta: true });
+                const conSelector = opcionesDeVenta(item.producto).length > 1;
                 return (
                 <div className="caja-cart-row" key={item.clave}>
                   <span style={{ flex: 2.4 }} className="caja-cart-nombre">
@@ -1067,7 +1247,7 @@ export default function CajaPage() {
                     <span className="caja-cart-nombre-col">
                       <span className="caja-cart-nombre-texto">{item.nombre}</span>
                       {/* Unidad o caja en la misma línea, y cuánto descuenta del stock (2026-10-11). */}
-                      {opcionesDeVenta(item.producto).length > 1 && (
+                      {conSelector && (
                         <span className="caja-cart-switch" role="group" aria-label="Se vende por">
                           {opcionesDeVenta(item.producto).map((o) => (
                             <button
@@ -1084,25 +1264,18 @@ export default function CajaPage() {
                       )}
                       {porPack && (
                         <span className="caja-cart-descuenta">
-                          {opcionesDeVenta(item.producto).length === 1 &&
-                            `${etiquetaPack(item.producto.pack_nombre, item.producto.pack_unidades, medida)} · `}
+                          {!conSelector && `${etiquetaPack(item.producto.pack_nombre, item.producto.pack_unidades, medida)} · `}
                           Descuenta {formatearCantidad(item.cantidad * item.producto.pack_unidades, medida)} del stock
                         </span>
                       )}
                       {porPeso && !(item.cantidad > 0) && <span className="caja-cart-warning">Ingresá el peso</span>}
-                      {combosDeLinea.map((c) => (
-                        <span className="caja-cart-promo" key={c.nombre}>
-                          {cantidadTexto(c.cantidad)} en el combo {c.nombre}
-                        </span>
-                      ))}
-                      {suelta > 0 && aplicaPrecioCantidad && (
+                      {aplicaPrecioCantidad && (
                         <span className="caja-cart-promo">
                           Precio por cantidad (desde {cantidadTexto(precioCantidadDe(item.producto, item.presentacion).desde)}
                           {grupo && ` · ${grupo}`})
                         </span>
                       )}
-                      {suelta > 0 &&
-                        !aplicaPrecioCantidad &&
+                      {!aplicaPrecioCantidad &&
                         tienePrecioCantidad(item.producto, item.presentacion) &&
                         faltan <= (porPack ? 5 : 5 * factorMedida(medida)) && (
                         <span className="caja-cart-promo-hint">
@@ -1145,19 +1318,12 @@ export default function CajaPage() {
                       </span>
                     )}
                   </span>
-                  {/* Si toda la línea entró en combos, su precio va en la fila del combo. */}
-                  <span style={{ flex: 1, textAlign: 'right' }} className={`caja-cart-precio${suelta > 0 ? '' : ' vacio'}`}>
-                    {suelta > 0 && (
-                      <>
-                        {formatearMonto(precio)}
-                        {!porPack && sufijoPrecio(medida)}
-                      </>
-                    )}
+                  <span style={{ flex: 1, textAlign: 'right' }} className="caja-cart-precio">
+                    {formatearMonto(precio)}
+                    {!porPack && sufijoPrecio(medida)}
                   </span>
                   <span style={{ flex: 1, textAlign: 'right' }} className="caja-cart-subtotal">
-                    {suelta > 0 || combosDeLinea.length === 0
-                      ? formatearMonto(subtotalLinea(item.producto, suelta, item.presentacion, cuentaDe(item)))
-                      : 'En combo'}
+                    {formatearMonto(subtotalLinea(item.producto, item.cantidad, item.presentacion, cuentaDe(item)))}
                   </span>
                   <span style={{ width: 32, display: 'flex', justifyContent: 'center' }} className="caja-cart-quitar">
                     <button
@@ -1176,28 +1342,6 @@ export default function CajaPage() {
                 </div>
                 );
               })}
-              {/* Combos aplicados (2026-11-01): una fila por combo, con lo que lleva y su precio. */}
-              {combosAplicados.map(({ combo, veces }) => (
-                <div className="caja-cart-row caja-cart-row-combo" key={`combo-${combo.id}`}>
-                  <span style={{ flex: 2.4 }} className="caja-cart-nombre">
-                    <IconoFila icono="rayo" color={colorDe(combo.id)} />
-                    <span className="caja-cart-nombre-col">
-                      <span className="caja-cart-nombre-texto">Combo {combo.nombre}</span>
-                      <span className="caja-cart-promo-hint">{detalleCombo(combo, veces)}</span>
-                    </span>
-                  </span>
-                  <span style={{ flex: 1.2 }} className="caja-cart-cantidad caja-cart-combo-veces">
-                    {veces} {veces === 1 ? 'combo' : 'combos'}
-                  </span>
-                  <span style={{ flex: 1, textAlign: 'right' }} className="caja-cart-precio">
-                    {formatearMonto(combo.precio)}
-                  </span>
-                  <span style={{ flex: 1, textAlign: 'right' }} className="caja-cart-subtotal">
-                    {formatearMonto(combo.precio * veces)}
-                  </span>
-                  <span style={{ width: 32 }} className="caja-cart-quitar" />
-                </div>
-              ))}
             </>
           )}
         </div>

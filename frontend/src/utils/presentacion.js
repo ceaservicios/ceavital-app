@@ -144,14 +144,13 @@ export function subtotalLinea(producto, cantidad, presentacion, cuenta = cantida
 }
 
 // Combos (2026-11-01): renglones, uno por producto, cada uno con su forma (suelto o su caja o pack),
-// su cantidad y su precio en la promo; el precio del combo (`precio` de GET /combos) es la suma. La
-// misma regla que el servidor (src/services/presentacion.js → aplicarCombos), que es el que cobra.
-
-const claveDeLinea = (productoId, presentacion) => `${productoId}:${presentacion}`;
+// su cantidad y su precio en la promo; el precio del combo (`precio` de GET /combos) es la suma. En
+// Caja se cobran solo si se elige la promo (2026-11-03). La misma cuenta que el servidor
+// (src/services/presentacion.js → lineasDeCombo), que es el que cobra.
 
 /**
- * Los combos de GET /combos listos para aplicarCombos: solo los vigentes y, en cada renglón,
- * `productos` con el id del producto si cuenta (como el servidor) y `marcas` con sus datos.
+ * Los combos de GET /combos listos para Caja: solo los vigentes y, en cada renglón, `productos` con
+ * el id del producto si cuenta (como el servidor) y `marcas` con sus datos.
  */
 export function combosParaCobrar(combos) {
   return combos
@@ -166,55 +165,10 @@ export function combosParaCobrar(combos) {
     }));
 }
 
-// Saca `veces` combos de lo que queda: cada renglón toma de sus marcas en orden hasta completar.
-// Devuelve las partes tomadas, o null si algún renglón no se completa (y no toca `quedan`).
-function tomarCombo(combo, veces, quedan) {
-  const copia = new Map(quedan);
-  const partes = [];
-  for (let renglon = 0; renglon < combo.renglones.length; renglon++) {
-    const r = combo.renglones[renglon];
-    let falta = veces * r.cantidad;
-    for (const productoId of r.productos) {
-      if (falta <= 0) break;
-      const clave = claveDeLinea(productoId, r.presentacion);
-      const tomar = Math.min(copia.get(clave) ?? 0, falta);
-      if (tomar > 0) {
-        copia.set(clave, copia.get(clave) - tomar);
-        partes.push({ renglon, producto_id: productoId, presentacion: r.presentacion, cantidad: tomar });
-        falta -= tomar;
-      }
-    }
-    if (falta > 0) return null;
-  }
-  for (const [clave, cantidad] of copia) quedan.set(clave, cantidad);
-  return partes;
-}
-
-/**
- * Saca de las líneas [{ producto_id, presentacion, cantidad, ... }] lo que entra en combos: cada
- * combo, en orden, las veces que entre completo con lo que va quedando. Devuelve { aplicados:
- * [{ combo, veces, partes }], resto }: `partes`, lo que tomó de cada marca; `resto`, las mismas
- * líneas con lo que no entró (sin las que quedaron en 0), que se cobran como siempre.
- */
-export function aplicarCombos(lineas, combos) {
-  const quedan = new Map(lineas.map((l) => [claveDeLinea(l.producto_id, l.presentacion), Number(l.cantidad) || 0]));
-  const aplicados = [];
-  for (const combo of combos) {
-    if (combo.renglones.length === 0) continue;
-    const hay = (r) => r.productos.reduce((acc, id) => acc + (quedan.get(claveDeLinea(id, r.presentacion)) ?? 0), 0);
-    // Tope por lo que hay de cada renglón; si una marca está en dos renglones, se baja hasta que entre.
-    for (let veces = Math.min(...combo.renglones.map((r) => Math.floor(hay(r) / r.cantidad))); veces >= 1; veces--) {
-      const partes = tomarCombo(combo, veces, quedan);
-      if (partes) {
-        aplicados.push({ combo, veces, partes });
-        break;
-      }
-    }
-  }
-  const resto = lineas
-    .map((l) => ({ ...l, cantidad: quedan.get(claveDeLinea(l.producto_id, l.presentacion)) }))
-    .filter((l) => l.cantidad > 0);
-  return { aplicados, resto };
+/** Cuánto suma un renglón a la promo: cantidad × su precio (suelto en kg o litro, la cantidad va en gramos o ml). */
+export function subtotalRenglon(renglon, medida) {
+  if (renglon.presentacion === 'pack') return renglon.cantidad * renglon.precio;
+  return Math.round((renglon.cantidad * renglon.precio) / factorMedida(medida));
 }
 
 /**

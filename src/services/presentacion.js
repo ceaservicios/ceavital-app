@@ -11,7 +11,7 @@ import { ApiError } from '../utils/api-error.js';
 // - Grupos de promocion (2026-11-01, migracion 035): los productos de un mismo grupo suman juntos
 //   para llegar, sueltos con sueltos y packs con packs (decision del usuario); sin grupo cuenta solo
 //   ese producto. Cada producto usa su propio "desde" y su precio contra el total del grupo.
-// - Combos (2026-11-01, migraciones 036, 037 y 038): ver aplicarCombos y lineasDeCombo, mas abajo.
+// - Combos (2026-11-01, migraciones 036, 037 y 038): ver lineasDeCombo, mas abajo.
 
 export const PRESENTACIONES = ['unidad', 'pack'];
 
@@ -134,8 +134,9 @@ export function armarLineas(items, productos) {
 
 // Combos (2026-11-01, migraciones 036, 037 y 038): renglones, uno por producto, cada uno con su forma
 // (suelto o su caja o pack), su cantidad y su precio en la promo, que vale solo para el combo. El
-// precio del combo es la suma de sus renglones. Solo Caja. La misma regla esta en
-// frontend/src/utils/presentacion.js, para mostrar el total antes de cobrar.
+// precio del combo es la suma de sus renglones. Solo Caja, y solo cuando se elige la promo en el
+// buscador, las veces que se pida (pedido del usuario, 2026-11-03): lo que se escanea suelto nunca
+// arma una promo. frontend/src/utils/presentacion.js repite la cuenta para mostrar el total.
 
 /** Cuanto suma un renglon al combo: cantidad × su precio (suelto en kg o litro, la cantidad va en gramos o ml). */
 export function subtotalRenglon(renglon, medida) {
@@ -143,80 +144,23 @@ export function subtotalRenglon(renglon, medida) {
   return Math.round((renglon.cantidad * renglon.precio) / factorMedida(medida));
 }
 
-const claveDeLinea = (productoId, presentacion) => `${productoId}:${presentacion}`;
-
-// Saca `veces` combos de lo que queda: cada renglon toma de sus marcas en orden hasta completar.
-// Devuelve las partes tomadas, o null si algun renglon no se completa (y no toca `quedan`).
-function tomarCombo(combo, veces, quedan) {
-  const copia = new Map(quedan);
-  const partes = [];
-  for (let renglon = 0; renglon < combo.renglones.length; renglon++) {
-    const r = combo.renglones[renglon];
-    let falta = veces * r.cantidad;
-    for (const productoId of r.productos) {
-      if (falta <= 0) break;
-      const clave = claveDeLinea(productoId, r.presentacion);
-      const tomar = Math.min(copia.get(clave) ?? 0, falta);
-      if (tomar > 0) {
-        copia.set(clave, copia.get(clave) - tomar);
-        partes.push({ renglon, producto_id: productoId, presentacion: r.presentacion, cantidad: tomar });
-        falta -= tomar;
-      }
-    }
-    if (falta > 0) return null;
-  }
-  for (const [clave, cantidad] of copia) quedan.set(clave, cantidad);
-  return partes;
-}
-
 /**
- * Saca de las lineas lo que entra en combos: cada combo, en orden, las veces que entre completo con
- * lo que va quedando. `items`: lineas juntadas [{ producto_id, presentacion, cantidad }]; `combos`:
- * [{ id, nombre, precio, renglones: [{ presentacion, cantidad, precio, productos: [producto_id] }] }],
- * ordenados por id. Devuelve { aplicados: [{ combo, veces, partes }], resto }: `partes`, lo que tomo
- * de cada producto ({ renglon, producto_id, presentacion, cantidad }); `resto`, las lineas con lo que no
- * entro en ningun combo (sin las que quedaron en 0), que se cobran como siempre (armarLineas).
+ * Las lineas de una promo elegida `veces` veces: una por renglon, con la cantidad del renglon por las
+ * veces y su precio en la promo, asi la promo suma justo `combo.precio × veces` (lo que muestra Caja).
+ * Sin precio por cantidad; guardan el combo y una copia de su nombre. `combo`: de combosVigentes;
+ * `productos`: Map producto_id -> fila con COLUMNAS_PRESENTACION.
  */
-export function aplicarCombos(items, combos) {
-  const quedan = new Map(items.map((i) => [claveDeLinea(i.producto_id, i.presentacion), i.cantidad]));
-  const aplicados = [];
-  for (const combo of combos) {
-    if (combo.renglones.length === 0) continue;
-    const hay = (r) => r.productos.reduce((acc, id) => acc + (quedan.get(claveDeLinea(id, r.presentacion)) ?? 0), 0);
-    // Tope por lo que hay de cada renglon; si una marca esta en dos renglones, se baja hasta que entre.
-    for (let veces = Math.min(...combo.renglones.map((r) => Math.floor(hay(r) / r.cantidad))); veces >= 1; veces--) {
-      const partes = tomarCombo(combo, veces, quedan);
-      if (partes) {
-        aplicados.push({ combo, veces, partes });
-        break;
-      }
-    }
-  }
-  const resto = items
-    .map((i) => ({ ...i, cantidad: quedan.get(claveDeLinea(i.producto_id, i.presentacion)) }))
-    .filter((i) => i.cantidad > 0);
-  return { aplicados, resto };
-}
-
-/**
- * Las lineas de un combo cobrado `veces` veces: una por cada parte tomada (`partes`, de
- * aplicarCombos; desde la 038, una por renglon), cada una a su precio en la promo. El subtotal es el
- * del renglon por las veces, asi el combo suma justo `combo.precio × veces` (lo que muestra Caja).
- * Sin precio por cantidad; guardan el combo y una copia de su nombre. `productos`: Map producto_id ->
- * fila con COLUMNAS_PRESENTACION.
- */
-export function lineasDeCombo(combo, veces, partes, productos) {
-  return partes.map(({ renglon, producto_id, presentacion, cantidad }) => {
-    const producto = productos.get(producto_id);
-    const r = combo.renglones[renglon];
+export function lineasDeCombo(combo, veces, productos) {
+  return combo.renglones.map((r) => {
+    const producto = productos.get(r.productos[0]);
     // armarLinea, para las unidades de stock y la copia del pack; el precio es el de la promo.
-    const linea = armarLinea(producto, { cantidad, presentacion }, 0);
+    const linea = armarLinea(producto, { cantidad: r.cantidad * veces, presentacion: r.presentacion }, 0);
     return {
       ...linea,
       precio_unitario: r.precio,
       precio_cantidad_desde: null,
       precio_cantidad_grupo: null,
-      subtotal: Math.round((subtotalRenglon(r, producto.medida) * cantidad) / r.cantidad),
+      subtotal: subtotalRenglon(r, producto.medida) * veces,
       combo_id: combo.id,
       combo_nombre: combo.nombre,
     };

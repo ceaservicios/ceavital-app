@@ -7,9 +7,9 @@ import { describirCantidad, subtotalRenglon, tienePack } from './presentacion.js
 // precio en la promo: "1 Fernet a $11.000 + 2 Coca-Cola a $3.250". Ese precio vale solo para el
 // combo; el del producto no cambia ("No debe cambiar el valor en el sistema. Por algo es promo... El
 // stock sí, pero precio no"). El precio del combo es la suma de sus renglones. En Caja se cobra solo
-// cuando el carrito tiene todo lo del combo (presentacion.js → aplicarCombos). Sin fecha y solo en
-// Caja. Los arma, cambia y borra solo el Administrador, en Configuración → Promociones; los ven los
-// tres roles, porque Caja los necesita.
+// si se elige la promo en el buscador, las veces que se pida (2026-11-03; ventas.service →
+// registrarVentaEnTransaccion). Sin fecha y solo en Caja. Los arma, cambia y borra solo el
+// Administrador, en Configuración → Promociones; los ven los tres roles, porque Caja los necesita.
 
 const MAX_NOMBRE = 60;
 const MAX_PRECIO = 1_000_000_000;
@@ -133,7 +133,7 @@ function describirRenglon(nombre, presentacion, cantidad, precio, medida) {
  * calcular el precio normal), en `productos` (una lista de uno, como antes de la 038). `precio`: la
  * suma de los renglones. `problema` del producto: por qué no se puede cobrar en la forma del renglón
  * (se eliminó, o ya no se vende así). `vigente`: tiene renglones y ninguno tiene problema; uno que no
- * está vigente no se aplica en Caja. Ordenados por id: en ese orden se aplican.
+ * está vigente no se puede cobrar en Caja. Ordenados por id.
  */
 export async function listarCombos() {
   const combos = await db.prepare('SELECT id, nombre FROM combos WHERE eliminado_en IS NULL ORDER BY id').all();
@@ -172,7 +172,7 @@ export async function listarCombos() {
   });
 }
 
-/** Los que se aplican al cobrar en Caja, con el producto de cada renglón y su precio en la promo. */
+/** Los que se pueden cobrar en Caja, con el producto de cada renglón y su precio en la promo. */
 export async function combosVigentes() {
   return (await listarCombos())
     .filter((c) => c.vigente)

@@ -28,6 +28,9 @@ const MEDIO_PAGO = {
   mercado_pago: 'Mercado Pago',
   fiado: 'Pago pendiente',
   cta_cte: 'Cuenta Corriente',
+  // Los de un gasto (migración 039).
+  transferencia: 'Transferencia',
+  cheque: 'Cheque',
 };
 
 // accion -> categoría, título y cómo se lee el detalle en el panel.
@@ -112,6 +115,20 @@ const CATALOGO = {
     categoria: 'instalacion',
     titulo: 'Eliminó un cierre de caja',
     detalle: (d) => `cierre #${d.cierre_id} del ${fecha(d.fecha)} · contado ${pesos(d.contado)} · fondo dejado ${pesos(d.fondo)}`,
+  },
+  'gasto-editado': {
+    categoria: 'instalacion',
+    titulo: 'Corrigió un gasto',
+    detalle: (d) =>
+      [
+        `gasto #${d.gasto_id} «${d.concepto_antes}»`,
+        d.concepto !== d.concepto_antes && `concepto → «${d.concepto}»`,
+        d.monto !== d.monto_antes && `monto ${pesos(d.monto_antes)} → ${pesos(d.monto)}`,
+        d.medio !== d.medio_antes && `medio ${MEDIO_PAGO[d.medio_antes] ?? d.medio_antes} → ${MEDIO_PAGO[d.medio] ?? d.medio}`,
+        d.proveedor !== d.proveedor_antes && `proveedor ${d.proveedor_antes ?? 'ninguno'} → ${d.proveedor ?? 'ninguno'}`,
+      ]
+        .filter(Boolean)
+        .join(' · '),
   },
   'lote-editado': {
     categoria: 'instalacion',

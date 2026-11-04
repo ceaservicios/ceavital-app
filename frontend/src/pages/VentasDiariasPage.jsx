@@ -43,6 +43,79 @@ const ESTADOS = [
 
 const PUEDE_ELIMINAR_GASTO = new Set(['admin', 'encargado']);
 
+// Medio de pago de un gasto (2026-11-03, migración 039). Solo el efectivo sale de la caja.
+const MEDIOS_GASTO = [
+  { valor: 'efectivo', label: 'Efectivo' },
+  { valor: 'mercado_pago', label: 'Mercado Pago' },
+  { valor: 'transferencia', label: 'Transferencia' },
+  { valor: 'tarjeta', label: 'Tarjeta' },
+  { valor: 'cheque', label: 'Cheque' },
+];
+const etiquetaMedioGasto = (valor) => MEDIOS_GASTO.find((m) => m.valor === valor)?.label ?? valor;
+const GASTO_VACIO = { concepto: '', monto: '', proveedor_id: '', medio_pago: 'efectivo' };
+// Si sale o no del efectivo de la caja, según el medio.
+const notaDelMedio = (medio) =>
+  medio === 'efectivo'
+    ? 'Se descuenta del efectivo de la caja.'
+    : `Pagado con ${etiquetaMedioGasto(medio)}: no se descuenta del efectivo de la caja.`;
+
+// Los campos de un gasto, para anotarlo y para corregirlo (2026-11-03). El proveedor, solo para
+// quien ve los proveedores (Administrador y Encargado). `proveedorExtra`: el proveedor que ya tenía
+// el gasto si se dio de baja después, para que se siga viendo al corregirlo.
+function CamposGasto({ gasto, setGasto, proveedores, proveedorExtra = null }) {
+  return (
+    <>
+      <label className="vd-campo vd-gasto-concepto">
+        <span>Concepto</span>
+        <input
+          required
+          maxLength={200}
+          placeholder="Ej.: flete, limpieza"
+          aria-label="Concepto"
+          value={gasto.concepto}
+          onChange={(e) => setGasto({ ...gasto, concepto: e.target.value })}
+        />
+      </label>
+      <label className="vd-campo">
+        <span>Monto</span>
+        <input
+          required
+          type="number"
+          min="1"
+          placeholder="0"
+          aria-label="Monto"
+          value={gasto.monto}
+          onChange={(e) => setGasto({ ...gasto, monto: e.target.value })}
+        />
+      </label>
+      <label className="vd-campo">
+        <span>Medio de pago</span>
+        <select aria-label="Medio de pago" value={gasto.medio_pago} onChange={(e) => setGasto({ ...gasto, medio_pago: e.target.value })}>
+          {MEDIOS_GASTO.map((m) => (
+            <option key={m.valor} value={m.valor}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {proveedores.length > 0 && (
+        <label className="vd-campo">
+          <span>Proveedor</span>
+          <select aria-label="Proveedor" value={gasto.proveedor_id} onChange={(e) => setGasto({ ...gasto, proveedor_id: e.target.value })}>
+            <option value="">Sin proveedor asociado</option>
+            {proveedorExtra && <option value={proveedorExtra.id}>{proveedorExtra.nombre} (dado de baja)</option>}
+            {proveedores.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </>
+  );
+}
+
 // 'AAAA-MM-DD' corrido N días (al mediodía UTC, así un cambio de hora no lo mueve de día).
 function sumarDias(dia, n) {
   const fecha = new Date(`${dia}T12:00:00Z`);
@@ -109,12 +182,16 @@ export default function VentasDiariasPage() {
   const abiertaRef = useRef(null);
 
   const [mostrarFormGasto, setMostrarFormGasto] = useState(false);
-  const [nuevoGasto, setNuevoGasto] = useState({ concepto: '', monto: '', proveedor_id: '' });
+  const [nuevoGasto, setNuevoGasto] = useState(GASTO_VACIO);
   const [registrandoGasto, setRegistrandoGasto] = useState(false);
   const [confirmandoBaja, setConfirmandoBaja] = useState(null); // id del gasto a eliminar
+  // Corregir un gasto (2026-11-03): sus campos como se editan, con su id; null si no se corrige ninguno.
+  const [editando, setEditando] = useState(null);
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
   // Guardias sincrónicas: un doble click en el mismo tick anotaba el gasto (o la baja) dos veces.
   const registrandoGastoRef = useRef(false);
   const eliminandoGastoRef = useRef(false);
+  const guardandoEdicionRef = useRef(false);
   const pedidoRef = useRef(0); // para descartar respuestas de filtros viejos
 
   const cargar = useCallback(async () => {
@@ -149,6 +226,7 @@ export default function VentasDiariasPage() {
     abiertaRef.current = null;
     setAbierta(null);
     setDetalle(null);
+    setEditando(null);
   }, [desde, hasta, medio, vendedor, cliente, estado]);
 
   // El detalle que se abre cerca del borde de abajo queda a la vista sin scrollear a mano.
@@ -214,8 +292,9 @@ export default function VentasDiariasPage() {
         concepto: nuevoGasto.concepto,
         monto: Number(nuevoGasto.monto),
         proveedor_id: nuevoGasto.proveedor_id === '' ? null : Number(nuevoGasto.proveedor_id),
+        medio_pago: nuevoGasto.medio_pago,
       });
-      setNuevoGasto({ concepto: '', monto: '', proveedor_id: '' });
+      setNuevoGasto(GASTO_VACIO);
       setMostrarFormGasto(false);
       setExito(
         hoy >= desde && hoy <= hasta
@@ -228,6 +307,43 @@ export default function VentasDiariasPage() {
     } finally {
       registrandoGastoRef.current = false;
       setRegistrandoGasto(false);
+    }
+  }
+
+  function abrirEdicion(g) {
+    setConfirmandoBaja(null);
+    if (editando?.id === g.id) return setEditando(null);
+    setEditando({
+      id: g.id,
+      concepto: g.concepto,
+      monto: String(g.monto),
+      medio_pago: g.medio_pago,
+      proveedor_id: g.proveedor_id == null ? '' : String(g.proveedor_id),
+    });
+  }
+
+  async function guardarEdicion(e) {
+    e.preventDefault();
+    if (guardandoEdicionRef.current || !editando) return;
+    guardandoEdicionRef.current = true;
+    setGuardandoEdicion(true);
+    setError(null);
+    setExito(null);
+    try {
+      await api.patch(`/caja/gastos/${editando.id}`, {
+        concepto: editando.concepto,
+        monto: Number(editando.monto),
+        medio_pago: editando.medio_pago,
+        proveedor_id: editando.proveedor_id === '' ? null : Number(editando.proveedor_id),
+      });
+      setEditando(null);
+      setExito('Gasto corregido.');
+      await cargar();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo corregir el gasto.');
+    } finally {
+      guardandoEdicionRef.current = false;
+      setGuardandoEdicion(false);
     }
   }
 
@@ -540,48 +656,9 @@ export default function VentasDiariasPage() {
 
           {mostrarFormGasto && (
             <form className="vd-gasto-form" onSubmit={registrarGasto}>
-              <label className="vd-campo vd-gasto-concepto">
-                <span>Concepto</span>
-                <input
-                  required
-                  maxLength={200}
-                  placeholder="Ej.: flete, limpieza"
-                  aria-label="Concepto"
-                  value={nuevoGasto.concepto}
-                  onChange={(e) => setNuevoGasto({ ...nuevoGasto, concepto: e.target.value })}
-                />
-              </label>
-              <label className="vd-campo">
-                <span>Monto</span>
-                <input
-                  required
-                  type="number"
-                  min="1"
-                  placeholder="0"
-                  aria-label="Monto"
-                  value={nuevoGasto.monto}
-                  onChange={(e) => setNuevoGasto({ ...nuevoGasto, monto: e.target.value })}
-                />
-              </label>
-              {proveedores.length > 0 && (
-                <label className="vd-campo">
-                  <span>Proveedor</span>
-                  <select
-                    aria-label="Proveedor"
-                    value={nuevoGasto.proveedor_id}
-                    onChange={(e) => setNuevoGasto({ ...nuevoGasto, proveedor_id: e.target.value })}
-                  >
-                    <option value="">Sin proveedor asociado</option>
-                    {proveedores.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+              <CamposGasto gasto={nuevoGasto} setGasto={setNuevoGasto} proveedores={proveedores} />
               <div className="vd-gasto-pie">
-                <span className="vd-gasto-nota">Se registra con la fecha y hora actuales y se descuenta del efectivo de la caja.</span>
+                <span className="vd-gasto-nota">Se registra con la fecha y hora actuales. {notaDelMedio(nuevoGasto.medio_pago)}</span>
                 <div className="vd-gasto-botones">
                   <button type="button" className="btn" onClick={() => setMostrarFormGasto(false)}>
                     Cancelar
@@ -605,6 +682,7 @@ export default function VentasDiariasPage() {
                   <tr>
                     <th>Fecha y hora</th>
                     <th>Concepto</th>
+                    <th>Medio de pago</th>
                     <th className="vd-opcional">Proveedor</th>
                     <th className="vd-opcional">Registrado por</th>
                     <th className="num">Monto</th>
@@ -613,13 +691,15 @@ export default function VentasDiariasPage() {
                 </thead>
                 <tbody>
                   {gastos.map((g) => (
-                    <tr key={g.id} className="sin-click">
+                    <Fragment key={g.id}>
+                    <tr className="sin-click">
                       <td className="vd-g-fecha">{formatearFechaHora(g.creado_en)}</td>
                       <td className="cliente-td-nombre vd-g-concepto">
                         <ConIcono icono={g.proveedor_nombre ? 'camion' : 'billetera'} color={g.proveedor_nombre ? COLOR.naranja : COLOR.violeta}>
                           {g.concepto}
                         </ConIcono>
                       </td>
+                      <td className="vd-g-medio">{etiquetaMedioGasto(g.medio_pago)}</td>
                       <td className={`vd-opcional${g.proveedor_nombre ? '' : ' vd-sin-dato'}`}>{g.proveedor_nombre ?? '—'}</td>
                       <td className="vd-opcional">{g.usuario_nombre}</td>
                       <td className="num vd-gasto-monto">{formatearMonto(g.monto)}</td>
@@ -638,22 +718,77 @@ export default function VentasDiariasPage() {
                               </button>
                             </span>
                           ) : (
-                            <button type="button" className="vd-eliminar" title="Eliminar gasto" onClick={() => setConfirmandoBaja(g.id)}>
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <path d="M3 6h18" />
-                                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                              </svg>
-                            </button>
+                            <span className="vd-gasto-iconos">
+                              {/* Corregir el gasto entero (2026-11-03): concepto, monto, medio y proveedor. */}
+                              <button
+                                type="button"
+                                className={`vd-editar${editando?.id === g.id ? ' activa' : ''}`}
+                                title="Corregir gasto"
+                                aria-label={`Corregir el gasto ${g.concepto}`}
+                                onClick={() => abrirEdicion(g)}
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <path d="M12 20h9" />
+                                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                className="vd-eliminar"
+                                title="Eliminar gasto"
+                                onClick={() => {
+                                  setEditando(null);
+                                  setConfirmandoBaja(g.id);
+                                }}
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <path d="M3 6h18" />
+                                  <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                </svg>
+                              </button>
+                            </span>
                           )}
                         </td>
                       )}
                     </tr>
+                    {editando?.id === g.id && (
+                      <tr className="sin-click vd-fila-edicion">
+                        <td colSpan={puedeEliminarGasto ? 7 : 6}>
+                          <form className="vd-gasto-form" onSubmit={guardarEdicion}>
+                            <CamposGasto
+                              gasto={editando}
+                              setGasto={setEditando}
+                              proveedores={proveedores}
+                              proveedorExtra={
+                                g.proveedor_id != null && !proveedores.some((p) => p.id === g.proveedor_id)
+                                  ? { id: g.proveedor_id, nombre: g.proveedor_nombre ?? 'Proveedor' }
+                                  : null
+                              }
+                            />
+                            <div className="vd-gasto-pie">
+                              <span className="vd-gasto-nota">
+                                {notaDelMedio(editando.medio_pago)} La fecha y hora quedan como estaban.
+                              </span>
+                              <div className="vd-gasto-botones">
+                                <button type="button" className="btn" onClick={() => setEditando(null)}>
+                                  Cancelar
+                                </button>
+                                <button type="submit" className="btn btn-primary" disabled={guardandoEdicion}>
+                                  {guardandoEdicion ? 'Guardando…' : 'Guardar cambios'}
+                                </button>
+                              </div>
+                            </div>
+                          </form>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td colSpan={2}>Total</td>
+                    <td colSpan={3}>Total</td>
                     <td className="vd-opcional" />
                     <td className="vd-opcional" />
                     <td className="num vd-gasto-total">{formatearMonto(totalGastos)}</td>
