@@ -113,7 +113,7 @@ export default function SaldosPage() {
           <strong>{formatearFecha(c.vence)}</strong>
           <EstadoVence estado={c.estado} />
         </div>
-        <div className="saldos-fila-monto">{formatearMonto(c.falta)}</div>
+        <div className="saldos-fila-monto">{c.monto == null ? <span className="saldos-fila-sin-monto">Según factura</span> : formatearMonto(c.falta)}</div>
         <button
           type="button"
           className={`btn-fila saldos-fila-btn${c.estado.clave === 'vencida' ? ' btn-fila-rojo' : ''}`}

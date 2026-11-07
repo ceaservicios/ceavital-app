@@ -171,6 +171,13 @@ const TRAZOS = {
       <path d="M5 17a3.5 3.5 0 0 1 7 0M15 9h4M15 13h4" />
     </>
   ),
+  cofre: (
+    <>
+      <rect x="3" y="4" width="18" height="15" rx="2" />
+      <circle cx="12" cy="11.5" r="3.2" />
+      <path d="M12 8.3v1.2M12 13.5v1.2M8.8 11.5H10M14 11.5h1.2M7 19v2M17 19v2" />
+    </>
+  ),
   candado: (
     <>
       <rect x="4" y="11" width="16" height="10" rx="2" />

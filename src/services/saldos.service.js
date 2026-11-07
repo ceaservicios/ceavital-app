@@ -1,22 +1,21 @@
 import db from '../db/connection.js';
 import { esDiaValido, hoyNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
 import { ApiError } from '../utils/api-error.js';
+import { frenarSiNoAlcanza, validarOrigen } from './caja-general.service.js';
 
 // Saldos pendientes (pedido del usuario, 2026-10-29): en una sola lista, lo que falta pagar. Las
 // boletas de proveedores impagas o pagadas en parte (salen de compras_proveedor, con su fecha para
-// pagar) y las cuentas de impuestos, servicios y gastos fijos, que se cargan acá con vencimiento y
-// repetición.
+// pagar) y las cuentas de impuestos y servicios: las que se cargan acá, de una sola vez, y los
+// vencimientos de lo que se paga siempre, que entran solos desde Fijos (fijos.service.js, migración 041).
 
 const MAX_TEXTO = 200;
 // Tope de un monto en pesos, el mismo de precios, gastos y pagos a proveedores.
 const MAX_MONTO = 1_000_000_000;
 
 export const TIPOS_CUENTA = ['impuestos', 'alquiler', 'luz', 'agua', 'gas', 'internet', 'honorarios', 'otro'];
-// Cada cuánto se repite: el intervalo de Postgres que separa un vencimiento del siguiente.
-const REPETICIONES = { no: null, semanal: '7 days', quincenal: '15 days', mensual: '1 month', bimestral: '2 months', anual: '1 year' };
 const MEDIOS_PAGO = ['efectivo', 'transferencia', 'mercado_pago', 'debito', 'tarjeta'];
 
-function validarTexto(valor, campo, { requerido = true } = {}) {
+export function validarTexto(valor, campo, { requerido = true } = {}) {
   if (valor === undefined || valor === null || valor === '') {
     if (requerido) throw new ApiError(400, `${campo} es requerido`);
     return null;
@@ -28,7 +27,7 @@ function validarTexto(valor, campo, { requerido = true } = {}) {
   return limpio || null;
 }
 
-function validarMonto(valor, campo) {
+export function validarMonto(valor, campo) {
   // Solo número: Number(true) vale 1 y Number('') vale 0, y se aceptaban.
   if (typeof valor !== 'number' || !Number.isInteger(valor) || valor < 1) throw new ApiError(400, `${campo} tiene que ser un número entero mayor a 0`);
   if (valor > MAX_MONTO) throw new ApiError(400, `${campo} no puede superar ${MAX_MONTO.toLocaleString('es-AR')}`);
@@ -51,17 +50,12 @@ function validarCuenta(datos, { parcial = false } = {}) {
   if (pide('concepto')) cuenta.concepto = validarTexto(datos.concepto, 'El concepto');
   if (pide('monto')) cuenta.monto = validarMonto(datos.monto, 'El monto');
   if (pide('vence')) cuenta.vence = validarFecha(datos.vence, 'El vencimiento');
-  if (pide('repeticion')) {
-    const repeticion = datos.repeticion ?? 'no';
-    if (!(repeticion in REPETICIONES)) throw new ApiError(400, `repeticion tiene que ser una de: ${Object.keys(REPETICIONES).join(', ')}`);
-    cuenta.repeticion = repeticion;
-  }
   if (datos.nota !== undefined) cuenta.nota = validarTexto(datos.nota, 'La nota', { requerido: false });
   return cuenta;
 }
 
 // Lo pagado de cada cuenta y de cada boleta (pagos no anulados).
-const SQL_PAGADO = 'COALESCE((SELECT SUM(p.monto) FROM pagos_cuenta p WHERE p.cuenta_id = cp.id AND p.anulado_en IS NULL), 0)';
+export const SQL_PAGADO = 'COALESCE((SELECT SUM(p.monto) FROM pagos_cuenta p WHERE p.cuenta_id = cp.id AND p.anulado_en IS NULL), 0)';
 const SQL_PAGADO_COMPRA = 'COALESCE((SELECT SUM(pg.monto) FROM pagos_proveedor pg WHERE pg.compra_id = c.id AND pg.anulado_en IS NULL), 0)';
 
 async function obtenerCuentaActiva(id) {
@@ -72,7 +66,7 @@ async function obtenerCuentaActiva(id) {
   return cuenta;
 }
 
-// La pantalla: cuentas sin pagar del todo y boletas de proveedores con saldo (en cada una, la que
+// La pantalla: cuentas sin pagar del todo (una sin monto todavía no se pagó) y boletas de proveedores con saldo (en cada una, la que
 // vence antes, primero), lo pagado en el mes y la fecha de hoy del negocio, para que la pantalla arme
 // "Vencidas", "Esta semana" y "Más adelante" con el mismo día que el servidor.
 export async function obtenerSaldos() {
@@ -81,7 +75,7 @@ export async function obtenerSaldos() {
       `SELECT * FROM (
          SELECT cp.id, cp.tipo, cp.concepto, cp.monto, cp.vence, cp.repeticion, cp.nota, ${SQL_PAGADO} AS pagado
          FROM cuentas_pagar cp WHERE cp.eliminado_en IS NULL
-       ) x WHERE pagado < monto ORDER BY vence, id`
+       ) x WHERE monto IS NULL OR pagado < monto ORDER BY vence, id`
     )
     .all();
   const compras = await db
@@ -113,7 +107,7 @@ export async function contarVencidas() {
     .prepare(
       `SELECT
          (SELECT COUNT(*) FROM cuentas_pagar cp
-          WHERE cp.eliminado_en IS NULL AND cp.vence < ${SQL_HOY_NEGOCIO} AND ${SQL_PAGADO} < cp.monto)
+          WHERE cp.eliminado_en IS NULL AND cp.vence < ${SQL_HOY_NEGOCIO} AND (cp.monto IS NULL OR ${SQL_PAGADO} < cp.monto))
          + (SELECT COUNT(*) FROM compras_proveedor c JOIN proveedores pr ON pr.id = c.proveedor_id
             WHERE c.anulada_en IS NULL AND pr.eliminado_en IS NULL AND c.vence < ${SQL_HOY_NEGOCIO} AND ${SQL_PAGADO_COMPRA} < c.total)
          AS cantidad`
@@ -122,40 +116,38 @@ export async function contarVencidas() {
   return fila.cantidad;
 }
 
-// Ficha de una cuenta: sus datos, lo pagado, los pagos (con los anulados) y, si ya se creó, la
-// siguiente de la serie.
+// Ficha de una cuenta: sus datos, lo pagado, los pagos (con los anulados) y si su fijo sigue vigente.
 export async function obtenerCuenta(id) {
   const cuenta = await obtenerCuentaActiva(id);
   const pagos = await db
     .prepare(
-      `SELECT p.id, p.fecha, p.monto, p.medio, p.sale_de_caja, p.detalle, p.creado_en, p.anulado_en,
+      `SELECT p.id, p.fecha, p.monto, p.medio, COALESCE(g.origen, 'otro') AS origen, p.detalle, p.creado_en, p.anulado_en,
          u.nombre AS usuario_nombre, ua.nombre AS anulado_por_nombre
        FROM pagos_cuenta p
        JOIN usuarios u ON u.id = p.usuario_id
        LEFT JOIN usuarios ua ON ua.id = p.anulado_por
+       LEFT JOIN gastos_caja g ON g.id = p.gasto_caja_id
        WHERE p.cuenta_id = ?
        ORDER BY p.fecha DESC, p.id DESC`
     )
     .all(id);
-  const siguiente = await db
-    .prepare('SELECT id, vence FROM cuentas_pagar WHERE origen_id = ? AND eliminado_en IS NULL')
-    .get(id);
-  return { ...cuenta, pagos: pagos.map((p) => ({ ...p, anulado: Boolean(p.anulado_en) })), siguiente: siguiente ?? null };
+  const fijo = cuenta.fijo_id ? await db.prepare('SELECT id FROM fijos WHERE id = ? AND eliminado_en IS NULL').get(cuenta.fijo_id) : null;
+  return { ...cuenta, pagos: pagos.map((p) => ({ ...p, anulado: Boolean(p.anulado_en) })), fijo_vigente: Boolean(fijo) };
 }
 
 export async function crearCuenta(datos, { usuarioId }) {
   const c = validarCuenta(datos);
   const creada = await db
     .prepare(
-      `INSERT INTO cuentas_pagar (tipo, concepto, monto, vence, repeticion, nota, serie_base, usuario_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`
+      `INSERT INTO cuentas_pagar (tipo, concepto, monto, vence, nota, serie_base, usuario_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`
     )
-    .get(c.tipo, c.concepto, c.monto, c.vence, c.repeticion, c.nota ?? null, c.vence, usuarioId);
+    .get(c.tipo, c.concepto, c.monto, c.vence, c.nota ?? null, c.vence, usuarioId);
   return obtenerCuenta(creada.id);
 }
 
 // Corregir una cuenta (ej. la luz de este mes vino más cara). El monto no puede quedar por debajo
-// de lo ya pagado. Si cambia el vencimiento, la serie sigue contando desde la fecha nueva.
+// de lo ya pagado.
 export async function editarCuenta(id, datos) {
   const c = validarCuenta(datos, { parcial: true });
   if (Object.keys(c).length === 0) throw new ApiError(400, 'No se envió ningún campo para actualizar');
@@ -164,16 +156,23 @@ export async function editarCuenta(id, datos) {
     if (c.monto !== undefined && c.monto < actual.pagado) {
       throw new ApiError(400, `El monto no puede ser menor a lo ya pagado (${actual.pagado.toLocaleString('es-AR')}).`);
     }
-    if (c.vence !== undefined && c.vence !== actual.vence) {
-      c.serie_base = c.vence;
-      c.serie_numero = 0;
-    }
     const claves = Object.keys(c);
     await db
       .prepare(`UPDATE cuentas_pagar SET ${claves.map((k) => `${k} = ?`).join(', ')}, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?`)
       .run(...claves.map((k) => c[k]), id);
   });
   return obtenerCuenta(id);
+}
+
+// "Saltear" un vencimiento de un fijo que este período no se paga: se da de baja y el próximo sigue
+// igual. No vuelve, porque el fijo ya lo dejó atrás. Si tiene pagos, se anulan primero.
+export async function saltearVencimiento(id) {
+  await db.transaction(async () => {
+    const cuenta = await obtenerCuentaActiva(id);
+    if (!cuenta.fijo_id) throw new ApiError(409, 'Solo se puede saltear un vencimiento de un fijo.');
+    if (cuenta.pagado > 0) throw new ApiError(409, 'Este vencimiento tiene pagos: anulalos primero.');
+    await db.prepare('UPDATE cuentas_pagar SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+  });
 }
 
 // Dar de baja una cuenta cargada por error. Si tiene pagos, se anulan primero.
@@ -188,58 +187,47 @@ export async function eliminarCuenta(id) {
 function validarPago(datos) {
   if (!datos || typeof datos !== 'object' || Array.isArray(datos)) throw new ApiError(400, 'Faltan los datos del pago');
   if (!MEDIOS_PAGO.includes(datos.medio)) throw new ApiError(400, `medio tiene que ser uno de: ${MEDIOS_PAGO.join(', ')}`);
-  if (datos.sale_de_caja !== undefined && typeof datos.sale_de_caja !== 'boolean') {
-    throw new ApiError(400, 'sale_de_caja tiene que ser true o false');
-  }
   return {
     monto: validarMonto(datos.monto, 'El monto del pago'),
     fecha: validarFecha(datos.fecha ?? hoyNegocio(), 'La fecha del pago'),
     medio: datos.medio,
-    sale_de_caja: datos.medio === 'efectivo' && datos.sale_de_caja === true,
+    origen: validarOrigen(datos.origen, datos.medio),
     detalle: validarTexto(datos.detalle, 'El detalle', { requerido: false }),
   };
 }
 
 // Pagar (todo o una parte). Leer lo pagado, decidir y escribir en una transacción: dos pagos a la
-// vez no pueden pasarse del monto. Si con este pago queda saldada y se repite, se crea la
-// siguiente con el mismo monto (una sola vez por cuenta: origen_id es único).
+// vez no pueden pasarse del monto. En un vencimiento sin monto ("según factura"), el que se escribe
+// al pagar pasa a ser el de la cuenta.
 export async function registrarPagoCuenta(id, datos, { usuarioId }) {
   const pago = validarPago(datos);
   await db.transaction(async () => {
     const cuenta = await obtenerCuentaActiva(id);
-    const pendiente = cuenta.monto - cuenta.pagado;
-    if (pago.monto > pendiente) throw new ApiError(400, `El pago supera lo que falta pagar (${pendiente.toLocaleString('es-AR')}).`);
+    if (cuenta.monto === null) {
+      await db.prepare('UPDATE cuentas_pagar SET monto = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = ?').run(pago.monto, id);
+    } else if (pago.monto > cuenta.monto - cuenta.pagado) {
+      throw new ApiError(400, `El pago supera lo que falta pagar (${(cuenta.monto - cuenta.pagado).toLocaleString('es-AR')}).`);
+    }
+    const saleDeUnaCaja = pago.origen !== 'otro';
     let gastoId = null;
-    if (pago.sale_de_caja) {
+    if (saleDeUnaCaja) {
       const gasto = await db
-        .prepare('INSERT INTO gastos_caja (usuario_id, concepto, monto, proveedor_id) VALUES (?, ?, ?, NULL) RETURNING id')
-        .get(usuarioId, `Pago de ${cuenta.concepto}`.slice(0, MAX_TEXTO), pago.monto);
+        .prepare('INSERT INTO gastos_caja (usuario_id, concepto, monto, proveedor_id, origen) VALUES (?, ?, ?, NULL, ?) RETURNING id')
+        .get(usuarioId, `Pago de ${cuenta.concepto}`.slice(0, MAX_TEXTO), pago.monto, pago.origen);
       gastoId = gasto.id;
+      if (pago.origen === 'general') await frenarSiNoAlcanza();
     }
     await db
       .prepare(
         `INSERT INTO pagos_cuenta (cuenta_id, usuario_id, fecha, monto, medio, sale_de_caja, gasto_caja_id, detalle)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(id, usuarioId, pago.fecha, pago.monto, pago.medio, pago.sale_de_caja, gastoId, pago.detalle);
-
-    const intervalo = REPETICIONES[cuenta.repeticion];
-    if (intervalo && pago.monto === pendiente) {
-      const numero = cuenta.serie_numero + 1;
-      const { vence } = await db.prepare('SELECT (?::date + (?::int * ?::interval))::date AS vence').get(cuenta.serie_base, numero, intervalo);
-      await db
-        .prepare(
-          `INSERT INTO cuentas_pagar (tipo, concepto, monto, vence, repeticion, nota, serie_base, serie_numero, origen_id, usuario_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (origen_id) DO NOTHING`
-        )
-        .run(cuenta.tipo, cuenta.concepto, cuenta.monto, vence, cuenta.repeticion, cuenta.nota, cuenta.serie_base, numero, id, usuarioId);
-    }
+      .run(id, usuarioId, pago.fecha, pago.monto, pago.medio, saleDeUnaCaja, gastoId, pago.detalle);
   });
   return obtenerCuenta(id);
 }
 
-// Anular un pago cargado mal: queda en el historial y, si salió de la caja, se da de baja su gasto.
-// La siguiente de la serie, si ya se creó, queda (se elimina a mano si no corresponde).
+// Anular un pago cargado mal: queda en el historial y, si salió de una caja, se da de baja su gasto.
 export async function anularPagoCuenta(id, pagoId, { usuarioId }) {
   await db.transaction(async () => {
     await obtenerCuentaActiva(id);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api/client.js';
 import Icono from '../components/Icono.jsx';
 import { COLOR } from '../utils/colores.js';
@@ -10,12 +10,12 @@ import './SaldosPage.css';
 
 // Cargar deuda (pedido del usuario, 2026-10-29: "poder cargar sea uno u otro"): el único alta de
 // Saldos pendientes. Arriba se elige qué se carga y abajo va su formulario: un impuesto o servicio
-// (con vencimiento y repetición) o una deuda con un proveedor sin cargar mercadería (un saldo de
+// que se paga una sola vez (lo que se repite se carga en Fijos) o una deuda con un proveedor sin cargar mercadería (un saldo de
 // antes, una boleta que no se carga producto por producto; no toca el stock). Página propia, como
 // "Nuevo proveedor" (nada de paneles al costado).
 
 const QUE = [
-  { valor: 'cuenta', titulo: 'Impuesto o servicio', sub: 'Alquiler, luz, impuestos, internet… Se puede repetir sola.', icono: 'banco', color: COLOR.violeta },
+  { valor: 'cuenta', titulo: 'Impuesto o servicio', sub: 'Un impuesto, un arreglo o un servicio que se paga una sola vez.', icono: 'banco', color: COLOR.violeta },
   { valor: 'proveedor', titulo: 'Deuda con un proveedor', sub: 'Una factura o un saldo de antes, sin cargar mercadería.', icono: 'camion', color: COLOR.naranja },
 ];
 
@@ -187,6 +187,14 @@ export default function CargarDeudaPage() {
             </div>
           </div>
           {que === 'cuenta' ? <CamposCuenta form={cuenta} setForm={setCuenta} /> : <CamposDeuda form={deuda} setForm={setDeuda} proveedores={proveedores} />}
+          {que === 'cuenta' && (
+            <div className="cpagar-aviso">
+              <Icono nombre="repetir" tam={16} />
+              <span>
+                ¿Se paga siempre? Cargalo en <Link to="/fijos/nuevo">Fijos</Link> y aparece solo en cada vencimiento.
+              </span>
+            </div>
+          )}
           <div className="cpagar-acciones">
             <button type="button" className="btn" onClick={() => navigate('/saldos')}>
               Cancelar

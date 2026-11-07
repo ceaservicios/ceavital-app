@@ -29,6 +29,11 @@ export async function editarCuentaController(req, res) {
   res.json(await saldosService.editarCuenta(parsearId(req.params.id), req.body || {}));
 }
 
+export async function saltearVencimientoController(req, res) {
+  await saldosService.saltearVencimiento(parsearId(req.params.id));
+  res.json({ ok: true });
+}
+
 export async function eliminarCuentaController(req, res) {
   await saldosService.eliminarCuenta(parsearId(req.params.id));
   res.status(204).send();

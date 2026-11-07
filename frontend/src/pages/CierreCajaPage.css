@@ -267,6 +267,16 @@
   font-size: 14px;
   color: var(--text-secondary);
 }
+.cierre-retiro small {
+  display: block;
+  margin-top: 1px;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+.cierre-guardado-celda {
+  font-weight: 600;
+  color: var(--ok-ink);
+}
 .cierre-retiro strong {
   font-size: 16px;
   font-weight: 700;

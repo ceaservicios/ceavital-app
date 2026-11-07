@@ -2,6 +2,7 @@ import db from '../db/connection.js';
 import { hoyNegocio, sqlDiaNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
 import { ApiError } from '../utils/api-error.js';
 import { SQL_PARTES_DE_LA_VENTA } from './ventas.service.js';
+import { frenarSiNoAlcanza } from './caja-general.service.js';
 
 // Se suman todos los medios que existan en los datos, aunque el plan actual no
 // ofrezca 'cta_cte': una venta ya registrada nunca se descarta del total. Una venta
@@ -69,8 +70,8 @@ function condicionDelTurno(anterior, columnaHasta) {
 // ven los 3 roles en Cierre de Caja antes de que Admin/Encargado confirmen el cierre.
 //
 // Efectivo que tiene que haber en la caja = fondo inicial del turno (el que dejó el cierre anterior
-// o el cargado a mano) + ventas en efectivo del turno − gastos y pagos a proveedores del turno en
-// efectivo (los que salen del cajón; los de otro medio no cuentan, migración 039).
+// o el cargado a mano) + ventas en efectivo del turno − gastos y pagos del turno que salieron del
+// cajón (origen 'caja', migración 040: los de otro medio, los de Caja general y los de otro lado no cuentan).
 export async function calcularResumenDelTurno() {
   const anterior = await ultimoCierre();
   const cargado = await fondoCargado(anterior);
@@ -91,7 +92,7 @@ export async function calcularResumenDelTurno() {
   const gastos = await db
     .prepare(
       `SELECT COALESCE(SUM(monto), 0) AS total FROM gastos_caja
-       WHERE eliminado_en IS NULL AND medio_pago = 'efectivo' AND ${gastosTurno.sql}`
+       WHERE eliminado_en IS NULL AND origen = 'caja' AND ${gastosTurno.sql}`
     )
     .get(...gastosTurno.params);
 
@@ -165,6 +166,8 @@ export async function editarCierre(id, { total_efectivo_contado, fondo_dejado },
          RETURNING *`
       )
       .get(contado, contado - Number(cierre.total_efectivo_esperado), fondoDejado, usuarioId, id);
+    // Si bajó el retiro, Caja general baja con él: no puede quedar debiendo lo que ya se pagó con esa plata.
+    if (cierre.a_caja_general) await frenarSiNoAlcanza();
     return { cierre: corregido, antes, cambio: true };
   });
 }
@@ -182,6 +185,7 @@ export async function eliminarCierre(id, { usuarioId }) {
     await db
       .prepare(`UPDATE cierres_caja SET eliminado_en = (NOW() AT TIME ZONE 'UTC'), eliminado_por = ? WHERE id = ?`)
       .run(usuarioId, id);
+    if (cierre.a_caja_general) await frenarSiNoAlcanza();
     return cierre;
   });
 }

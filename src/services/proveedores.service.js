@@ -3,6 +3,7 @@ import { esDiaValido, hoyNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio
 import { ApiError } from '../utils/api-error.js';
 import { factorMedida } from './presentacion.js';
 import { listarProductosDeProveedor } from './stock.service.js';
+import { frenarSiNoAlcanza, validarOrigen } from './caja-general.service.js';
 
 // Tope de longitud de los textos libres (nombre, teléfono, email, condición de pago).
 const MAX_TEXTO = 200;
@@ -118,7 +119,7 @@ export async function obtenerProveedor(id, { rol } = {}) {
     .all(id);
   const pagos = await db
     .prepare(
-      `SELECT pg.id, pg.compra_id, pg.fecha, pg.monto, pg.medio, pg.sale_de_caja, pg.cheque_numero, pg.cheque_banco,
+      `SELECT pg.id, pg.compra_id, pg.fecha, pg.monto, pg.medio, COALESCE(gc.origen, 'otro') AS origen, pg.cheque_numero, pg.cheque_banco,
          pg.cheque_fecha_cobro, pg.detalle, pg.creado_en, pg.anulado_en,
          u.nombre AS usuario_nombre, ua.nombre AS anulado_por_nombre,
          c.comprobante_tipo AS compra_comprobante_tipo, c.comprobante_numero AS compra_comprobante_numero
@@ -126,6 +127,7 @@ export async function obtenerProveedor(id, { rol } = {}) {
        JOIN usuarios u ON u.id = pg.usuario_id
        LEFT JOIN usuarios ua ON ua.id = pg.anulado_por
        JOIN compras_proveedor c ON c.id = pg.compra_id
+       LEFT JOIN gastos_caja gc ON gc.id = pg.gasto_caja_id
        WHERE pg.proveedor_id = ?
        ORDER BY pg.fecha DESC, pg.id DESC`
     )
@@ -227,21 +229,19 @@ export async function eliminarProveedor(id) {
 
 // -- Pagos a proveedores --
 
-// Un pago: monto, fecha, medio y, si es cheque, sus datos. En efectivo se elige si sale de la
-// caja (decisión del usuario, 2026-10-28).
+// Un pago: monto, fecha, medio y, si es cheque, sus datos. En efectivo se elige de dónde sale: la
+// caja del turno, Caja general u otro lado (decisión del usuario, 2026-11-06; antes, 2026-10-28, si
+// salía o no de la caja).
 function validarPago(datos) {
   if (!datos || typeof datos !== 'object' || Array.isArray(datos)) throw new ApiError(400, 'Faltan los datos del pago');
   const medio = datos.medio;
   if (!MEDIOS_PAGO.includes(medio)) throw new ApiError(400, 'medio tiene que ser efectivo, mercado_pago o cheque');
-  if (datos.sale_de_caja !== undefined && typeof datos.sale_de_caja !== 'boolean') {
-    throw new ApiError(400, 'sale_de_caja tiene que ser true o false');
-  }
   const esCheque = medio === 'cheque';
   return {
     monto: validarEntero(datos.monto, 'El monto del pago', { minimo: 1, maximo: MAX_MONTO }),
     fecha: validarFecha(datos.fecha ?? hoyNegocio(), 'La fecha del pago'),
     medio,
-    sale_de_caja: medio === 'efectivo' && datos.sale_de_caja === true,
+    origen: validarOrigen(datos.origen, medio),
     cheque_numero: esCheque ? validarString(datos.cheque_numero, 'El número de cheque', { requerido: false, maxLength: 50 }) : null,
     cheque_banco: esCheque ? validarString(datos.cheque_banco, 'El banco', { requerido: false, maxLength: 100 }) : null,
     cheque_fecha_cobro: esCheque && datos.cheque_fecha_cobro != null ? validarFecha(datos.cheque_fecha_cobro, 'La fecha de cobro') : null,
@@ -249,19 +249,21 @@ function validarPago(datos) {
   };
 }
 
-// Dentro de la transacción de quien llama. Si sale de la caja, se anota también como gasto de
-// caja (cuenta en el arqueo del turno y aparece en Ventas diarias).
+// Dentro de la transacción de quien llama. Si sale de la caja del turno o de Caja general, se anota
+// también como gasto con ese origen (cuenta en el arqueo o baja Caja general, y aparece en Ventas diarias).
 async function insertarPago(proveedor, compra, pago, usuarioId) {
   const pendiente = compra.total - compra.pagado;
   if (pago.monto > pendiente) {
     throw new ApiError(400, `El pago supera lo que falta pagar de ${textoComprobante(compra)} (${pendiente.toLocaleString('es-AR')}).`);
   }
+  const saleDeUnaCaja = pago.origen !== 'otro';
   let gastoId = null;
-  if (pago.sale_de_caja) {
+  if (saleDeUnaCaja) {
     const gasto = await db
-      .prepare('INSERT INTO gastos_caja (usuario_id, concepto, monto, proveedor_id) VALUES (?, ?, ?, ?) RETURNING id')
-      .get(usuarioId, `Pago a ${proveedor.nombre} · ${textoComprobante(compra)}`.slice(0, MAX_TEXTO), pago.monto, proveedor.id);
+      .prepare('INSERT INTO gastos_caja (usuario_id, concepto, monto, proveedor_id, origen) VALUES (?, ?, ?, ?, ?) RETURNING id')
+      .get(usuarioId, `Pago a ${proveedor.nombre} · ${textoComprobante(compra)}`.slice(0, MAX_TEXTO), pago.monto, proveedor.id, pago.origen);
     gastoId = gasto.id;
+    if (pago.origen === 'general') await frenarSiNoAlcanza();
   }
   await db
     .prepare(
@@ -270,7 +272,7 @@ async function insertarPago(proveedor, compra, pago, usuarioId) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
-      proveedor.id, compra.id, usuarioId, pago.fecha, pago.monto, pago.medio, pago.sale_de_caja, gastoId,
+      proveedor.id, compra.id, usuarioId, pago.fecha, pago.monto, pago.medio, saleDeUnaCaja, gastoId,
       pago.cheque_numero, pago.cheque_banco, pago.cheque_fecha_cobro, pago.detalle
     );
 }
@@ -299,8 +301,8 @@ export async function registrarPago(proveedorId, datos, { usuarioId, rol }) {
   return obtenerProveedor(proveedorId, { rol });
 }
 
-// Anular un pago (cargado mal): queda en el historial y, si salió de la caja, se da de baja su
-// gasto, así el efectivo del turno vuelve a lo que era.
+// Anular un pago (cargado mal): queda en el historial y, si salió de una caja, se da de baja su
+// gasto, así el efectivo del turno o Caja general vuelven a lo que eran.
 export async function anularPago(proveedorId, pagoId, { usuarioId, rol }) {
   await db.transaction(async () => {
     await obtenerProveedorActivo(proveedorId);

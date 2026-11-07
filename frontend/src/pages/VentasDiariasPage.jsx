@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import Hero from '../components/Hero.jsx';
 import Icono from '../components/Icono.jsx';
 import { ConIcono } from '../components/ConAvatar.jsx';
+import OrigenEfectivo, { MEDIO_CON_ORIGEN } from '../components/OrigenEfectivo.jsx';
 import Pestanas from '../components/Pestanas.jsx';
 import { COLOR, COLOR_MEDIO, ICONO_MEDIO } from '../utils/colores.js';
 import { cuandoFueElCierreCorto, fechaHoyISO, formatearFecha, formatearFechaHora, formatearMonto } from '../utils/format.js';
@@ -11,6 +12,7 @@ import { ItemsPedido } from './pedidosComun.jsx';
 import './ClientesEmpresaPage.css';
 import './Pedidos.css';
 import './VentasDiariasPage.css';
+import './FijosPage.css';
 
 // Ventas diarias (pedido del usuario, 2026-10-16): el detalle del día a día que Caja no tenía.
 // Las ventas de un período con filtros, los totales y los gastos y pagos a proveedores (que
@@ -43,7 +45,7 @@ const ESTADOS = [
 
 const PUEDE_ELIMINAR_GASTO = new Set(['admin', 'encargado']);
 
-// Medio de pago de un gasto (2026-11-03, migración 039). Solo el efectivo sale de la caja.
+// Medio de pago de un gasto (2026-11-03, migración 039). Solo el efectivo sale de la caja o de Caja general.
 const MEDIOS_GASTO = [
   { valor: 'efectivo', label: 'Efectivo' },
   { valor: 'mercado_pago', label: 'Mercado Pago' },
@@ -52,17 +54,18 @@ const MEDIOS_GASTO = [
   { valor: 'cheque', label: 'Cheque' },
 ];
 const etiquetaMedioGasto = (valor) => MEDIOS_GASTO.find((m) => m.valor === valor)?.label ?? valor;
-const GASTO_VACIO = { concepto: '', monto: '', proveedor_id: '', medio_pago: 'efectivo' };
-// Si sale o no del efectivo de la caja, según el medio.
-const notaDelMedio = (medio) =>
-  medio === 'efectivo'
-    ? 'Se descuenta del efectivo de la caja.'
-    : `Pagado con ${etiquetaMedioGasto(medio)}: no se descuenta del efectivo de la caja.`;
+const GASTO_VACIO = { concepto: '', monto: '', proveedor_id: '', medio_pago: 'efectivo', origen: 'caja', repetir: false };
+// Si sale o no del efectivo de la caja, según el medio. Quien elige de dónde sale ya lo ve en esa opción.
+const notaDelMedio = (medio, conOrigen) => {
+  if (medio !== 'efectivo') return `Pagado con ${etiquetaMedioGasto(medio)}: no se descuenta del efectivo de la caja.`;
+  return conOrigen ? '' : 'Se descuenta del efectivo de la caja.';
+};
+const medioDelGasto = (g) => (g.medio_pago === 'efectivo' ? MEDIO_CON_ORIGEN[g.origen] : etiquetaMedioGasto(g.medio_pago));
 
 // Los campos de un gasto, para anotarlo y para corregirlo (2026-11-03). El proveedor, solo para
 // quien ve los proveedores (Administrador y Encargado). `proveedorExtra`: el proveedor que ya tenía
 // el gasto si se dio de baja después, para que se siga viendo al corregirlo.
-function CamposGasto({ gasto, setGasto, proveedores, proveedorExtra = null }) {
+function CamposGasto({ gasto, setGasto, proveedores, conOrigen, conRepetir = false, proveedorExtra = null }) {
   return (
     <>
       <label className="vd-campo vd-gasto-concepto">
@@ -110,6 +113,19 @@ function CamposGasto({ gasto, setGasto, proveedores, proveedorExtra = null }) {
               </option>
             ))}
           </select>
+        </label>
+      )}
+      {/* De dónde sale el efectivo (2026-11-06): Administrador y Encargado; lo del Cajero sale de la caja. */}
+      {conOrigen && gasto.medio_pago === 'efectivo' && (
+        <OrigenEfectivo valor={gasto.origen} onCambiar={(origen) => setGasto({ ...gasto, origen })} monto={gasto.monto} ayudaCaja="Se descuenta del efectivo de la caja." />
+      )}
+      {conRepetir && (
+        <label className="fijo-check">
+          <input type="checkbox" checked={gasto.repetir} onChange={(e) => setGasto({ ...gasto, repetir: e.target.checked })} />
+          <span>
+            <strong>Repetir todos los meses</strong>
+            <span>Queda en Fijos y el mes que viene aparece solo en Saldos pendientes.</span>
+          </span>
         </label>
       )}
     </>
@@ -293,12 +309,16 @@ export default function VentasDiariasPage() {
         monto: Number(nuevoGasto.monto),
         proveedor_id: nuevoGasto.proveedor_id === '' ? null : Number(nuevoGasto.proveedor_id),
         medio_pago: nuevoGasto.medio_pago,
+        origen: nuevoGasto.medio_pago === 'efectivo' ? nuevoGasto.origen : null,
+        repetir: nuevoGasto.repetir,
       });
       setNuevoGasto(GASTO_VACIO);
       setMostrarFormGasto(false);
       setExito(
         hoy >= desde && hoy <= hasta
-          ? 'Gasto registrado.'
+          ? nuevoGasto.repetir
+            ? 'Gasto registrado. Se repite todos los meses: quedó en Fijos.'
+            : 'Gasto registrado.'
           : `Gasto registrado con fecha de hoy (${formatearFecha(hoy)}). No aparece en la lista porque el período elegido es otro.`
       );
       await cargar();
@@ -318,6 +338,7 @@ export default function VentasDiariasPage() {
       concepto: g.concepto,
       monto: String(g.monto),
       medio_pago: g.medio_pago,
+      origen: g.medio_pago === 'efectivo' ? g.origen : 'caja',
       proveedor_id: g.proveedor_id == null ? '' : String(g.proveedor_id),
     });
   }
@@ -334,6 +355,7 @@ export default function VentasDiariasPage() {
         concepto: editando.concepto,
         monto: Number(editando.monto),
         medio_pago: editando.medio_pago,
+        origen: editando.medio_pago === 'efectivo' ? editando.origen : null,
         proveedor_id: editando.proveedor_id === '' ? null : Number(editando.proveedor_id),
       });
       setEditando(null);
@@ -656,9 +678,9 @@ export default function VentasDiariasPage() {
 
           {mostrarFormGasto && (
             <form className="vd-gasto-form" onSubmit={registrarGasto}>
-              <CamposGasto gasto={nuevoGasto} setGasto={setNuevoGasto} proveedores={proveedores} />
+              <CamposGasto gasto={nuevoGasto} setGasto={setNuevoGasto} proveedores={proveedores} conOrigen={conProveedores} conRepetir={conProveedores} />
               <div className="vd-gasto-pie">
-                <span className="vd-gasto-nota">Se registra con la fecha y hora actuales. {notaDelMedio(nuevoGasto.medio_pago)}</span>
+                <span className="vd-gasto-nota">Se registra con la fecha y hora actuales. {notaDelMedio(nuevoGasto.medio_pago, conProveedores)}</span>
                 <div className="vd-gasto-botones">
                   <button type="button" className="btn" onClick={() => setMostrarFormGasto(false)}>
                     Cancelar
@@ -699,7 +721,7 @@ export default function VentasDiariasPage() {
                           {g.concepto}
                         </ConIcono>
                       </td>
-                      <td className="vd-g-medio">{etiquetaMedioGasto(g.medio_pago)}</td>
+                      <td className="vd-g-medio">{medioDelGasto(g)}</td>
                       <td className={`vd-opcional${g.proveedor_nombre ? '' : ' vd-sin-dato'}`}>{g.proveedor_nombre ?? '—'}</td>
                       <td className="vd-opcional">{g.usuario_nombre}</td>
                       <td className="num vd-gasto-monto">{formatearMonto(g.monto)}</td>
@@ -760,6 +782,7 @@ export default function VentasDiariasPage() {
                               gasto={editando}
                               setGasto={setEditando}
                               proveedores={proveedores}
+                              conOrigen={conProveedores}
                               proveedorExtra={
                                 g.proveedor_id != null && !proveedores.some((p) => p.id === g.proveedor_id)
                                   ? { id: g.proveedor_id, nombre: g.proveedor_nombre ?? 'Proveedor' }
@@ -768,7 +791,7 @@ export default function VentasDiariasPage() {
                             />
                             <div className="vd-gasto-pie">
                               <span className="vd-gasto-nota">
-                                {notaDelMedio(editando.medio_pago)} La fecha y hora quedan como estaban.
+                                {notaDelMedio(editando.medio_pago, conProveedores)} La fecha y hora quedan como estaban.
                               </span>
                               <div className="vd-gasto-botones">
                                 <button type="button" className="btn" onClick={() => setEditando(null)}>

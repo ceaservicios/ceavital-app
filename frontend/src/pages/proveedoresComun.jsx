@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
 import { formatearFecha, formatearMonto, fechaHoyISO } from '../utils/format.js';
 import { describirCantidadLinea, sufijoPrecio } from '../utils/presentacion.js';
+import OrigenEfectivo, { textoOrigen } from '../components/OrigenEfectivo.jsx';
 
 // Piezas compartidas por la lista de proveedores, el alta, la ficha y el ingreso de mercadería
 // (pedido del usuario, 2026-10-28: registrar las compras a un proveedor y que se sumen al stock,
@@ -218,7 +219,7 @@ export function etiquetaMedioProveedor(valor) {
   return MEDIOS_PAGO_PROVEEDOR.find((m) => m.valor === valor)?.texto ?? valor;
 }
 
-/** Lo que acompaña al medio: "N° 12345678 · Banco Nación · cobro 15/11/2026", "con efectivo de la caja". */
+/** Lo que acompaña al medio: "N° 12345678 · Banco Nación · cobro 15/11/2026", "con efectivo de Caja general". */
 export function detallePago(p) {
   const partes = [];
   if (p.medio === 'cheque') {
@@ -226,7 +227,7 @@ export function detallePago(p) {
     if (p.cheque_banco) partes.push(p.cheque_banco);
     if (p.cheque_fecha_cobro) partes.push(`cobro ${formatearFecha(p.cheque_fecha_cobro)}`);
   }
-  if (p.medio === 'efectivo') partes.push(p.sale_de_caja ? 'con efectivo de la caja' : 'fuera de la caja');
+  if (p.medio === 'efectivo') partes.push(textoOrigen(p.origen));
   if (p.detalle) partes.push(p.detalle);
   return partes.join(' · ');
 }
@@ -334,14 +335,20 @@ function TotalesCompra({ total, pagado, conPagos, mercaderia = null }) {
   );
 }
 
-// Un pago a un proveedor. En efectivo se elige en cada pago si la plata sale de la caja
-// (decisión del usuario, 2026-10-28): si sale, se descuenta del efectivo del turno y aparece en
-// Ventas → Gastos y pagos a proveedores.
+export function mensajeDelPago(payload) {
+  if (payload.origen === 'caja') return 'Pago registrado. Se descontó del efectivo de la caja.';
+  if (payload.origen === 'general') return 'Pago registrado. Se descontó de Caja general.';
+  return 'Pago registrado.';
+}
+
+// Un pago a un proveedor. En efectivo se elige en cada pago de dónde sale la plata (decisión del
+// usuario, 2026-11-06): de la caja del turno, de Caja general o de otro lado. De las dos primeras
+// aparece en Ventas → Gastos y pagos a proveedores.
 export const PAGO_VACIO = (monto = '') => ({
   monto: monto === '' ? '' : String(monto),
   fecha: fechaHoyISO(),
   medio: 'efectivo',
-  sale_de_caja: true,
+  origen: 'caja',
   cheque_numero: '',
   cheque_banco: '',
   cheque_fecha_cobro: '',
@@ -357,7 +364,7 @@ export function pagoParaApi(pago) {
       monto,
       fecha: pago.fecha,
       medio: pago.medio,
-      sale_de_caja: pago.medio === 'efectivo' && pago.sale_de_caja,
+      origen: pago.medio === 'efectivo' ? pago.origen : null,
       cheque_numero: pago.medio === 'cheque' ? pago.cheque_numero.trim() || null : null,
       cheque_banco: pago.medio === 'cheque' ? pago.cheque_banco.trim() || null : null,
       cheque_fecha_cobro: pago.medio === 'cheque' ? pago.cheque_fecha_cobro || null : null,
@@ -367,7 +374,7 @@ export function pagoParaApi(pago) {
 }
 
 // Campos del pago en una grilla que siempre cierra: monto, fecha y medio en una fila; los datos
-// del cheque (o la casilla de la caja) en la siguiente; el detalle a todo el ancho. Saldos pendientes
+// del cheque (o de dónde sale el efectivo) en la siguiente; el detalle a todo el ancho. Saldos pendientes
 // lo usa con sus propios medios y su texto de la caja (2026-10-29).
 const AYUDA_CAJA_PROVEEDOR = 'Se descuenta del efectivo del turno y figura en Ventas, en gastos y pagos a proveedores.';
 export function CamposPago({ pago, setPago, medios = MEDIOS_PAGO_PROVEEDOR, ayudaCaja = AYUDA_CAJA_PROVEEDOR }) {
@@ -399,13 +406,9 @@ export function CamposPago({ pago, setPago, medios = MEDIOS_PAGO_PROVEEDOR, ayud
         </div>
       </div>
       {pago.medio === 'efectivo' && (
-        <label className="pago-check pago-campo-full">
-          <input type="checkbox" checked={pago.sale_de_caja} onChange={(e) => setPago({ ...pago, sale_de_caja: e.target.checked })} />
-          <span>
-            <strong>Pagado con efectivo de la caja</strong>
-            <span className="pago-check-ayuda">{ayudaCaja}</span>
-          </span>
-        </label>
+        <div className="pago-campo-full">
+          <OrigenEfectivo valor={pago.origen} onCambiar={(origen) => setPago({ ...pago, origen })} monto={pago.monto} ayudaCaja={ayudaCaja} />
+        </div>
       )}
       {pago.medio === 'cheque' && (
         <>

@@ -5,6 +5,7 @@ import Hero from '../components/Hero.jsx';
 import { MigaFicha } from '../components/Topbar.jsx';
 import { ConIcono } from '../components/ConAvatar.jsx';
 import Pestanas from '../components/Pestanas.jsx';
+import { avisarCambioDeEfectivo } from '../components/OrigenEfectivo.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { COLOR, colorDe, ICONO_ESTADO, ICONO_MEDIO_PAGO } from '../utils/colores.js';
 import { formatearFecha, formatearFechaHora, formatearMonto } from '../utils/format.js';
@@ -22,6 +23,7 @@ import {
   estadoDeuda,
   etiquetaMedioProveedor,
   ItemsCompra,
+  mensajeDelPago,
   PAGO_VACIO,
   pagoParaApi,
   textoComprobante,
@@ -122,9 +124,8 @@ export default function ProveedorDetallePage() {
     return conGuardia(async () => {
       aplicar(await api.post(`/proveedores/${id}/pagos`, { compra_id: Number(pago.compra_id), ...payload }));
       setPago({ compra_id: '', ...PAGO_VACIO() });
-      setExito(
-        payload.sale_de_caja ? 'Pago registrado. Se descontó del efectivo de la caja.' : 'Pago registrado.'
-      );
+      avisarCambioDeEfectivo();
+      setExito(mensajeDelPago(payload));
     }, 'No se pudo registrar el pago.');
   }
 
@@ -133,6 +134,7 @@ export default function ProveedorDetallePage() {
     return conGuardia(async () => {
       try {
         aplicar(await api.post(`/proveedores/${id}/${ruta}/anular`, {}));
+        avisarCambioDeEfectivo();
         setExito(tipo === 'compra' ? 'Compra anulada. Los productos se retiraron del stock.' : 'Pago anulado.');
       } finally {
         setConfirmando(null);

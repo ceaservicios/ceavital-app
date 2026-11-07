@@ -1,0 +1,63 @@
+/* Caja general: lista de movimientos. */
+.cg-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cg-filtros-lista {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.cg-tipo {
+  width: 230px;
+  max-width: 100%;
+}
+.cg-page .vd-rapido {
+  padding: 0 8px;
+}
+.cg-nota {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.cliente-page.cg-page .cliente-tabla th {
+  position: static;
+}
+.cg-tabla .cg-monto {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.cg-tabla .cg-entra {
+  color: var(--ok-ink);
+}
+.cg-tabla .cg-sale {
+  color: var(--text-primary);
+}
+.cg-tabla .cg-queda {
+  color: var(--text-secondary);
+}
+
+/* Anotar movimiento */
+.cg-cuenta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+  border: 1px solid var(--border-rule);
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.cg-cuenta strong {
+  font-size: 16px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}

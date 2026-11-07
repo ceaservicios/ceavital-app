@@ -14,7 +14,7 @@ export async function listarGastosController(req, res) {
 }
 
 export async function registrarGastoController(req, res) {
-  const gasto = await gastosService.registrarGasto(req.body || {}, { usuarioId: req.sesion.usuario_id });
+  const gasto = await gastosService.registrarGasto(req.body || {}, { usuarioId: req.sesion.usuario_id, rol: req.sesion.rol });
   res.status(201).json(gasto);
 }
 
@@ -22,7 +22,7 @@ export async function registrarGastoController(req, res) {
 export async function editarGastoController(req, res) {
   const id = parsearId(req.params.id);
   const { gasto, antes } = await gastosService.editarGasto(id, req.body || {});
-  const cambio = ['concepto', 'monto', 'medio_pago', 'proveedor_id'].some((campo) => gasto[campo] !== antes[campo]);
+  const cambio = ['concepto', 'monto', 'medio_pago', 'origen', 'proveedor_id'].some((campo) => gasto[campo] !== antes[campo]);
   if (cambio) {
     await registrarAccion('gasto-editado', {
       actor: actorDeSesion(req.sesion),
@@ -35,6 +35,8 @@ export async function editarGastoController(req, res) {
         monto: gasto.monto,
         medio_antes: antes.medio_pago,
         medio: gasto.medio_pago,
+        origen_antes: antes.origen,
+        origen: gasto.origen,
         proveedor_antes: antes.proveedor_nombre,
         proveedor: gasto.proveedor_nombre,
       },

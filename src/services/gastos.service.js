@@ -1,6 +1,8 @@
 import db from '../db/connection.js';
 import { ApiError } from '../utils/api-error.js';
 import { esDiaValido, sqlDiaNegocio } from '../utils/fecha-negocio.js';
+import { frenarSiNoAlcanza, validarOrigen } from './caja-general.service.js';
+import { crearFijoDeGasto } from './fijos.service.js';
 
 const MAX_CONCEPTO = 200;
 // Tope de un monto en pesos (Number.isInteger(1e21) es true): sin él un gasto
@@ -65,13 +67,14 @@ async function verificarQueNoEsUnPago(id) {
   if (pagoCuenta) throw new ApiError(409, `Es el pago de «${pagoCuenta.concepto}»: se anula desde Saldos pendientes, en su ficha.`);
 }
 
-const SQL_GASTO_CON_PROVEEDOR = `SELECT g.id, g.concepto, g.monto, g.medio_pago, g.proveedor_id, p.nombre AS proveedor_nombre
+const SQL_GASTO_CON_PROVEEDOR = `SELECT g.id, g.concepto, g.monto, g.medio_pago, g.origen, g.proveedor_id, p.nombre AS proveedor_nombre
   FROM gastos_caja g LEFT JOIN proveedores p ON p.id = g.proveedor_id
   WHERE g.id = ? AND g.eliminado_en IS NULL`;
 
 // Gastos y pagos a proveedores en Caja (corrección pedida 2026-09-15). Desde el 2026-11-03 cada
-// gasto lleva su medio de pago (migración 039): solo los de efectivo salen del cajón y cuentan en
-// el arqueo (caja.service.calcularResumenDelTurno); los demás quedan anotados sin tocar la caja.
+// gasto lleva su medio de pago (migración 039) y, en efectivo, de dónde sale (migración 040): de la
+// caja del turno cuenta en el arqueo (caja.service.calcularResumenDelTurno), de Caja general baja su
+// saldo y de otro lado queda anotado sin tocar ninguna de las dos.
 // Con desde/hasta: los gastos de un período (pantalla "Ventas diarias", 2026-10-16), con quién
 // lo cargó y el proveedor.
 export function listarGastos({ fecha, desde, hasta } = {}) {
@@ -108,30 +111,39 @@ export function listarGastos({ fecha, desde, hasta } = {}) {
 
 // Crear: los 3 roles (decisión 2026-09-18 -- cualquiera en caja puede
 // registrar un gasto en el momento en que ocurre, ej. un cajero que paga un
-// flete en efectivo a media tarde).
-export async function registrarGasto({ concepto, monto, proveedor_id, medio_pago }, { usuarioId }) {
+// flete en efectivo a media tarde). El Cajero no maneja Caja general: su gasto en efectivo sale siempre
+// de la caja del turno. "Repetir todos los meses" (2026-11-06) crea un fijo mensual con este gasto, solo
+// para Administrador y Encargado, que son los que ven Fijos.
+export async function registrarGasto({ concepto, monto, proveedor_id, medio_pago, origen, repetir }, { usuarioId, rol }) {
   const conceptoValido = validarConcepto(concepto);
   const montoValido = validarMonto(monto);
   const medioValido = validarMedioPago(medio_pago);
+  const origenValido = validarOrigen(rol === 'cajero' ? 'caja' : origen ?? 'caja', medioValido);
   const proveedorId = validarProveedorId(proveedor_id);
+  if (repetir !== undefined && typeof repetir !== 'boolean') throw new ApiError(400, 'repetir tiene que ser true o false');
 
   // Leer-decidir-escribir en una transacción: el proveedor no puede darse de baja entre el chequeo y el alta.
   return db.transaction(async () => {
     await verificarProveedorActivo(proveedorId);
-    return db
-      .prepare(`INSERT INTO gastos_caja (usuario_id, concepto, monto, proveedor_id, medio_pago) VALUES (?, ?, ?, ?, ?) RETURNING *`)
-      .get(usuarioId, conceptoValido, montoValido, proveedorId, medioValido);
+    const gasto = await db
+      .prepare(`INSERT INTO gastos_caja (usuario_id, concepto, monto, proveedor_id, medio_pago, origen) VALUES (?, ?, ?, ?, ?, ?) RETURNING *`)
+      .get(usuarioId, conceptoValido, montoValido, proveedorId, medioValido, origenValido);
+    if (origenValido === 'general') await frenarSiNoAlcanza();
+    if (repetir && rol !== 'cajero') await crearFijoDeGasto({ concepto: conceptoValido, monto: montoValido }, { usuarioId });
+    return gasto;
   });
 }
 
 // Corregir un gasto ya anotado (pedido del usuario, 2026-11-03: "en gastos podamos editar los
-// métodos de pago y todo eso. Todo el gasto hecho"): concepto, monto, medio de pago y proveedor.
+// métodos de pago y todo eso. Todo el gasto hecho"): concepto, monto, medio de pago, de dónde salió
+// el efectivo y proveedor.
 // Admin+Encargado, como eliminarlo. La fecha y quién lo anotó no cambian. Un cierre ya hecho no
 // cambia (es una foto); el turno abierto sí. Devuelve el gasto como quedó y como estaba (para el registro).
-export async function editarGasto(id, { concepto, monto, proveedor_id, medio_pago }) {
+export async function editarGasto(id, { concepto, monto, proveedor_id, medio_pago, origen }) {
   const conceptoValido = validarConcepto(concepto);
   const montoValido = validarMonto(monto);
   const medioValido = validarMedioPago(medio_pago);
+  const origenValido = validarOrigen(origen ?? 'caja', medioValido);
   const proveedorId = validarProveedorId(proveedor_id);
 
   return db.transaction(async () => {
@@ -141,8 +153,9 @@ export async function editarGasto(id, { concepto, monto, proveedor_id, medio_pag
     // Si el proveedor no cambia, se deja aunque se haya dado de baja después.
     if (proveedorId !== antes.proveedor_id) await verificarProveedorActivo(proveedorId);
     await db
-      .prepare('UPDATE gastos_caja SET concepto = ?, monto = ?, medio_pago = ?, proveedor_id = ? WHERE id = ?')
-      .run(conceptoValido, montoValido, medioValido, proveedorId, id);
+      .prepare('UPDATE gastos_caja SET concepto = ?, monto = ?, medio_pago = ?, origen = ?, proveedor_id = ? WHERE id = ?')
+      .run(conceptoValido, montoValido, medioValido, origenValido, proveedorId, id);
+    if (origenValido === 'general') await frenarSiNoAlcanza();
     const gasto = await db.prepare(SQL_GASTO_CON_PROVEEDOR).get(id);
     return { gasto, antes };
   });

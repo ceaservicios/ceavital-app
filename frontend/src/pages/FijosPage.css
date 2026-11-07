@@ -1,0 +1,139 @@
+/* Fijos: lo que suma cada tipo por mes. Al tocar una tarjeta, filtra la lista. */
+.fijos-tipos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 10px;
+}
+.fijos-tipo {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 12px 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-rule);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.fijos-tipo:hover {
+  background: var(--bg-hover);
+}
+.fijos-tipo:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.fijos-tipo[aria-pressed='true'] {
+  border-color: var(--c);
+  box-shadow: inset 0 0 0 1px var(--c);
+  background: color-mix(in srgb, var(--c) 7%, white);
+}
+.fijos-tipo-nombre {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+.fijos-tipo-nombre svg {
+  flex-shrink: 0;
+  color: var(--c);
+}
+.fijos-tipo strong {
+  font-size: 14.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.fijos-tipo-barra {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: color-mix(in srgb, var(--c) 14%, white);
+}
+.fijos-tipo-barra span {
+  display: block;
+  height: 100%;
+  background: var(--c);
+}
+.fijos-orden {
+  height: 40px;
+  max-width: 190px;
+  padding: 0 10px;
+  border: 1px solid var(--border-control);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+.fijos-pausado {
+  background: var(--bg-muted);
+}
+.fijos-pausado .saldos-fila-nombre,
+.fijos-pausado .saldos-fila-monto {
+  color: var(--text-tertiary);
+}
+
+/* Alta y edición */
+.cpagar-repite.fijo-frecuencias {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.fijo-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-rule);
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+.vd-gasto-form .fijo-check {
+  grid-column: 1 / -1;
+  background: var(--bg-surface);
+}
+.fijo-check input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  flex-shrink: 0;
+  accent-color: var(--color-primary);
+}
+.fijo-check strong {
+  display: block;
+  font-weight: 600;
+}
+.fijo-check span span {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+@media (max-width: 600px) {
+  .fijos-tipos {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .fijos-tipo {
+    padding: 8px 9px 11px;
+  }
+  .fijos-tipo strong {
+    font-size: 13px;
+  }
+  .fijos-orden {
+    max-width: none;
+    width: 100%;
+  }
+  .cpagar-repite.fijo-frecuencias {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

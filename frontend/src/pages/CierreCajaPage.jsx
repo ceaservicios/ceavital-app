@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
 import Hero from '../components/Hero.jsx';
 import { ConIcono } from '../components/ConAvatar.jsx';
+import { avisarCambioDeEfectivo, useEfectivoDisponible } from '../components/OrigenEfectivo.jsx';
 import { COLOR, COLOR_MEDIO } from '../utils/colores.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { cuandoFueElCierre, cuandoFueElCierreCorto, fechaHoyISO, formatearFecha, formatearHora, formatearMonto } from '../utils/format.js';
@@ -223,6 +224,7 @@ function EliminarCierre({ cierre, onCancelar, onListo }) {
 export default function CierreCajaPage() {
   const { usuario, moduloActivo } = useAuth();
   const puedeCerrar = PUEDE_CERRAR.has(usuario?.rol);
+  const disponible = useEfectivoDisponible(puedeCerrar);
 
   const [resumen, setResumen] = useState(null);
   const [cierres, setCierres] = useState([]);
@@ -252,6 +254,7 @@ export default function CierreCajaPage() {
   async function cierreCambiado(mensaje) {
     setAbierto(null);
     setExito(mensaje);
+    avisarCambioDeEfectivo();
     await cargar();
   }
 
@@ -321,7 +324,10 @@ export default function CierreCajaPage() {
     setExito(null);
     try {
       const cierre = await api.post('/caja/cierres', { total_efectivo_contado: contado, fondo_dejado: fondoNuevo });
-      setExito(`Cierre #${cierre.id} registrado. Fondo para el próximo turno: ${formatearMonto(cierre.fondo_dejado)}.`);
+      setExito(
+        `Cierre #${cierre.id} registrado. ${formatearMonto(cierre.total_efectivo_contado - cierre.fondo_dejado)} pasaron a Caja general. Fondo para el próximo turno: ${formatearMonto(cierre.fondo_dejado)}.`
+      );
+      avisarCambioDeEfectivo();
       setMontoContado('');
       setFondoDejado('');
       await cargar();
@@ -436,7 +442,10 @@ export default function CierreCajaPage() {
               <span>{formatearMonto(ventasEfectivo)}</span>
             </div>
             <div className="cierre-cuenta-fila">
-              <span>− Gastos y pagos en efectivo</span>
+              <span>
+                − Gastos y pagos en efectivo
+                <small>Solo los que salieron de la caja</small>
+              </span>
               <span>{gastos > 0 ? `− ${formatearMonto(gastos)}` : formatearMonto(0)}</span>
             </div>
             <div className={`cierre-cuenta-total${esperado < 0 ? ' cierre-cuenta-negativa' : ''}`}>
@@ -466,7 +475,10 @@ export default function CierreCajaPage() {
               ) : (
                 seRetira !== null && (
                   <div className="cierre-retiro">
-                    <span>Retiro de efectivo</span>
+                    <span>
+                      Retiro de efectivo
+                      {disponible && <small>Pasa a Caja general, que queda en {formatearMonto(disponible.general + seRetira)}</small>}
+                    </span>
                     <strong>{formatearMonto(seRetira)}</strong>
                   </div>
                 )
@@ -501,6 +513,7 @@ export default function CierreCajaPage() {
                   <th className="num">Contado</th>
                   <th className="num">Diferencia</th>
                   <th className="num">Fondo dejado</th>
+                  <th className="num cierre-opcional">A Caja general</th>
                   <th className="num cierre-opcional">Total vendido</th>
                   {esAdmin && <th aria-label="Acciones" />}
                 </tr>
@@ -530,6 +543,8 @@ export default function CierreCajaPage() {
                         {c.diferencia_efectivo === 0 ? 'Sin diferencia' : `${c.diferencia_efectivo > 0 ? 'Sobrante' : 'Faltante'} ${formatearMonto(Math.abs(c.diferencia_efectivo))}`}
                       </td>
                       <td className="num">{c.fondo_dejado > 0 ? formatearMonto(c.fondo_dejado) : '—'}</td>
+                      {/* Los cierres de antes de Caja general (migración 040) no pasaron a ella. */}
+                      <td className="num cierre-opcional cierre-guardado-celda">{c.a_caja_general ? formatearMonto(c.total_efectivo_contado - c.fondo_dejado) : '—'}</td>
                       <td className="num cierre-opcional">{formatearMonto(c.total_general)}</td>
                       {esAdmin && (
                         <td className="cierre-acciones">
@@ -561,7 +576,7 @@ export default function CierreCajaPage() {
                     </tr>
                     {abierto?.id === c.id && (
                       <tr className="sin-click cierre-fila-extra">
-                        <td colSpan={8}>
+                        <td colSpan={9}>
                           {abierto.tipo === 'editar' ? (
                             <CorregirCierre cierre={c} esUltimo={i === 0} onCancelar={() => setAbierto(null)} onListo={cierreCambiado} />
                           ) : (

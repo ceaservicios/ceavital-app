@@ -16,6 +16,7 @@ import { cerrarSesionesInactivas } from './services/session.service.js';
 import { cerrarSesionesClienteInactivas } from './services/clientes-portal.service.js';
 import { defensaCuerpoIp, defensaIp, iniciarDefensa, rutaApiInexistente } from './services/defensa-ip.service.js';
 import { revisarCuota } from './services/avisos-cuota.service.js';
+import { generarVencimientos } from './services/fijos.service.js';
 import { iniciarColaCorreo } from './services/cola-correo.service.js';
 import { revisarCopiaDiaria } from './services/copias.service.js';
 import { enMantenimiento, mantenimientoMiddleware } from './services/mantenimiento.service.js';
@@ -149,6 +150,11 @@ if (config.avisosCuota) {
 
 // Copia de seguridad automática del día (desde las 3, hora argentina): al minuto de arrancar (si el
 // servidor estuvo caído a esa hora, corre al volver) y después cada 15 minutos.
+// Fijos: cada vencimiento entra a Saldos pendientes 30 días antes (2026-11-06).
+const generarVencimientosSinFallar = () => !enMantenimiento() && generarVencimientos().catch((err) => console.error('[fijos] revisión fallida:', err.message));
+setTimeout(generarVencimientosSinFallar, 45_000);
+setInterval(generarVencimientosSinFallar, 60 * 60 * 1000);
+
 const revisarCopiaSinFallar = () => revisarCopiaDiaria().catch((err) => console.error('[copias] revisión fallida:', err.message));
 setTimeout(revisarCopiaSinFallar, 60_000);
 setInterval(revisarCopiaSinFallar, 15 * 60 * 1000);

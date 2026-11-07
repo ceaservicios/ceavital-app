@@ -36,6 +36,14 @@ const ICONOS = {
     </svg>
   ),
   // Saldos pendientes (2026-10-29): una boleta con renglones.
+  fijos: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m17 2 4 4-4 4" />
+      <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+      <path d="m7 22-4-4 4-4" />
+      <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+    </svg>
+  ),
   saldos: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z" />
@@ -67,6 +75,13 @@ const ICONOS = {
       <path d="M12 2v4" />
       <rect x="4" y="6" width="16" height="15" rx="2" />
       <path d="M9 12h6M9 16h6" />
+    </svg>
+  ),
+  'caja-general': (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="15" rx="2" />
+      <circle cx="12" cy="11.5" r="3.2" />
+      <path d="M12 8.3v1.2M12 13.5v1.2M8.8 11.5H10M14 11.5h1.2M7 19v2M17 19v2" />
     </svg>
   ),
   costos: (
@@ -108,9 +123,11 @@ const SECCIONES = [
       { modulo: 'vencimientos', to: '/vencimientos', label: 'Vencimientos' },
       { modulo: 'proveedores', to: '/proveedores', label: 'Proveedores' },
       { modulo: 'saldos', to: '/saldos', label: 'Saldos pendientes' },
+      { modulo: 'fijos', to: '/fijos', label: 'Fijos' },
       { modulo: 'clientes-empresa', to: '/clientes-empresa', label: 'Clientes' },
       { modulo: 'pedidos-cliente', to: '/pedidos-cliente', label: 'Pedidos de clientes' },
       { modulo: 'cierre', to: '/cierre-caja', label: 'Cierre de caja' },
+      { modulo: 'caja-general', to: '/caja-general', label: 'Caja general' },
     ],
   },
   {

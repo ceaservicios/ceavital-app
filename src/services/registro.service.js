@@ -19,6 +19,7 @@ const cantidadLote = (n, medida) =>
     ? `${(Number(n) / 1000).toLocaleString('es-AR')} ${medida === 'kg' ? 'kg' : 'L'}`
     : `${Number(n).toLocaleString('es-AR')} u.`;
 const METODO = { app: 'app autenticadora', mail: 'código por mail' };
+const ORIGEN_EFECTIVO = { caja: 'caja del turno', general: 'Caja general', otro: 'otro lado' };
 const ROL = { admin: 'Administrador', encargado: 'Encargado', cajero: 'Cajero' };
 const SEGUNDO_PASO = { app: 'con la app autenticadora', mail: 'con código por mail', recuperacion: 'con un código de recuperación' };
 const MEDIO_PAGO = {
@@ -116,6 +117,16 @@ const CATALOGO = {
     titulo: 'Eliminó un cierre de caja',
     detalle: (d) => `cierre #${d.cierre_id} del ${fecha(d.fecha)} · contado ${pesos(d.contado)} · fondo dejado ${pesos(d.fondo)}`,
   },
+  'caja-general-movimiento': {
+    categoria: 'instalacion',
+    titulo: 'Anotó un movimiento en Caja general',
+    detalle: (d) => [d.concepto, pesos(d.monto), fecha(d.fecha), d.detalle].filter(Boolean).join(' · '),
+  },
+  'caja-general-anulado': {
+    categoria: 'instalacion',
+    titulo: 'Anuló un movimiento de Caja general',
+    detalle: (d) => [d.concepto, pesos(d.monto), fecha(d.fecha), d.detalle].filter(Boolean).join(' · '),
+  },
   'gasto-editado': {
     categoria: 'instalacion',
     titulo: 'Corrigió un gasto',
@@ -125,6 +136,7 @@ const CATALOGO = {
         d.concepto !== d.concepto_antes && `concepto → «${d.concepto}»`,
         d.monto !== d.monto_antes && `monto ${pesos(d.monto_antes)} → ${pesos(d.monto)}`,
         d.medio !== d.medio_antes && `medio ${MEDIO_PAGO[d.medio_antes] ?? d.medio_antes} → ${MEDIO_PAGO[d.medio] ?? d.medio}`,
+        d.origen !== d.origen_antes && `sale de ${ORIGEN_EFECTIVO[d.origen_antes]} → ${ORIGEN_EFECTIVO[d.origen]}`,
         d.proveedor !== d.proveedor_antes && `proveedor ${d.proveedor_antes ?? 'ninguno'} → ${d.proveedor ?? 'ninguno'}`,
       ]
         .filter(Boolean)

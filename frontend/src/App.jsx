@@ -16,12 +16,16 @@ import ProveedorDetallePage from './pages/ProveedorDetallePage.jsx';
 import CargarMercaderiaPage from './pages/CargarMercaderiaPage.jsx';
 import SaldosPage from './pages/SaldosPage.jsx';
 import CargarDeudaPage from './pages/CargarDeudaPage.jsx';
+import FijosPage from './pages/FijosPage.jsx';
+import FijoFormPage from './pages/FijoFormPage.jsx';
 import CuentaPagarDetallePage from './pages/CuentaPagarDetallePage.jsx';
 import ClientesEmpresaPage from './pages/ClientesEmpresaPage.jsx';
 import ClienteEmpresaNuevoPage from './pages/ClienteEmpresaNuevoPage.jsx';
 import ClienteEmpresaDetallePage from './pages/ClienteEmpresaDetallePage.jsx';
 import PedidosClientePage from './pages/PedidosClientePage.jsx';
 import CierreCajaPage from './pages/CierreCajaPage.jsx';
+import CajaGeneralPage from './pages/CajaGeneralPage.jsx';
+import MovimientoCajaGeneralPage from './pages/MovimientoCajaGeneralPage.jsx';
 import CostosPage from './pages/CostosPage.jsx';
 import UsuariosPage from './pages/UsuariosPage.jsx';
 import ConfiguracionPage from './pages/ConfiguracionPage.jsx';
@@ -75,6 +79,11 @@ export default function App() {
             <Route path="nueva" element={<CargarDeudaPage />} />
             <Route path="cuentas/:id" element={<CuentaPagarDetallePage />} />
           </Route>
+          <Route path="fijos" element={<RequireRole modulo="fijos" />}>
+            <Route index element={<FijosPage />} />
+            <Route path="nuevo" element={<FijoFormPage />} />
+            <Route path=":id" element={<FijoFormPage />} />
+          </Route>
           <Route path="clientes-empresa" element={<RequireRole modulo="clientes-empresa" />}>
             <Route index element={<ClientesEmpresaPage />} />
             <Route path="nuevo" element={<ClienteEmpresaNuevoPage />} />
@@ -89,6 +98,10 @@ export default function App() {
             }
           />
           <Route path="cierre-caja" element={<CierreCajaPage />} />
+          <Route path="caja-general" element={<RequireRole modulo="caja-general" />}>
+            <Route index element={<CajaGeneralPage />} />
+            <Route path="nuevo" element={<MovimientoCajaGeneralPage />} />
+          </Route>
           <Route
             path="costos"
             element={

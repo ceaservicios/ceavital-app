@@ -9,6 +9,7 @@ import {
   obtenerCuentaController,
   obtenerSaldosController,
   registrarPagoCuentaController,
+  saltearVencimientoController,
 } from '../controllers/saldos.controller.js';
 
 const router = Router();
@@ -23,6 +24,7 @@ router.post('/cuentas', requireAuth(ROLES), crearCuentaController);
 router.get('/cuentas/:id', requireAuth(ROLES), obtenerCuentaController);
 router.patch('/cuentas/:id', requireAuth(ROLES), editarCuentaController);
 router.delete('/cuentas/:id', requireAuth(ROLES), eliminarCuentaController);
+router.post('/cuentas/:id/saltear', requireAuth(ROLES), saltearVencimientoController);
 router.post('/cuentas/:id/pagos', requireAuth(ROLES), registrarPagoCuentaController);
 router.post('/cuentas/:id/pagos/:pagoId/anular', requireAuth(ROLES), anularPagoCuentaController);
 
