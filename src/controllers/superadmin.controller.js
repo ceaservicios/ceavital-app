@@ -22,7 +22,7 @@ import {
   fijarImplementacion,
   fijarModificacionesSinCargo,
 } from '../services/cobro-cea.service.js';
-import { obtenerCotizacion, pesosDelTotal } from '../services/dolar-blue.service.js';
+import { actualizarCotizacion, obtenerCotizacion, pesosDelTotal } from '../services/dolar-blue.service.js';
 import { armarCorreoPrueba, correoCeaDisponible, correoDisponible, enviarCorreo } from '../services/mail.service.js';
 import { estadoCorreos } from '../services/cola-correo.service.js';
 import { estadoCopias, instalacion, listarCopiasDrive, pedirCopia } from '../services/copias.service.js';
@@ -128,6 +128,13 @@ function cotizacionDelPanel(cotizacion, aviso) {
   const { venta_cent: ventaCent, fecha, dia, fuente } = cotizacion;
   const totalPesos = aviso?.configurado && aviso.total > 0 ? pesosDelTotal(aviso.total, ventaCent) : null;
   return { venta_cent: ventaCent, fecha, dia, fuente, total_pesos: totalPesos };
+}
+
+// Botón «Actualizar» de la cotización al anotar un pago (2026-11-16): el dólar blue venta de ahora, sin
+// la caché de 30 minutos. El panel se recarga después y ya trae la nueva (queda guardada).
+export async function actualizarCotizacionSuperadminController(req, res) {
+  const { cotizacion, actualizada } = await actualizarCotizacion();
+  res.json({ actualizada, cotizacion });
 }
 
 export async function panelSuperadminController(req, res) {

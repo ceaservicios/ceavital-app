@@ -96,6 +96,7 @@ async function leerGuardada() {
     .prepare(
       `SELECT blue_venta_cent, blue_fecha, blue_fuente,
               blue_consultado_en > LOCALTIMESTAMP - INTERVAL '30 minutes' AS fresca,
+              blue_consultado_en > LOCALTIMESTAMP - INTERVAL '1 minute' AS reciente,
               ${sqlDiaNegocio('blue_consultado_en')} = ${SQL_HOY_NEGOCIO} AS de_hoy
        FROM instancia WHERE id = 1`
     )
@@ -106,6 +107,7 @@ async function leerGuardada() {
     fecha: fila.blue_fecha,
     fuente: fila.blue_fuente,
     fresca: Boolean(fila.fresca),
+    reciente: Boolean(fila.reciente),
     de_hoy: Boolean(fila.de_hoy),
   };
 }
@@ -157,6 +159,39 @@ async function resolverCotizacion() {
 export function obtenerCotizacion() {
   if (!enCurso) enCurso = resolverCotizacion().finally(() => (enCurso = null));
   return enCurso;
+}
+
+// Botón «Actualizar» de la cotización al anotar un pago en /sa (pedido del usuario, 2026-11-16: «tiene
+// que haber un botón para actualizar el valor del dólar»): sale a buscarla ahora, sin la caché de 30
+// minutos ni la espera de 5 tras una falla (la pide el superadmin a mano). Si se consultó hace menos de
+// un minuto, usa esa (que apretar varias veces no salga a internet cada vez). Devuelve { cotizacion,
+// actualizada }: actualizada en false si fallaron las dos fuentes y quedó la guardada de hoy (o null).
+// Nunca rechaza.
+let actualizando = null; // dos clicks a la vez comparten la misma consulta
+
+async function resolverActualizacion() {
+  try {
+    const guardada = await leerGuardada();
+    if (guardada?.reciente) return { cotizacion: publica(guardada), actualizada: true };
+    for (const fuente of FUENTES) {
+      const nueva = await consultarFuente(fuente);
+      if (nueva) {
+        sinFuentesHasta = 0;
+        return { cotizacion: publica(await guardar(nueva)), actualizada: true };
+      }
+    }
+    sinFuentesHasta = Date.now() + ESPERA_TRAS_FALLA_MS;
+    console.warn(`[dolar-blue] actualizar: fallaron las dos fuentes${guardada?.de_hoy ? ', queda la guardada de hoy' : ''}`);
+    return { cotizacion: guardada?.de_hoy ? publica(guardada) : null, actualizada: false };
+  } catch (err) {
+    console.warn(`[dolar-blue] no se pudo actualizar la cotización: ${String(err?.message ?? err).slice(0, 120)}`);
+    return { cotizacion: null, actualizada: false };
+  }
+}
+
+export function actualizarCotizacion() {
+  if (!actualizando) actualizando = resolverActualizacion().finally(() => (actualizando = null));
+  return actualizando;
 }
 
 // Olvida la espera de 5 minutos tras una falla de las dos fuentes (la usan las pruebas).

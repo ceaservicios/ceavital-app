@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   abonoSuperadminController,
   activarDosfaAdministradorController,
+  actualizarCotizacionSuperadminController,
   anotarModificacionSuperadminController,
   anularModificacionSuperadminController,
   anularPagoSuperadminController,
@@ -93,6 +94,8 @@ router.put('/modificaciones/sin-cargo', modificacionesSinCargoSuperadminControll
 router.post('/modificaciones', anotarModificacionSuperadminController);
 router.post('/modificaciones/:id/anular', anularModificacionSuperadminController);
 router.post('/pagos', registrarPagoSuperadminController);
+// El dólar blue de ahora para el pago, sin esperar la caché de 30 minutos (2026-11-16).
+router.post('/cotizacion/actualizar', actualizarCotizacionSuperadminController);
 router.post('/pagos/:id/anular', anularPagoSuperadminController);
 router.post('/suspender', suspenderSuperadminController);
 router.post('/reactivar', reactivarSuperadminController);

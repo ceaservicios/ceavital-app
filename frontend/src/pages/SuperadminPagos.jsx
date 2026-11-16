@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
-import { fechaHoyISO, formatearCotizacion, formatearFecha, formatearMonto, formatearPesos, formatearUsd, usdParaCampo } from '../utils/format.js';
+import {
+  fechaHoyISO,
+  formatearCotizacion,
+  formatearFecha,
+  formatearFechaHora,
+  formatearMonto,
+  formatearPesos,
+  formatearUsd,
+  usdParaCampo,
+} from '../utils/format.js';
 import { NOMBRE_MEDIO, textoDelDesglose } from './SuperadminCobro.jsx';
 
 // Pagos de lo que CEA le cobra a la empresa (panel /sa). Se anotan a mano. Desde el 2026-10-21 cada
@@ -85,6 +94,26 @@ export default function SuperadminPagos({ pagos, aviso = null, cotizacion = null
     );
   }
 
+  // «Actualizar» (pedido del usuario, 2026-11-16): el dólar blue venta de ahora, sin la caché de 30
+  // minutos del panel. Si llega, el campo vuelve a seguir la cotización del panel (que se recarga con la
+  // nueva); si no llega, queda lo que había en el campo, aunque se haya escrito a mano.
+  function actualizarDolar() {
+    ejecutar(
+      async () => {
+        const r = await api.post('/sa/cotizacion/actualizar', {});
+        if (r.cotizacion) setCotizacionAMano(false);
+        return r;
+      },
+      (r) => {
+        if (!r.cotizacion) return 'No se pudo consultar el dólar blue ahora. Probá de nuevo en un rato o escribí la cotización a mano.';
+        const cual = `${formatearCotizacion(r.cotizacion.venta_cent)} (${r.cotizacion.fuente}, ${formatearFechaHora(r.cotizacion.fecha)})`;
+        return r.actualizada
+          ? `Dólar blue actualizado: ${cual}.`
+          : `No se pudo consultar el dólar blue ahora: queda el último de hoy, ${cual}.`;
+      }
+    );
+  }
+
   function anular(id) {
     ejecutar(
       async () => {
@@ -136,7 +165,23 @@ export default function SuperadminPagos({ pagos, aviso = null, cotizacion = null
           </div>
           <div className="field">
             <label htmlFor="sa-pago-blue">Cotización dólar blue ($)</label>
-            <input id="sa-pago-blue" type="text" inputMode="decimal" maxLength={12} placeholder="Ej.: 1565" {...campo('cotizacion_blue')} />
+            {/* «Actualizar» va adentro del campo, a la derecha: el campo mide lo mismo que los demás. */}
+            <div className="sa-campo-boton">
+              <input id="sa-pago-blue" type="text" inputMode="decimal" maxLength={12} placeholder="Ej.: 1565" {...campo('cotizacion_blue')} />
+              <button
+                type="button"
+                className="sa-campo-boton-accion"
+                onClick={actualizarDolar}
+                disabled={ocupado}
+                title="Traer el dólar blue venta de este momento"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 12a9 9 0 1 1-3-6.7" />
+                  <path d="M21 4v5h-5" />
+                </svg>
+                Actualizar
+              </button>
+            </div>
           </div>
           <div className="field">
             <label htmlFor="sa-pago-comprobante">N° de comprobante</label>
@@ -162,8 +207,8 @@ export default function SuperadminPagos({ pagos, aviso = null, cotizacion = null
           </li>
           <li>El monto se completa con el total del aviso y se puede modificar.</li>
           <li>
-            Si se pagó en pesos, cargá el importe y la cotización del dólar blue usada (se completa con la del día): se cargan los dos o
-            ninguno.
+            Si se pagó en pesos, cargá el importe y la cotización del dólar blue usada (se completa con la del día y «Actualizar» trae la
+            de este momento): se cargan los dos o ninguno.
           </li>
           <li>Un pago mal cargado se anula (solo el último) y su aviso vuelve a quedar pendiente.</li>
         </ul>
