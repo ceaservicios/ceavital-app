@@ -74,6 +74,7 @@ export default function SuperadminPagos({ pagos, aviso = null, cotizacion = null
     // La cotización sugerida (sin tocar) solo viaja si se cargó lo pagado en pesos; escrita a mano,
     // viaja siempre y el servidor exige las dos.
     const sinPesos = !pago.pesos_pagados.trim();
+    const fechaPago = pago.fecha_pago; // el formulario se vacía al registrar: el aviso la toma de acá
     ejecutar(
       async () => {
         const r = await api.post('/sa/pagos', {
@@ -86,10 +87,13 @@ export default function SuperadminPagos({ pagos, aviso = null, cotizacion = null
         setCotizacionAMano(false);
         return r;
       },
+      // Primero cuándo se pagó y después a qué vencimiento corresponde (usuario, 2026-11-16: «esto es
+      // confuso… si bien la fecha de vencimiento es otra, el pago se hizo hoy»).
       (r) =>
         `Pago registrado: ${formatearUsd(r.monto)}` +
         (r.pesos_pagados ? ` (${formatearPesos(r.pesos_pagados)} al blue ${formatearCotizacion(r.cotizacion_blue_cent)})` : '') +
-        ` del aviso del ${formatearFecha(r.aviso)}. El próximo vence el ${formatearFecha(r.cuota_vence)}.` +
+        `, pagado el ${formatearFecha(fechaPago)}.` +
+        ` Corresponde al aviso con vencimiento el ${formatearFecha(r.aviso)}; el próximo vence el ${formatearFecha(r.cuota_vence)}.` +
         (r.reactivada ? ` El servicio se reactivó${r.avisado_a ? ` y se notificó por mail a ${r.avisado_a}` : ''}.` : '')
     );
   }
