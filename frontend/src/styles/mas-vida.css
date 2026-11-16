@@ -371,15 +371,138 @@
 :root .portal-contenido > :is(.hero, .card, .pestanas):nth-child(2) { animation-delay: 60ms; }
 :root .portal-contenido > :is(.hero, .card, .pestanas):nth-child(n + 3) { animation-delay: 120ms; }
 
+/* ---------- 12. Panel del Superadmin (/sa), pedido del usuario el 2026-11-16: «Sí, sumalo».
+   Tiene sus propias piezas (sa-*); acá van los mismos efectos que en el sistema. ---------- */
+/* Fondo con el mismo halo (el panel no está dentro del menú: el halo va en el body). */
+:root body:has(.sa-page) {
+  background:
+    radial-gradient(1000px 440px at 0% -14%, rgba(42, 154, 111, 0.15), transparent 62%),
+    radial-gradient(820px 400px at 100% -6%, rgba(34, 66, 140, 0.09), transparent 62%),
+    var(--bg-app);
+  background-attachment: fixed;
+}
+/* Entrada: encabezado, franja de cifras y pestañas al abrir; el contenido de cada pestaña, al cambiar. */
+:root .sa-page > :is(.sa-encabezado, .sa-resumen, .sa-pestanas, .card) {
+  animation: cv-entrar 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+:root .sa-page > :is(.sa-encabezado, .sa-resumen, .sa-pestanas, .card):nth-child(2) { animation-delay: 60ms; }
+:root .sa-page > :is(.sa-encabezado, .sa-resumen, .sa-pestanas, .card):nth-child(n + 3) { animation-delay: 120ms; }
+:root .sa-contenido > :not(.alert) {
+  animation: cv-entrar 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+:root .sa-contenido > :not(.alert):nth-child(2) { animation-delay: 60ms; }
+:root .sa-contenido > :not(.alert):nth-child(3) { animation-delay: 120ms; }
+:root .sa-contenido > :not(.alert):nth-child(n + 4) { animation-delay: 180ms; }
+/* Franja de cifras: el filo verde arriba (como la barra de las listas), sombra suave y cada cifra con
+   un velo verde al pasar el mouse. */
+:root .sa-resumen {
+  background:
+    linear-gradient(90deg, #0e4b38, rgba(14, 75, 56, 0.3) 40%, transparent 72%) top / 100% 3px no-repeat,
+    var(--bg-surface);
+  box-shadow: 0 1px 2px rgba(16, 32, 26, 0.04), 0 12px 30px -14px rgba(16, 32, 26, 0.16);
+  transition: border-color 0.2s ease-out;
+}
+:root .sa-resumen:hover {
+  border-color: rgba(14, 75, 56, 0.32);
+}
+:root :is(.sa-resumen-item, .sa-cifra) {
+  transition: background-color 0.2s ease-out;
+}
+:root :is(.sa-resumen-item, .sa-cifra):hover {
+  background-color: rgba(14, 75, 56, 0.05);
+}
+/* Instalación suspendida: el punto rojo late (es una alerta). */
+:root .sa-punto-alerta {
+  position: relative;
+}
+:root .sa-punto-alerta::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid #ff8a93;
+  opacity: 0;
+  pointer-events: none;
+  animation: cv-latido 2.2s ease-out infinite;
+}
+/* Pestañas subrayadas: la activa en verde; al pasar el mouse asoma el subrayado. */
+:root .sa-pestana:not(.sa-pestana-activa):hover {
+  border-bottom-color: rgba(14, 75, 56, 0.3);
+}
+:root .sa-pestana-activa {
+  color: var(--color-primary);
+}
+/* Títulos de las tarjetas con la marca verde, igual que los títulos de sección del sistema. */
+:root .sa-h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+:root .sa-h2::before {
+  content: '';
+  flex-shrink: 0;
+  width: 6px;
+  height: 20px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #2a9a6f, #0e4b38);
+}
+/* Tablas: títulos en verde y renglones en cascada. */
+:root .sa-tabla th {
+  color: var(--color-primary);
+  font-weight: 700;
+  border-bottom-color: rgba(14, 75, 56, 0.22);
+}
+:root .sa-tabla tbody tr {
+  animation: cv-aparecer 0.35s ease-out backwards;
+}
+:root .sa-tabla tbody tr:nth-child(2) { animation-delay: 25ms; }
+:root .sa-tabla tbody tr:nth-child(3) { animation-delay: 50ms; }
+:root .sa-tabla tbody tr:nth-child(4) { animation-delay: 75ms; }
+:root .sa-tabla tbody tr:nth-child(5) { animation-delay: 100ms; }
+:root .sa-tabla tbody tr:nth-child(n + 6) { animation-delay: 125ms; }
+/* Sin datos: el recuadro con la bandeja vacía; cargando: el aro que gira, a la izquierda del texto. */
+:root .sa-vacio {
+  border-color: rgba(14, 75, 56, 0.25);
+  background: linear-gradient(180deg, rgba(14, 75, 56, 0.045), transparent);
+}
+:root .sa-vacio::before {
+  content: '';
+  display: block;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 10px;
+  border-radius: 12px;
+  background: rgba(14, 75, 56, 0.1)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='%230e4b38' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 12h-6l-2 3h-4l-2-3H2'/%3E%3Cpath d='M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z'/%3E%3C/svg%3E")
+    center / 22px no-repeat;
+}
+:root .sa-cargando {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+:root .sa-cargando::before {
+  content: '';
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(14, 75, 56, 0.15);
+  border-top-color: var(--color-primary);
+  animation: cv-girar 0.8s linear infinite;
+}
+
 /* ---------- Reducir movimiento: todo quieto y visible (global.css acorta las duraciones; acá se
    apagan las animaciones que se repiten y el brillo) ---------- */
 @media (prefers-reduced-motion: reduce) {
   :root .hero-tono-rojo::after,
   :root .sidebar-badge::after,
+  :root .sa-punto-alerta::after,
   :root .hero::before {
     display: none;
   }
-  :root :is(.cliente-vacio, .saldos-vacio, .config-catalogo-vacio)[aria-busy='true']::before {
+  :root :is(.cliente-vacio, .saldos-vacio, .config-catalogo-vacio)[aria-busy='true']::before,
+  :root .sa-cargando::before {
     animation: none;
   }
 }
@@ -387,7 +510,8 @@
 @media print {
   :root .hero::before,
   :root .hero-tono-rojo::after,
-  :root .sidebar-badge::after {
+  :root .sidebar-badge::after,
+  :root .sa-punto-alerta::after {
     display: none;
   }
   :root * {
