@@ -12,7 +12,7 @@ import {
   reactivarInstancia,
   suspenderInstancia,
 } from '../services/instancia.service.js';
-import { listarAvisosEnviados } from '../services/avisos-cuota.service.js';
+import { listarAvisosEnviados, mandarAvisoAhora } from '../services/avisos-cuota.service.js';
 import { anularPago, listarPagos, registrarPago } from '../services/pagos-cuota.service.js';
 import {
   anotarModificacion,
@@ -285,7 +285,7 @@ export async function reactivarSuperadminController(req, res) {
 }
 
 export async function fijarCuotaSuperadminController(req, res) {
-  await fijarCuota(req.body || {});
+  const { vencimientoMovido } = await fijarCuota(req.body || {});
   const instancia = await obtenerInstancia();
   const { cuota } = instancia;
   await registrar(req, 'cuota-guardada', {
@@ -293,8 +293,9 @@ export async function fijarCuotaSuperadminController(req, res) {
     aviso_dias: cuota.aviso_dias,
     suspender_dias: cuota.suspender_dias,
     aviso_suspension_dias: cuota.aviso_suspension_dias,
+    ...(vencimientoMovido && { al_primer_abono: true }),
   });
-  res.json({ instancia });
+  res.json({ instancia, vencimiento_movido: vencimientoMovido });
 }
 
 export async function empresaEmailSuperadminController(req, res) {
@@ -302,6 +303,22 @@ export async function empresaEmailSuperadminController(req, res) {
   const instancia = await obtenerInstancia();
   await registrar(req, 'email-empresa', { email: instancia.empresa_email });
   res.json({ instancia });
+}
+
+// El aviso de pago real, en el momento (no el de prueba): ver avisos-cuota.service > mandarAvisoAhora.
+// concepto: 'implementacion' (botón de Implementación) o 'abono' (Aviso del mes y Abono mensual).
+export async function mandarAvisoSuperadminController(req, res) {
+  const r = await mandarAvisoAhora(req.body?.concepto ?? null);
+  await registrar(req, 'aviso-cuota-manual', {
+    concepto: r.concepto,
+    cuota: r.numero,
+    tipo: r.tipo,
+    vence: r.vence,
+    para: r.enviado_a,
+    reenvio: r.reenvio,
+    estado: r.estado,
+  });
+  res.json(r);
 }
 
 export async function correoPruebaSuperadminController(req, res) {
@@ -391,14 +408,19 @@ export async function restaurarSuperadminController(req, res) {
 // ---- Lo que CEA le cobra a la empresa, en dólares (2026-10-21) ----
 export async function implementacionSuperadminController(req, res) {
   const impl = await fijarImplementacion(req.body || {});
-  await registrar(req, 'implementacion-guardada', impl ?? {});
+  await registrar(req, 'implementacion-guardada', { ...impl });
   res.json({ cobro: await estadoCobro() });
 }
 
+// Si el vencimiento del abono quedó antes del primer abono, pasa a esa fecha (cobro-cea.alinearVencimientoConAbono).
 export async function abonoSuperadminController(req, res) {
-  const abono = await fijarAbono(req.body || {});
-  await registrar(req, 'abono-guardado', abono ? { importe: abono.importe, detalle: abono.detalle } : {});
-  res.json({ cobro: await estadoCobro() });
+  const { abono, vencimientoMovido } = await fijarAbono(req.body || {});
+  await registrar(
+    req,
+    'abono-guardado',
+    abono ? { importe: abono.importe, detalle: abono.detalle, desde: abono.desde, ...(vencimientoMovido && { vencimiento_movido: vencimientoMovido.vence }) } : {}
+  );
+  res.json({ cobro: await estadoCobro(), vencimiento_movido: vencimientoMovido });
 }
 
 export async function modificacionesSinCargoSuperadminController(req, res) {
@@ -430,8 +452,11 @@ export async function anularModificacionSuperadminController(req, res) {
 // ---- Historial de pagos de la cuota ----
 export async function registrarPagoSuperadminController(req, res) {
   const r = await registrarPago(req.body || {});
+  const cuota = r.desglose.implementacion;
   await registrar(req, 'pago-anotado', {
     pago_id: r.id,
+    concepto: r.concepto,
+    ...(cuota && { cuota: cuota.numero, de: cuota.de }),
     monto: r.monto,
     moneda: r.moneda,
     aviso: r.aviso,

@@ -39,8 +39,9 @@ const MAX_RECHAZOS = 5; // contraseña o código mal en 15 minutos
 //   registro_acciones (EST-01 §6), copias_seguridad y restauraciones (historial real), defensa por IP,
 //   cuenta y sesiones del superadmin, instancia/plan/cuota/pagos y lo que CEA le cobra a la empresa
 //   (implementación y abono en `instancia`, modificaciones solicitadas: migración 026; la última
-//   cotización del dólar blue en `instancia` y lo pagado en pesos en `pagos_cuota`: 027), que son de
-//   CEA, y la cola de correos (así no vuelven a salir mails viejos de la copia).
+//   cotización del dólar blue en `instancia` y lo pagado en pesos en `pagos_cuota`: 027; el primer
+//   abono en `instancia` y el día de vencimiento anterior en `pagos_cuota`: 043), que son de CEA, y la
+//   cola de correos (así no vuelven a salir mails viejos de la copia).
 export const PRESERVADAS = [
   'superadmin',
   'sesiones_superadmin',

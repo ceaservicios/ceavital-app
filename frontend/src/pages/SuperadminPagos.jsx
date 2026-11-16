@@ -13,22 +13,31 @@ import {
 import { NOMBRE_MEDIO, textoDelDesglose } from './SuperadminCobro.jsx';
 
 // Pagos de lo que CEA le cobra a la empresa (panel /sa). Se anotan a mano. Desde el 2026-10-21 cada
-// pago es en dólares y paga el aviso pendiente completo (cuota de la implementación, abono y
-// modificaciones con costo): guarda la foto de ese desglose y corre el vencimiento un mes, desde el
-// vencimiento (no desde el día en que pagó). El monto se completa con el total del aviso hasta que se
-// lo cambie a mano. Los pagos de antes siguen en pesos. Opcional (2026-10-21): lo pagado en pesos y la
-// cotización del dólar blue que se usó, que se completa con la de hoy (van los dos o ninguno). Las
+// pago es en dólares y guarda la foto de lo que pagó. Desde el 2026-11-09 cada pago es de uno de los dos
+// cobros pendientes (`pendientes` del panel): la cuota pendiente de la implementación, o el aviso del
+// abono (abono y modificaciones con costo), que corre el vencimiento del abono un mes, desde el
+// vencimiento (no desde el día en que pagó). El monto se completa con el total de lo elegido hasta que
+// se lo cambie a mano. Los pagos de antes siguen en pesos. Opcional (2026-10-21): lo pagado en pesos y
+// la cotización del dólar blue que se usó, que se completa con la de hoy (van los dos o ninguno). Las
 // acciones pasan por `ejecutar` del panel, que recarga todo.
 
 const MEDIOS = Object.entries(NOMBRE_MEDIO);
 
-const montoSugerido = (aviso) => (aviso?.configurado && aviso.total > 0 ? usdParaCampo(aviso.total) : '');
+const montoSugerido = (pendiente) => (pendiente?.total > 0 ? usdParaCampo(pendiente.total) : '');
 // "1565" o "1565,50", como se escribe en el campo.
 const cotizacionSugerida = (cotizacion) => (cotizacion ? usdParaCampo(cotizacion.venta_cent) : '');
 
-const pagoVacio = (aviso, cotizacion) => ({
+// Cómo se nombra cada cobro pendiente en "Qué paga".
+function nombreDelPendiente(p) {
+  const cuota = p.aviso.implementacion;
+  return cuota
+    ? `Implementación · cuota ${cuota.numero} de ${cuota.de} · ${formatearFecha(p.vence)}`
+    : `Abono · aviso del ${formatearFecha(p.vence)}`;
+}
+
+const pagoVacio = (pendiente, cotizacion) => ({
   fecha_pago: fechaHoyISO(),
-  monto: montoSugerido(aviso),
+  monto: montoSugerido(pendiente),
   pesos_pagados: '',
   cotizacion_blue: cotizacionSugerida(cotizacion),
   medio_pago: 'transferencia',
@@ -36,15 +45,23 @@ const pagoVacio = (aviso, cotizacion) => ({
   nota: '',
 });
 
-export default function SuperadminPagos({ pagos, aviso = null, cotizacion = null, ocupado, ejecutar }) {
-  const [pago, setPago] = useState(() => pagoVacio(aviso, cotizacion));
+export default function SuperadminPagos({ pagos, pendientes = [], cotizacion = null, ocupado, ejecutar }) {
+  // Qué se paga: el concepto de un cobro pendiente. Arranca en el más viejo.
+  const [concepto, setConcepto] = useState(() => pendientes[0]?.concepto ?? '');
+  const elegido = pendientes.find((p) => p.concepto === concepto) ?? pendientes[0] ?? null;
+  const [pago, setPago] = useState(() => pagoVacio(elegido, cotizacion));
   const [montoAMano, setMontoAMano] = useState(false); // ya no se completa solo
   const [cotizacionAMano, setCotizacionAMano] = useState(false); // ídem, la cotización
   const [anulando, setAnulando] = useState(null); // id del pago en confirmación
   const [motivo, setMotivo] = useState('');
 
-  // Si cambia el aviso pendiente (se anotó un pago, se cargó la implementación…), el monto lo sigue.
-  const sugerido = montoSugerido(aviso);
+  // Si lo elegido ya no está pendiente (se pagó, se quitó la implementación…), pasa al más viejo.
+  useEffect(() => {
+    if (!pendientes.some((p) => p.concepto === concepto)) setConcepto(pendientes[0]?.concepto ?? '');
+  }, [pendientes, concepto]);
+
+  // Si cambia lo elegido o su total (se anotó un pago, se cargó el abono…), el monto lo sigue.
+  const sugerido = montoSugerido(elegido);
   useEffect(() => {
     if (!montoAMano) setPago((p) => ({ ...p, monto: sugerido }));
   }, [sugerido, montoAMano]);
@@ -55,8 +72,12 @@ export default function SuperadminPagos({ pagos, aviso = null, cotizacion = null
     if (!cotizacionAMano) setPago((p) => ({ ...p, cotizacion_blue: blueSugerido }));
   }, [blueSugerido, cotizacionAMano]);
 
-  // Solo se anula el último pago sin anular (el servidor también lo exige).
-  const ultimoId = pagos.reduce((max, p) => (!p.anulado_en && p.id > max ? p.id : max), 0);
+  // Solo se anula el último pago sin anular de cada cobro (el servidor también lo exige).
+  const ultimoId = pagos.reduce((max, p) => {
+    if (p.anulado_en) return max;
+    const clave = p.concepto ?? 'abono';
+    return p.id > (max[clave] ?? 0) ? { ...max, [clave]: p.id } : max;
+  }, {});
 
   const campo = (nombre) => ({
     value: pago[nombre],
@@ -80,21 +101,29 @@ export default function SuperadminPagos({ pagos, aviso = null, cotizacion = null
         const r = await api.post('/sa/pagos', {
           ...pago,
           cotizacion_blue: sinPesos && !cotizacionAMano ? null : pago.cotizacion_blue,
-          aviso: aviso?.vence ?? null,
+          concepto: elegido?.concepto ?? null,
+          aviso: elegido?.vence ?? null,
         });
-        setPago(pagoVacio(aviso, cotizacion)); // al recargar, los efectos de arriba ponen el total y la cotización nuevos
+        setPago(pagoVacio(elegido, cotizacion)); // al recargar, los efectos de arriba ponen el total y la cotización nuevos
         setMontoAMano(false);
         setCotizacionAMano(false);
         return r;
       },
       // Primero cuándo se pagó y después a qué vencimiento corresponde (usuario, 2026-11-16: «esto es
       // confuso… si bien la fecha de vencimiento es otra, el pago se hizo hoy»).
-      (r) =>
-        `Pago registrado: ${formatearUsd(r.monto)}` +
-        (r.pesos_pagados ? ` (${formatearPesos(r.pesos_pagados)} al blue ${formatearCotizacion(r.cotizacion_blue_cent)})` : '') +
-        `, pagado el ${formatearFecha(fechaPago)}.` +
-        ` Corresponde al aviso con vencimiento el ${formatearFecha(r.aviso)}; el próximo vence el ${formatearFecha(r.cuota_vence)}.` +
-        (r.reactivada ? ` El servicio se reactivó${r.avisado_a ? ` y se notificó por mail a ${r.avisado_a}` : ''}.` : '')
+      (r) => {
+        const cuota = r.desglose?.implementacion;
+        const que = cuota
+          ? ` Corresponde a la cuota ${cuota.numero} de ${cuota.de} de la implementación, con vencimiento el ${formatearFecha(r.aviso)}.`
+          : ` Corresponde al abono con vencimiento el ${formatearFecha(r.aviso)}; el próximo abono vence el ${formatearFecha(r.cuota_vence)}.`;
+        return (
+          `Pago registrado: ${formatearUsd(r.monto)}` +
+          (r.pesos_pagados ? ` (${formatearPesos(r.pesos_pagados)} al blue ${formatearCotizacion(r.cotizacion_blue_cent)})` : '') +
+          `, pagado el ${formatearFecha(fechaPago)}.` +
+          que +
+          (r.reactivada ? ` El servicio se reactivó${r.avisado_a ? ` y se notificó por mail a ${r.avisado_a}` : ''}.` : '')
+        );
+      }
     );
   }
 
@@ -126,7 +155,12 @@ export default function SuperadminPagos({ pagos, aviso = null, cotizacion = null
         setMotivo('');
         return r;
       },
-      (r) => (r.cuota_vence ? `Pago anulado. El aviso del ${formatearFecha(r.cuota_vence)} vuelve a quedar pendiente.` : 'Pago anulado.')
+      (r) =>
+        r.concepto === 'implementacion'
+          ? `Pago anulado. ${r.numero ? `La cuota ${r.numero} de la implementación` : 'La cuota'} vuelve a quedar pendiente.`
+          : r.cuota_vence
+            ? `Pago anulado. El aviso del abono del ${formatearFecha(r.cuota_vence)} vuelve a quedar pendiente.`
+            : 'Pago anulado.'
     );
   }
 
@@ -134,7 +168,8 @@ export default function SuperadminPagos({ pagos, aviso = null, cotizacion = null
     <section className="card sa-card">
       <h2 className="sa-h2">Pagos</h2>
       <p className="sa-ayuda">
-        Registrar el pago de un aviso marca como pagado todo lo que incluye y corre el próximo vencimiento un mes.
+        Cada pago es de la implementación (la cuota pendiente) o del abono (su aviso del mes). Registrar el del abono corre su próximo
+        vencimiento un mes.
       </p>
 
       <form className="sa-aviso-form" onSubmit={anotar}>
@@ -144,9 +179,17 @@ export default function SuperadminPagos({ pagos, aviso = null, cotizacion = null
             <input id="sa-pago-fecha" type="date" max={fechaHoyISO()} required {...campo('fecha_pago')} />
           </div>
           <div className="field">
-            <label htmlFor="sa-pago-aviso">Aviso que paga</label>
-            <select id="sa-pago-aviso" disabled={ocupado} value={aviso?.vence ?? ''} onChange={() => {}}>
-              <option value={aviso?.vence ?? ''}>{aviso ? `Del ${formatearFecha(aviso.vence)}` : 'Desde la fecha de pago'}</option>
+            <label htmlFor="sa-pago-aviso">Qué paga</label>
+            <select id="sa-pago-aviso" disabled={ocupado} value={elegido?.concepto ?? ''} onChange={(e) => setConcepto(e.target.value)}>
+              {pendientes.length === 0 ? (
+                <option value="">Desde la fecha de pago</option>
+              ) : (
+                pendientes.map((p) => (
+                  <option key={p.concepto} value={p.concepto}>
+                    {nombreDelPendiente(p)}
+                  </option>
+                ))
+              )}
             </select>
           </div>
           <div className="field">
@@ -205,16 +248,17 @@ export default function SuperadminPagos({ pagos, aviso = null, cotizacion = null
       <details className="sa-como">
         <summary>Cómo funciona</summary>
         <ul>
+          <li>En «Qué paga» se elige la cuota pendiente de la implementación o el aviso del abono: son pagos separados.</li>
           <li>
-            El vencimiento se corre desde el vencimiento, no desde la fecha de pago: si vence el 10 y se paga el 15, el próximo sigue venciendo el
-            10. Si el abono todavía no empezó, pasa a la fecha del primer abono cuando corresponde.
+            El vencimiento del abono se corre desde el vencimiento, no desde la fecha de pago: si vence el 10 y se paga el 15, el próximo sigue
+            venciendo el 10. Pagar una cuota de la implementación no lo mueve.
           </li>
-          <li>El monto se completa con el total del aviso y se puede modificar.</li>
+          <li>El monto se completa con el total de lo elegido y se puede modificar.</li>
           <li>
             Si se pagó en pesos, cargá el importe y la cotización del dólar blue usada (se completa con la del día y «Actualizar» trae la
             de este momento): se cargan los dos o ninguno.
           </li>
-          <li>Un pago mal cargado se anula (solo el último) y su aviso vuelve a quedar pendiente.</li>
+          <li>Un pago mal cargado se anula (solo el último de la implementación o del abono) y lo que pagó vuelve a quedar pendiente.</li>
         </ul>
       </details>
 
@@ -268,7 +312,7 @@ export default function SuperadminPagos({ pagos, aviso = null, cotizacion = null
                         <span className="sa-chip sa-chip-neutro">Anulado</span>
                         <span className="sa-detalle-fila">{p.anulado_motivo}</span>
                       </div>
-                    ) : p.id !== ultimoId ? null : anulando === p.id ? (
+                    ) : p.id !== ultimoId[p.concepto ?? 'abono'] ? null : anulando === p.id ? (
                       <div className="sa-confirmar">
                         <input
                           type="text"

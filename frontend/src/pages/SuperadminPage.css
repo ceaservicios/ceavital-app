@@ -705,7 +705,7 @@
   min-width: 560px;
 }
 .sa-tabla-avisos {
-  min-width: 560px;
+  min-width: 690px;
 }
 .sa-tabla-correos {
   min-width: 720px;
@@ -729,11 +729,15 @@
 .sa-tabla-copias th:nth-child(3) {
   width: 240px;
 }
+/* Avisos: fecha, cobro (2026-11-09), etapa, vencimiento y destinatario. */
 .sa-tabla-avisos th:nth-child(1),
-.sa-tabla-avisos th:nth-child(2) {
+.sa-tabla-avisos th:nth-child(3) {
   width: 180px;
 }
-.sa-tabla-avisos th:nth-child(3) {
+.sa-tabla-avisos th:nth-child(2) {
+  width: 130px;
+}
+.sa-tabla-avisos th:nth-child(4) {
   width: 150px;
 }
 .sa-tabla-avisos td {

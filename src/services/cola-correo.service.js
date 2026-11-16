@@ -25,17 +25,19 @@ let temporizador = null;
 // Encola un mail. tipo: qué mail es (se ve en el panel). venceEnMinutos: si no salió en ese tiempo
 // ya no sirve y se descarta (un código de ingreso). Dentro de una transacción, se guarda con ella.
 // Un mail del correo de la empresa a esa misma casilla se guarda y sale por el de CEA (ver
-// canalDeSalida), así el panel muestra por dónde salió de verdad.
+// canalDeSalida), así el panel muestra por dónde salió de verdad. Devuelve el id del mail (los avisos
+// de cuota lo anotan, así se sabe después si salió: vinculo.service).
 export async function encolarCorreo({ para, asunto, texto, html }, { canal: pedido = 'empresa', tipo, venceEnMinutos = null } = {}) {
   const canal = canalDeSalida(pedido, para);
   if (!correoDelCanalDisponible(canal)) throw new ApiError(503, 'El envío de mails no está configurado en este servidor');
-  await db
+  const { id } = await db
     .prepare(
       `INSERT INTO correos (canal, tipo, para, asunto, texto, html, vence_en)
-       VALUES (?, ?, ?, ?, ?, ?, LOCALTIMESTAMP + (?::int * INTERVAL '1 minute'))`
+       VALUES (?, ?, ?, ?, ?, ?, LOCALTIMESTAMP + (?::int * INTERVAL '1 minute')) RETURNING id`
     )
-    .run(canal, tipo, String(para).slice(0, MAX_PARA), asunto, texto, html ?? null, venceEnMinutos);
+    .get(canal, tipo, String(para).slice(0, MAX_PARA), asunto, texto, html ?? null, venceEnMinutos);
   db.despuesDeConfirmar(() => setImmediate(procesarCola));
+  return id;
 }
 
 // Cierra el mail: deja el estado final y vacía lo que podía ser sensible.

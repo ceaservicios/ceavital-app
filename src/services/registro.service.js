@@ -250,7 +250,7 @@ const CATALOGO = {
     categoria: 'instalacion',
     titulo: 'Guardó la cuota',
     detalle: (d) =>
-      `vence ${fecha(d.vence)}${d.monto ? ` · ${Number(d.monto).toLocaleString('es-AR')} por mes` : ''} · aviso ${d.aviso_dias} días antes · ${d.suspender_dias ? `se suspende a los ${d.suspender_dias} días` : 'no se suspende sola'}`,
+      `vence ${fecha(d.vence)}${d.por_cuota ? ` (el de la cuota ${d.por_cuota} de la implementación)` : ''}${d.al_primer_abono ? ' (el del primer abono)' : ''}${d.monto ? ` · ${Number(d.monto).toLocaleString('es-AR')} por mes` : ''} · aviso ${d.aviso_dias} días antes · ${d.suspender_dias ? `se suspende a los ${d.suspender_dias} días` : 'no se suspende sola'}`,
   },
   // Los de antes del 2026-10-21 son en pesos (sin moneda); desde entonces, en dólares (centavos), con lo
   // pagado en pesos y la cotización del dólar blue si se cargaron (migración 027).
@@ -259,7 +259,12 @@ const CATALOGO = {
     titulo: 'Anotó un pago de la cuota',
     detalle: (d) =>
       d.moneda === 'USD'
-        ? `${usd(d.monto)}${d.pesos ? ` · en pesos ${pesos(d.pesos)} (blue ${cotizacion(d.cotizacion_blue)})` : ''} · aviso del ${fecha(d.aviso)} · nuevo vencimiento ${fecha(d.cuota_vence)}`
+        ? `${usd(d.monto)}${d.pesos ? ` · en pesos ${pesos(d.pesos)} (blue ${cotizacion(d.cotizacion_blue)})` : ''} · ${
+            // Desde el 2026-11-09 cada pago es de la implementación o del abono (concepto).
+            d.concepto === 'implementacion'
+              ? `cuota ${d.cuota} de ${d.de} de la implementación, vencía el ${fecha(d.aviso)}`
+              : `${d.concepto === 'abono' ? 'abono, ' : ''}aviso del ${fecha(d.aviso)} · nuevo vencimiento ${fecha(d.cuota_vence)}`
+          }`
         : `$${Number(d.monto).toLocaleString('es-AR')} · ${d.meses} ${d.meses === 1 ? 'mes' : 'meses'} · nuevo vencimiento ${fecha(d.cuota_vence)}`,
   },
   'pago-anulado': { categoria: 'instalacion', titulo: 'Anuló un pago de la cuota', detalle: (d) => `pago #${d.pago_id} · ${d.motivo}` },
@@ -268,12 +273,23 @@ const CATALOGO = {
     categoria: 'instalacion',
     titulo: 'Guardó la implementación',
     detalle: (d) =>
-      d.valor ? `${usd(d.valor)} + ${String(d.recargo).replace('.', ',')} % en ${d.cuotas} cuotas · la primera vence el ${fecha(d.primera_vence)}` : 'la quitó',
+      d.valor
+        ? `${usd(d.valor)} + ${String(d.recargo).replace('.', ',')} % en ${d.cuotas} cuotas · la primera vence el ${fecha(d.primera_vence)}${d.vencimiento_movido ? ` · el próximo vencimiento pasó al ${fecha(d.vencimiento_movido)}` : ''}`
+        : 'la quitó',
   },
   'abono-guardado': {
     categoria: 'instalacion',
     titulo: 'Guardó el abono mensual',
-    detalle: (d) => (d.importe ? `${usd(d.importe)} por mes · ${d.detalle}` : 'lo quitó'),
+    detalle: (d) =>
+      d.importe
+        ? `${usd(d.importe)} por mes · ${d.detalle}${d.desde ? ` · el primero vence el ${fecha(d.desde)}` : ''}${d.vencimiento_movido ? ` · el vencimiento del abono pasó al ${fecha(d.vencimiento_movido)}` : ''}`
+        : 'lo quitó',
+  },
+  'aviso-cuota-manual': {
+    categoria: 'instalacion',
+    titulo: 'Mandó el aviso de pago a mano',
+    detalle: (d) =>
+      `${d.concepto === 'implementacion' ? `cuota ${d.cuota} de la implementación, ` : d.concepto === 'abono' ? 'abono, ' : ''}aviso del ${fecha(d.vence)} · a ${d.para}${d.reenvio ? ' · reenvío' : ''}${d.estado === 'enviado' ? '' : ` · ${d.estado}`}`,
   },
   'modificaciones-sin-cargo': {
     categoria: 'instalacion',

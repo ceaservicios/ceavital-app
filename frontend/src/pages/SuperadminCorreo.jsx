@@ -26,6 +26,7 @@ const TIPO = {
   'cuenta-admin': 'Datos de un Administrador',
   'acceso-portal': 'Acceso al portal',
   'aviso-cuota': 'Aviso de cuota',
+  'aviso-cuota-reenvio': 'Aviso de cuota (reenvío)',
   'alerta-seguridad': 'Alerta de seguridad',
   'copia-fallida': 'Copia de seguridad fallida',
   restauracion: 'Restauración de una copia',

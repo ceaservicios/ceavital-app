@@ -4,10 +4,14 @@ import { esDiaValido, hoyNegocio } from '../utils/fecha-negocio.js';
 
 // Lo que CEA le cobra a la empresa, en dólares (decisión del usuario, 2026-10-21; panel /sa >
 // Cuota y pagos, migración 026): la implementación en cuotas con recargo, el abono mensual y las
-// modificaciones solicitadas (las primeras, sin cargo). Cada mes hay un aviso, el del vencimiento
-// pendiente (instancia.cuota_vence): la cuota de la implementación de ese mes, el abono, las
-// modificaciones con costo que tocan y el total. Un pago paga el aviso completo y guarda la foto del
-// desglose (pagos-cuota.service). Los montos van en centavos de dólar.
+// modificaciones solicitadas (las primeras, sin cargo). Los montos van en centavos de dólar.
+// Desde el 2026-11-09 (migración 044, pedido del usuario: con la cuota del 26/10 sin anotar, nunca salía
+// el mail del abono del 10/11) son DOS COBROS SEPARADOS, cada uno con su vencimiento, su aviso por mail
+// y su pago:
+//  - implementación: cada cuota vence en su fecha (planDeCuotas); la pendiente es la primera sin pagar;
+//  - abono: la serie de instancia.cuota_vence (el "Próximo vencimiento"), con el abono y las
+//    modificaciones con costo que tocan. Arranca en su primer vencimiento (abono_desde, migración 043).
+// Un pago paga uno de los dos y guarda la foto de lo que pagó (pagos-cuota.service).
 
 export const USD_MAX = 100_000_000; // centavos: USD 1.000.000
 export const CUOTAS_MAX = 120;
@@ -31,6 +35,14 @@ export function sumarMeses(fechaIso, meses, dia) {
   const d = Math.min(dia, ultimoDia);
   return `${anioNuevo}-${String(mesNuevo + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
+
+const msDe = (fechaIso) => Date.parse(`${fechaIso}T00:00:00Z`);
+
+// Días de `desde` a `hasta` ('AAAA-MM-DD'; negativo si `hasta` es anterior).
+export const diasEntre = (desde, hasta) => Math.round((msDe(hasta) - msDe(desde)) / 86_400_000);
+
+// 'AAAA-MM-DD' + días.
+export const sumarDias = (fechaIso, dias) => new Date(msDe(fechaIso) + dias * 86_400_000).toISOString().slice(0, 10);
 
 // ---- Validaciones ----
 
@@ -117,6 +129,20 @@ export function planDeCuotas({ valor, recargo, cuotas, primera_vence: primera })
   };
 }
 
+// El abono entra en el aviso del mes de su primer vencimiento (abono.desde) y en los siguientes; sin
+// esa fecha, desde el primero. Va por mes, como las cuotas: si se cambia el día de vencimiento, ningún
+// mes queda sin abono.
+export const abonoEnElAviso = (abono, vence) => Boolean(abono) && (!abono.desde || anioMes(vence) >= anioMes(abono.desde));
+
+// El vencimiento que sigue al pagar el aviso `vence` (día fijo `dia`): un mes después, salvo que ese
+// aviso todavía no tuviera el abono y el siguiente ya caiga en el mes del primer abono o después.
+// Entonces es la fecha del primer abono, y su día pasa a ser el día fijo.
+export function vencimientoSiguiente(vence, dia, abono) {
+  const siguiente = sumarMeses(vence, 1, dia);
+  if (!abono?.desde || abonoEnElAviso(abono, vence) || anioMes(siguiente) < anioMes(abono.desde)) return { vence: siguiente, dia };
+  return { vence: abono.desde, dia: Number(abono.desde.slice(8)) };
+}
+
 // En qué aviso se cobra (o sale por primera vez) una modificación de la fecha `fecha`: el primer
 // vencimiento de la serie (día fijo `dia`) posterior a esa fecha y no anterior al pendiente `vence`.
 export function avisoDeModificacion(fecha, vence, dia) {
@@ -125,19 +151,18 @@ export function avisoDeModificacion(fecha, vence, dia) {
   return aviso;
 }
 
-// El aviso del vencimiento `vence`. `cobro` es lo que devuelve leerCobro(). Por mes del calendario
-// (así un cambio del día de vencimiento no deja nada afuera):
-//  - la cuota de la implementación que vence en ese mes, si no está pagada;
-//  - el abono;
+// El aviso del abono del vencimiento `vence` (la serie de instancia.cuota_vence). `cobro` es lo que
+// devuelve leerCobro(). Por mes del calendario (así un cambio del día de vencimiento no deja nada afuera):
+//  - el abono, si ya arrancó (abonoEnElAviso); si no, abono_desde dice cuándo arranca;
 //  - las modificaciones con costo sin cobrar cuyo aviso es de ese mes o anterior (si se corrió el
 //    vencimiento a mano, una que quedó atrás se suma al pendiente: nunca se pierde);
 //  - para el mail: el uso de las sin cargo y cuáles se listan (mientras queden, todas las usadas;
 //    sin quedar, solo la que tiene su aviso justo en ese mes).
+// La implementación ya no va acá: cada cuota tiene su aviso (armarAvisoImplementacion, 2026-11-09).
 export function armarAviso(vence, cobro) {
-  const { impl, abono, sinCargo, cuotasPagadas, modificacionesCobradas } = cobro;
+  const { abono, sinCargo, modificacionesCobradas } = cobro;
+  const abonoDelMes = abonoEnElAviso(abono, vence) ? abono : null;
   const activas = cobro.modificaciones.filter((m) => !m.anulada_en);
-  const plan = impl ? planDeCuotas(impl) : null;
-  const cuota = plan?.cuotas.find((c) => anioMes(c.vence) === anioMes(vence) && !cuotasPagadas.has(c.numero)) ?? null;
   const porFecha = (a, b) => (a.fecha === b.fecha ? a.id - b.id : a.fecha < b.fecha ? -1 : 1);
   const conCosto = activas
     .filter((m) => !m.sin_cargo && !modificacionesCobradas.has(m.id) && anioMes(m.aviso) <= anioMes(vence))
@@ -148,18 +173,74 @@ export function armarAviso(vence, cobro) {
   const listadas = (quedan > 0 ? sinCargoUsadas : sinCargoUsadas.filter((m) => anioMes(m.aviso) === anioMes(vence)))
     .sort(porFecha)
     .map((m) => ({ fecha: m.fecha, detalle: m.detalle }));
-  const total = (cuota?.importe ?? 0) + (abono?.importe ?? 0) + suma(conCosto, 'importe');
+  const total = (abonoDelMes?.importe ?? 0) + suma(conCosto, 'importe');
   return {
+    concepto: 'abono',
     vence,
-    // Sin implementación ni abono (ni modificaciones con costo), el aviso sale sin desglose ni total.
-    configurado: Boolean(impl || abono || conCosto.length),
-    implementacion: cuota
-      ? { numero: cuota.numero, de: impl.cuotas, importe: cuota.importe, valor: impl.valor, recargo: impl.recargo, total: plan.total }
-      : null,
-    abono: abono ? { detalle: abono.detalle, importe: abono.importe } : null,
+    // Sin abono ni modificaciones con costo, el aviso sale sin desglose ni total.
+    configurado: Boolean(abono || conCosto.length),
+    implementacion: null,
+    abono: abonoDelMes ? { detalle: abonoDelMes.detalle, importe: abonoDelMes.importe } : null,
+    abono_desde: abono && !abonoDelMes ? abono.desde : null,
     modificaciones: { sin_cargo: sinCargo, usadas: sinCargoUsadas.length, quedan, sin_cargo_listadas: listadas, con_costo: conCosto },
     total,
   };
+}
+
+// La cuota de la implementación pendiente: la primera sin pagar, o null (sin implementación o todas pagas).
+export function cuotaPendiente(cobro) {
+  if (!cobro.impl) return null;
+  return planDeCuotas(cobro.impl).cuotas.find((c) => !cobro.cuotasPagadas.has(c.numero)) ?? null;
+}
+
+// El aviso de la cuota pendiente de la implementación (2026-11-09): vence en la fecha de la cuota y
+// lleva solo esa cuota. Misma forma que armarAviso, sin abono ni modificaciones. null si no hay.
+export function armarAvisoImplementacion(cobro) {
+  const cuota = cuotaPendiente(cobro);
+  if (!cuota) return null;
+  const { impl } = cobro;
+  return {
+    concepto: 'implementacion',
+    vence: cuota.vence,
+    configurado: true,
+    implementacion: {
+      numero: cuota.numero,
+      de: impl.cuotas,
+      importe: cuota.importe,
+      valor: impl.valor,
+      recargo: impl.recargo,
+      total: planDeCuotas(impl).total,
+    },
+    abono: null,
+    abono_desde: null,
+    modificaciones: null,
+    total: cuota.importe,
+  };
+}
+
+// Los cobros pendientes, del vencimiento más viejo al más nuevo (con la misma fecha, primero la
+// implementación): { concepto, vence, dias_restantes, estado, aviso }. estado: 'vencida',
+// 'por_vencer' (dentro de los días de aviso) o 'vigente'.
+//  - la cuota pendiente de la implementación, si hay;
+//  - el abono del vencimiento cargado, si cobra algo (el abono de ese mes o modificaciones con costo).
+//    Una instalación sin implementación, abono ni modificaciones (la cuota de antes, en pesos) sigue
+//    con su aviso sin desglose.
+// De acá salen los avisos por mail, la suspensión (cuenta desde el primero) y lo que ve Gestión.
+export function pendientesDeCobro(cobro, hoy = hoyNegocio()) {
+  const avisos = [];
+  const impl = armarAvisoImplementacion(cobro);
+  if (impl) avisos.push(impl);
+  if (cobro.vence) {
+    const mensual = armarAviso(cobro.vence, cobro);
+    if (mensual.total > 0 || (!mensual.configurado && !cobro.impl)) avisos.push(mensual);
+  }
+  return avisos
+    .map((aviso) => {
+      const dias = diasEntre(hoy, aviso.vence);
+      const estado = dias < 0 ? 'vencida' : dias <= cobro.avisoDias ? 'por_vencer' : 'vigente';
+      return { concepto: aviso.concepto, vence: aviso.vence, dias_restantes: dias, estado, aviso };
+    })
+    .sort((a, b) => (a.vence === b.vence ? (a.concepto === 'implementacion' ? -1 : 1) : a.vence < b.vence ? -1 : 1));
 }
 
 // Lo que guarda un pago: qué pagó y cuánto era, para que el historial no cambie si después se edita
@@ -167,12 +248,13 @@ export function armarAviso(vence, cobro) {
 export function fotoDelAviso(aviso) {
   return {
     aviso: aviso.vence,
+    concepto: aviso.concepto,
     moneda: 'USD',
     implementacion: aviso.implementacion
       ? { numero: aviso.implementacion.numero, de: aviso.implementacion.de, importe: aviso.implementacion.importe }
       : null,
     abono: aviso.abono,
-    modificaciones: aviso.modificaciones.con_costo,
+    modificaciones: aviso.modificaciones?.con_costo ?? [],
     total: aviso.total,
   };
 }
@@ -186,8 +268,8 @@ const desgloseDe = (valor) => (typeof valor === 'string' ? JSON.parse(valor) : (
 export async function leerCobro() {
   const fila = await db
     .prepare(
-      `SELECT cuota_vence, cuota_dia_vence, impl_valor_usd, impl_recargo, impl_cuotas, impl_primera_vence,
-              abono_detalle, abono_usd, modif_sin_cargo
+      `SELECT cuota_vence, cuota_dia_vence, cuota_aviso_dias, impl_valor_usd, impl_recargo, impl_cuotas, impl_primera_vence,
+              abono_detalle, abono_usd, abono_desde, modif_sin_cargo
        FROM instancia WHERE id = 1`
     )
     .get();
@@ -216,6 +298,7 @@ export async function leerCobro() {
   return {
     vence: fila.cuota_vence ?? null,
     dia: fila.cuota_dia_vence ?? null,
+    avisoDias: Number(fila.cuota_aviso_dias ?? 0),
     impl:
       fila.impl_valor_usd === null || fila.impl_valor_usd === undefined
         ? null
@@ -226,7 +309,9 @@ export async function leerCobro() {
             primera_vence: fila.impl_primera_vence,
           },
     abono:
-      fila.abono_usd === null || fila.abono_usd === undefined ? null : { detalle: fila.abono_detalle, importe: Number(fila.abono_usd) },
+      fila.abono_usd === null || fila.abono_usd === undefined
+        ? null
+        : { detalle: fila.abono_detalle, importe: Number(fila.abono_usd), desde: fila.abono_desde ?? null },
     sinCargo: Number(fila.modif_sin_cargo ?? 0),
     modificaciones: modificaciones.map((m) => ({
       id: m.id,
@@ -243,12 +328,13 @@ export async function leerCobro() {
   };
 }
 
-// El aviso de un vencimiento cualquiera (el mail de prueba usa uno de ejemplo si no hay vencimiento).
+// El aviso del abono de un vencimiento cualquiera (el mail de prueba usa uno de ejemplo si no hay nada pendiente).
 export async function avisoDelVencimiento(vence) {
   return vence ? armarAviso(vence, await leerCobro()) : null;
 }
 
-// Para el panel: implementación con sus cuotas, abono, modificaciones y el aviso pendiente.
+// Para el panel: implementación con sus cuotas, abono, modificaciones, el aviso del abono pendiente
+// (`aviso`) y los cobros pendientes de los dos (`pendientes`, ver pendientesDeCobro).
 export async function estadoCobro() {
   const cobro = await leerCobro();
   const hoy = hoyNegocio();
@@ -299,13 +385,36 @@ export async function estadoCobro() {
     abono: cobro.abono,
     modificaciones: { sin_cargo: cobro.sinCargo, usadas, quedan: Math.max(0, cobro.sinCargo - usadas), lista },
     aviso: cobro.vence ? armarAviso(cobro.vence, cobro) : null,
+    pendientes: pendientesDeCobro(cobro).map((p) => ({ ...p, total: p.aviso.configurado ? p.aviso.total : null })),
   };
 }
 
 // ---- Escritura ----
 
+// El abono arranca en su primer vencimiento (2026-11-09). Si el vencimiento del abono quedó en un mes
+// anterior al del primer abono (por ejemplo, porque la regla del 2026-10-26 lo había corrido a la cuota
+// de la implementación), pasa a esa fecha, con su día como día fijo: si no, el aviso del abono saldría
+// sin abono. No lo corre si ya hay un pago del abono de ese mes o de uno posterior (volver atrás
+// cobraría dos veces), ni si no hay vencimiento cargado. Corre en la transacción de quien guarda (el
+// abono o la cuota). Devuelve { vence } si lo corrió, o null. La migración 044 hizo lo mismo una vez.
+export async function alinearVencimientoConAbono() {
+  const fila = await db.prepare('SELECT cuota_vence, abono_desde FROM instancia WHERE id = 1').get();
+  const vence = fila.cuota_vence ?? null;
+  const desde = fila.abono_desde ?? null;
+  if (!vence || !desde || anioMes(vence) >= anioMes(desde)) return null;
+  const { ultimo } = await db
+    .prepare(`SELECT MAX(periodo_desde) AS ultimo FROM pagos_cuota WHERE anulado_en IS NULL AND concepto = 'abono'`)
+    .get();
+  if (ultimo && anioMes(ultimo) >= anioMes(desde)) return null;
+  await db
+    .prepare('UPDATE instancia SET cuota_vence = ?, cuota_dia_vence = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = 1')
+    .run(desde, Number(desde.slice(8)));
+  return { vence: desde };
+}
+
 // Implementación: los cuatro datos, o los cuatro vacíos para quitarla. No se puede bajar la cantidad
-// de cuotas por debajo de una ya pagada.
+// de cuotas por debajo de una ya pagada. Ya no mueve el vencimiento del abono (2026-11-09): cada cuota
+// tiene su fecha y su aviso.
 export async function fijarImplementacion(datos = {}) {
   const { valor, recargo, cuotas, primera_vence: primera } = datos;
   const vacios = [valor, recargo, cuotas, primera].filter(vacio).length;
@@ -341,16 +450,29 @@ export async function fijarImplementacion(datos = {}) {
   return impl;
 }
 
-// Abono mensual: qué incluye (una línea) y el importe por mes; los dos vacíos lo quitan.
+// Abono mensual: qué incluye (una línea), el importe por mes y, opcional, el vencimiento del primer
+// abono (vacío = desde el vencimiento cargado). Detalle e importe vacíos lo quitan, con su fecha.
+// Devuelve { abono, vencimientoMovido } (alinearVencimientoConAbono).
 export async function fijarAbono(datos = {}) {
-  const { detalle, importe } = datos;
+  const { detalle, importe, desde } = datos;
   const sinDetalle = vacio(typeof detalle === 'string' ? detalle.trim() : detalle);
   if (sinDetalle !== vacio(importe)) throw new ApiError(400, 'Completá qué incluye y el importe por mes (o dejá los dos vacíos para quitar el abono)');
-  const abono = sinDetalle ? null : { detalle: textoDeUnaLinea(detalle, 'Qué incluye'), importe: parsearUsd(importe, 'El importe por mes') };
-  await db
-    .prepare('UPDATE instancia SET abono_detalle = ?, abono_usd = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = 1')
-    .run(abono?.detalle ?? null, abono?.importe ?? null);
-  return abono;
+  let abono = null;
+  if (!sinDetalle) {
+    if (!vacio(desde) && !esDiaValido(desde)) throw new ApiError(400, 'El vencimiento del primer abono tiene que ser una fecha real (AAAA-MM-DD)');
+    abono = {
+      detalle: textoDeUnaLinea(detalle, 'Qué incluye'),
+      importe: parsearUsd(importe, 'El importe por mes'),
+      desde: vacio(desde) ? null : desde,
+    };
+  }
+  const vencimientoMovido = await db.transaction(async () => {
+    await db
+      .prepare('UPDATE instancia SET abono_detalle = ?, abono_usd = ?, abono_desde = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = 1')
+      .run(abono?.detalle ?? null, abono?.importe ?? null, abono?.desde ?? null);
+    return alinearVencimientoConAbono();
+  });
+  return { abono, vencimientoMovido };
 }
 
 const SQL_SIN_CARGO_USADAS = 'SELECT COUNT(*) FROM modificaciones_cuota WHERE sin_cargo AND anulada_en IS NULL';

@@ -1,10 +1,10 @@
 import db from '../db/connection.js';
 import { ApiError } from '../utils/api-error.js';
-import { SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
+import { hoyNegocio, SQL_HOY_NEGOCIO } from '../utils/fecha-negocio.js';
 import { cambiarPlan } from './modulos.service.js';
 import { armarCorreoCuota, correoCeaDisponible, enviarCorreo } from './mail.service.js';
 import { encolarCorreo } from './cola-correo.service.js';
-import { avisoDelVencimiento } from './cobro-cea.service.js';
+import { alinearVencimientoConAbono, avisoDelVencimiento, diasEntre, leerCobro, pendientesDeCobro, sumarDias } from './cobro-cea.service.js';
 import { obtenerCotizacion } from './dolar-blue.service.js';
 
 // Estado de la instalación que gestiona el superadmin: suspensión (manual o automática por
@@ -26,9 +26,7 @@ export async function obtenerInstancia() {
     .prepare(
       `SELECT estado, motivo_suspension, suspendida_en, suspension_por_cuota, suspension_auto_vence, empresa_email,
               cuota_vence, cuota_aviso_dias, cuota_suspender_dias, cuota_aviso_suspension_dias,
-              (cuota_vence - ${SQL_HOY_NEGOCIO}) AS cuota_dias_restantes,
-              (cuota_vence + cuota_suspender_dias) AS cuota_suspende_el,
-              (cuota_vence + cuota_suspender_dias) - ${SQL_HOY_NEGOCIO} AS cuota_dias_para_suspender
+              (cuota_vence - ${SQL_HOY_NEGOCIO}) AS cuota_dias_restantes
        FROM instancia WHERE id = 1`
     )
     .get();
@@ -38,6 +36,10 @@ export async function obtenerInstancia() {
   if (fila.cuota_vence) {
     cuotaEstado = dias < 0 ? 'vencida' : dias <= fila.cuota_aviso_dias ? 'por_vencer' : 'vigente';
   }
+  // La suspensión automática cuenta desde el vencimiento sin pagar más viejo, de la implementación o
+  // del abono (2026-11-09, cobro-cea.pendientesDeCobro).
+  const [masViejo] = pendientesDeCobro(await leerCobro());
+  const suspendeEl = masViejo && fila.cuota_suspender_dias ? sumarDias(masViejo.vence, fila.cuota_suspender_dias) : null;
   return {
     estado: fila.estado,
     motivo_suspension: fila.motivo_suspension ?? null,
@@ -46,18 +48,20 @@ export async function obtenerInstancia() {
     suspension_auto_vence: fila.suspension_auto_vence ?? null,
     empresa_email: fila.empresa_email ?? null,
     cuota: {
-      // El importe ya no es un monto fijo en pesos (instancia.cuota_monto quedó sin uso, 2026-10-21):
-      // es el total del aviso del mes, en dólares (cobro-cea.service).
+      // El vencimiento del abono (el "Próximo vencimiento"). El importe ya no es un monto fijo en pesos
+      // (instancia.cuota_monto quedó sin uso, 2026-10-21): sale de cobro-cea.service, en dólares. La
+      // implementación tiene sus propios vencimientos desde el 2026-11-09.
       vence: fila.cuota_vence ?? null,
       aviso_dias: fila.cuota_aviso_dias,
       dias_restantes: fila.cuota_vence ? dias : null,
       estado: cuotaEstado,
-      // Suspensión automática (null = no se suspende sola). suspende_el: la fecha en que se
-      // suspendería con el vencimiento actual.
+      // Suspensión automática (null = no se suspende sola). suspende_vence: el vencimiento sin pagar
+      // más viejo, del que cuenta; suspende_el: la fecha en que se suspendería.
       suspender_dias: fila.cuota_suspender_dias ?? null,
       aviso_suspension_dias: fila.cuota_aviso_suspension_dias,
-      suspende_el: fila.cuota_suspende_el ?? null,
-      dias_para_suspender: fila.cuota_suspende_el ? fila.cuota_dias_para_suspender : null,
+      suspende_vence: masViejo?.vence ?? null,
+      suspende_el: suspendeEl,
+      dias_para_suspender: suspendeEl ? diasEntre(hoyNegocio(), suspendeEl) : null,
     },
   };
 }
@@ -108,21 +112,21 @@ export async function suspenderInstancia(motivo) {
   });
 }
 
-// Suspensión automática (la llama la revisión horaria de la cuota): si la cuota lleva los
-// días configurados vencida y todavía no se suspendió sola por este vencimiento (si CEA la
-// reactivó a mano sin el pago, es una prórroga y no se repite). Devuelve true si suspendió.
+// Suspensión automática (la llama la revisión horaria de la cuota): si el vencimiento sin pagar más
+// viejo (de la implementación o del abono, 2026-11-09) lleva los días configurados vencido y todavía
+// no se suspendió sola por ese vencimiento (si CEA la reactivó a mano sin el pago, es una prórroga y
+// no se repite). Devuelve true si suspendió.
 export async function suspenderPorCuotaSiCorresponde() {
   return db.transaction(async () => {
-    const fila = await db
-      .prepare(
-        `SELECT estado, cuota_vence, suspension_auto_vence,
-                (cuota_vence + cuota_suspender_dias) <= ${SQL_HOY_NEGOCIO} AS toca
-         FROM instancia WHERE id = 1`
-      )
-      .get();
-    if (fila.estado !== 'activa' || !fila.toca || fila.suspension_auto_vence === fila.cuota_vence) return false;
-    const vence = fila.cuota_vence.split('-').reverse().join('/');
-    await aplicarSuspension(`Cuota impaga (venció el ${vence})`, { porCuota: true, vence: fila.cuota_vence });
+    const fila = await db.prepare('SELECT estado, suspension_auto_vence, cuota_suspender_dias FROM instancia WHERE id = 1').get();
+    if (fila.estado !== 'activa' || !fila.cuota_suspender_dias) return false;
+    const [masViejo] = pendientesDeCobro(await leerCobro());
+    if (!masViejo || fila.suspension_auto_vence === masViejo.vence) return false;
+    if (sumarDias(masViejo.vence, fila.cuota_suspender_dias) > hoyNegocio()) return false;
+    const impl = masViejo.aviso.implementacion;
+    const que = impl ? `Cuota ${impl.numero} de ${impl.de} de la implementación impaga` : masViejo.aviso.abono ? 'Abono impago' : 'Cuota impaga';
+    const vence = masViejo.vence.split('-').reverse().join('/');
+    await aplicarSuspension(`${que} (venció el ${vence})`, { porCuota: true, vence: masViejo.vence });
     return true;
   });
 }
@@ -179,7 +183,9 @@ function enteroEntre(valor, minimo, maximo, mensaje) {
 // con la cuota ya vencida). Un campo que no viene en el pedido conserva su valor
 // (también vence: antes un pedido sin vence borraba el vencimiento y apagaba la
 // suspensión automática). El importe en pesos (cuota_monto) ya no se carga ni se toca: desde el
-// 2026-10-21 el aviso se arma en dólares con la implementación, el abono y las modificaciones.
+// 2026-10-21 el aviso se arma en dólares. Desde el 2026-11-09 este es el vencimiento del abono (la
+// implementación tiene los suyos): si queda en un mes anterior al del primer abono, pasa a esa fecha
+// (cobro-cea.alinearVencimientoConAbono). Devuelve { vencimientoMovido }.
 export async function fijarCuota(datos) {
   const { vence, aviso_dias: avisoDias, suspender_dias: suspenderDias, aviso_suspension_dias: avisoSuspension } = datos;
   const cambiaVence = 'vence' in datos;
@@ -191,7 +197,7 @@ export async function fijarCuota(datos) {
     fecha = vence;
   }
 
-  await db.transaction(async () => {
+  const vencimientoMovido = await db.transaction(async () => {
     const actual = await db
       .prepare('SELECT cuota_vence, cuota_aviso_dias, cuota_suspender_dias, cuota_aviso_suspension_dias FROM instancia WHERE id = 1')
       .get();
@@ -226,7 +232,9 @@ export async function fijarCuota(datos) {
       // Si vence no cambió, el día fijo tampoco (puede no coincidir con el día de cuota_vence:
       // un día 31 vence el 30 en los meses de 30 días).
       .run(fecha, cambiaVence && fecha ? Number(fecha.slice(8)) : null, aviso, suspender, avisoPrevio);
+    return alinearVencimientoConAbono();
   });
+  return { vencimientoMovido };
 }
 
 // Topes de usuarios por rol que carga el superadmin al armar la empresa (sin cargar = no se
@@ -297,18 +305,19 @@ export async function fijarEmpresaEmail(email) {
   await db.prepare('UPDATE instancia SET empresa_email = ?, actualizado_en = CURRENT_TIMESTAMP WHERE id = 1').run(valor);
 }
 
-// Manda al email de la empresa un aviso de cuota de prueba, con el diseño real, el estado actual de
-// la cuota, el desglose del aviso pendiente (sin vencimiento cargado, uno de ejemplo a 5 días) y, si
-// hay cotización del dólar blue, el equivalente en pesos: comprueba que el correo de CEA sale y
-// muestra cómo le llegan los avisos.
+// Manda al email de la empresa un aviso de cuota de prueba, con el diseño real: el del cobro pendiente
+// más viejo (la cuota de la implementación o el abono; sin nada pendiente, uno del abono de ejemplo a 5
+// días) y, si hay cotización del dólar blue, el equivalente en pesos. Comprueba que el correo de CEA
+// sale y muestra cómo le llegan los avisos.
 export async function enviarCorreoDePrueba() {
   if (!correoCeaDisponible()) throw new ApiError(503, 'El correo de CEA no está configurado en este servidor (variables SA_SMTP_*)');
   const { empresa_email: para, estado, cuota } = await obtenerInstancia();
   if (!para) throw new ApiError(400, 'Cargá primero el email de la empresa');
-  const vence = cuota.vence ?? new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
-  const diasRestantes = cuota.vence ? cuota.dias_restantes : 5;
+  const [pendiente] = pendientesDeCobro(await leerCobro());
+  const vence = pendiente?.vence ?? cuota.vence ?? sumarDias(hoyNegocio(), 5);
+  const diasRestantes = pendiente ? pendiente.dias_restantes : cuota.vence ? cuota.dias_restantes : 5;
   const tipo = estado === 'suspendida' ? 'suspendida' : diasRestantes > 0 ? 'por_vencer' : diasRestantes === 0 ? 'vence_hoy' : 'vencida';
-  const [aviso, cotizacion] = await Promise.all([avisoDelVencimiento(vence), obtenerCotizacion()]);
+  const [aviso, cotizacion] = await Promise.all([pendiente ? pendiente.aviso : avisoDelVencimiento(vence), obtenerCotizacion()]);
   await enviarCorreo({ para, ...armarCorreoCuota({ tipo, vence, diasRestantes, aviso, cotizacion, prueba: true }) }, 'cea');
   return { enviado_a: para };
 }

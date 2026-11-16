@@ -23,6 +23,7 @@ import { enMantenimiento, mantenimientoMiddleware } from './services/mantenimien
 import { cerrarRestauracionesCortadas } from './services/restauracion.service.js';
 import { asegurarSuperadmin, cerrarSesionesSuperadminInactivas } from './services/superadmin.service.js';
 import { claveDosfaDisponible } from './utils/dosfa.js';
+import { vinculoDisponible } from './middleware/vinculo-auth.middleware.js';
 
 function asegurarCertificado() {
   const certPath = path.join(config.certsDir, 'cert.pem');
@@ -61,6 +62,9 @@ await cerrarRestauracionesCortadas();
 await asegurarSuperadmin();
 if (!claveDosfaDisponible()) {
   console.warn('[2fa] falta DOSFA_CLAVE (32 caracteres o más): la verificación en dos pasos solo se puede configurar por mail');
+}
+if (config.vinculo.token && !vinculoDisponible()) {
+  console.warn('[vinculo] VINCULO_GESTION_TOKEN tiene menos de 32 caracteres: la consulta de Gestión queda apagada');
 }
 await iniciarDefensa();
 // Mails en cola (EST-01 §10.3): manda lo pendiente de antes del reinicio y revisa cada 30 s.

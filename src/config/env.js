@@ -116,6 +116,13 @@ const config = {
       .filter(Boolean),
   },
 
+  // Vínculo con CEA Servicios - Gestión (services/vinculo.service.js): Gestión consulta la cuota y los
+  // avisos de cuota con GET /api/vinculo/estado y este token, que genera Gestión al vincular el sistema
+  // (32 caracteres o más). Vacío o más corto = la consulta no existe (404).
+  vinculo: {
+    token: (process.env.VINCULO_GESTION_TOKEN || '').trim(),
+  },
+
   // Copias de seguridad (services/copias.service.js): Google Drive de CEA (admin@ceaservicios.com.ar)
   // con el cliente OAuth de IntelDrive y DaleFit. Sin las tres (o sin PUBLIC_URL) no hay copias.
   gdrive: {

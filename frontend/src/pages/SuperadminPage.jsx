@@ -4,7 +4,16 @@ import { api, ApiError, setCsrfSuperadmin } from '../api/client.js';
 import { formatearFecha, formatearFechaHora, formatearUsd } from '../utils/format.js';
 import ConfigurarDosfa from '../components/ConfigurarDosfa.jsx';
 import SuperadminAdmins from './SuperadminAdmins.jsx';
-import { LineaCotizacion, SeccionAbono, SeccionImplementacion, SeccionModificaciones, TablaAviso } from './SuperadminCobro.jsx';
+import {
+  delCobro,
+  LineaCotizacion,
+  nombreDelCobro,
+  SeccionAbono,
+  SeccionImplementacion,
+  SeccionModificaciones,
+  TablaAviso,
+  textoVencimientoMovido,
+} from './SuperadminCobro.jsx';
 import SuperadminCopias from './SuperadminCopias.jsx';
 import SuperadminCorreo from './SuperadminCorreo.jsx';
 import SuperadminPagos from './SuperadminPagos.jsx';
@@ -49,13 +58,17 @@ const ESTADO_CUOTA = {
   vencida: { texto: 'Cuota vencida', corto: 'Vencida', clase: 'sa-chip-alerta' },
 };
 
+const ETIQUETA_COBRO = { implementacion: 'Implementación', abono: 'Abono' };
+
+// La suspensión cuenta desde el vencimiento sin pagar más viejo, de la implementación o del abono
+// (cuota.suspende_vence, 2026-11-09).
 function textoSuspension(instancia) {
   const { cuota } = instancia;
   if (!cuota.suspender_dias) return 'Sin suspensión automática.';
   if (!cuota.suspende_el || instancia.estado === 'suspendida') return `Se suspende automáticamente a los ${cuota.suspender_dias} días del vencimiento.`;
-  if (instancia.suspension_auto_vence === cuota.vence) return 'Reactivada manualmente sin el pago: no se vuelve a suspender por este vencimiento.';
+  if (instancia.suspension_auto_vence === cuota.suspende_vence) return 'Reactivada manualmente sin el pago: no se vuelve a suspender por este vencimiento.';
   if (cuota.dias_para_suspender <= 0) return 'Se suspende automáticamente en la próxima revisión (dentro de una hora).';
-  return `Se suspende automáticamente el ${formatearFecha(cuota.suspende_el)} si no se registra el pago.`;
+  return `Se suspende automáticamente el ${formatearFecha(cuota.suspende_el)} si no se registra el pago del ${formatearFecha(cuota.suspende_vence)}.`;
 }
 
 function textoDias(cuota) {
@@ -246,7 +259,11 @@ export default function SuperadminPage() {
   const { instancia } = panel;
   const suspendida = instancia.estado === 'suspendida';
   const estadoCuota = ESTADO_CUOTA[instancia.cuota.estado];
-  const avisoMes = panel.cobro?.aviso ?? null; // total del aviso pendiente, en dólares
+  // Los dos cobros pendientes (implementación y abono), del vencimiento más viejo al más nuevo.
+  const pendientes = panel.cobro?.pendientes ?? [];
+  const pendientePor = (concepto) => pendientes.find((p) => p.concepto === concepto) ?? null;
+  const masViejo = pendientes[0] ?? null;
+  const pendienteImpl = pendientePor('implementacion');
   const moduloPorId = Object.fromEntries(panel.modulos.map((m) => [m.id, m]));
 
   // ---- Secciones (cada una es una tarjeta a todo el ancho) ----
@@ -412,9 +429,68 @@ export default function SuperadminPage() {
     </section>
   );
 
-  // Aviso del mes: el vencimiento pendiente, la suspensión automática y el desglose en dólares de lo
-  // que se cobra ese mes (2026-10-21; el importe fijo en pesos ya no se usa). A la izquierda el
-  // desglose; a la derecha, vencimiento y suspensión.
+  // "Enviar aviso" (2026-10-26): el aviso real, en el momento. Desde el 2026-11-09, uno por cobro
+  // (`concepto`): el de la cuota pendiente de la implementación o el del abono. Solo con lo guardado:
+  // si el vencimiento del abono del formulario no se guardó, el mail saldría con otra fecha que la que se ve.
+  function faltaParaMandar(concepto) {
+    if (!panel.correo.disponible) return 'Falta configurar el correo de CEA (variables SA_SMTP_*)';
+    if (!instancia.empresa_email) return 'Cargá el email de la empresa (más abajo)';
+    if (concepto === 'abono' && vence !== (instancia.cuota.vence ?? '')) return 'Guardá el vencimiento antes de enviar el aviso';
+    if (!pendientePor(concepto)) return concepto === 'abono' ? 'Cargá el abono y guardá su próximo vencimiento' : 'No hay cuotas sin pagar';
+    return null;
+  }
+
+  function mandarAviso(concepto) {
+    ejecutar(
+      async () => {
+        const r = await api.post('/sa/cuota/aviso', { concepto });
+        if (r.estado !== 'enviado') {
+          await cargar();
+          setConfirmando(null);
+          throw new ApiError(
+            r.error
+              ? `El aviso no se envió: ${r.error}. Quedó en cola y se reintenta automáticamente (ver pestaña Correo).`
+              : 'El aviso quedó en cola y se envía en unos minutos (ver pestaña Correo).',
+            502
+          );
+        }
+        return r;
+      },
+      (r) =>
+        `Aviso ${r.concepto === 'implementacion' ? `de la cuota ${r.numero} de la implementación` : 'del abono'} del ${formatearFecha(r.vence)} enviado a ${r.enviado_a}${r.reenvio ? ' (reenvío)' : ''}.`
+    );
+  }
+
+  // El botón con su confirmación (pedido del usuario, 2026-11-09: uno en Implementación y otro en Abono
+  // mensual). El del abono también va en Aviso del mes; `clave` separa las confirmaciones. Va dentro del
+  // pie del formulario (type="button": no lo envía).
+  const botonMandarAviso = (clave, concepto) => {
+    const pendiente = pendientePor(concepto);
+    const falta = faltaParaMandar(concepto);
+    return confirmando === clave && pendiente ? (
+      <div className="sa-confirmar">
+        <span>
+          ¿Enviar ahora a {instancia.empresa_email} el aviso {delCobro(pendiente)} del {formatearFecha(pendiente.vence)}
+          {pendiente.total !== null ? ` por ${formatearUsd(pendiente.total)}` : ''}?
+        </span>
+        <button type="button" className="btn btn-primary" disabled={ocupado} onClick={() => mandarAviso(concepto)}>
+          Enviar aviso
+        </button>
+        <button type="button" className="btn" disabled={ocupado} onClick={() => setConfirmando(null)}>
+          Cancelar
+        </button>
+      </div>
+    ) : (
+      <button type="button" className="btn" disabled={ocupado || Boolean(falta)} title={falta ?? undefined} onClick={() => setConfirmando(clave)}>
+        {concepto === 'implementacion' ? 'Enviar aviso de la cuota' : 'Enviar aviso del abono'}
+      </button>
+    );
+  };
+
+  // Aviso del mes: el vencimiento del abono, la suspensión automática y el desglose en dólares del aviso
+  // del abono (2026-10-21; el importe fijo en pesos ya no se usa). Desde el 2026-11-09 la cuota de la
+  // implementación se avisa y se paga aparte: acá solo se nombra. A la izquierda el desglose; a la
+  // derecha, vencimiento y suspensión.
   const seccionCuota = (
     <section className="card sa-card" key="cuota">
       <div className="sa-card-cabecera">
@@ -422,13 +498,19 @@ export default function SuperadminPage() {
         <span className={`sa-chip ${estadoCuota.clase}`}>{estadoCuota.texto}</span>
       </div>
       <p className="sa-detalle">
-        {instancia.cuota.vence ? `Vence el ${formatearFecha(instancia.cuota.vence)} · ${textoDias(instancia.cuota)}. ` : ''}
+        {instancia.cuota.vence ? `El abono vence el ${formatearFecha(instancia.cuota.vence)} · ${textoDias(instancia.cuota)}. ` : ''}
         {textoSuspension(instancia)}
       </p>
       <div className="sa-aviso-grilla">
         <div className="sa-desglose">
           <TablaAviso aviso={panel.cobro.aviso} />
           <LineaCotizacion cotizacion={panel.cotizacion} />
+          {pendienteImpl && (
+            <p className="sa-ayuda">
+              Aparte del abono: {nombreDelCobro(pendienteImpl)}, {pendienteImpl.dias_restantes < 0 ? 'venció' : 'vence'} el{' '}
+              {formatearFecha(pendienteImpl.vence)} ({formatearUsd(pendienteImpl.total)}). Tiene su propio aviso y su propio pago.
+            </p>
+          )}
         </div>
         <form
           className="sa-aviso-form"
@@ -442,14 +524,14 @@ export default function SuperadminPage() {
                   suspender_dias: suspenderDias === '' ? null : Number(suspenderDias),
                   aviso_suspension_dias: avisoSuspension === '' ? 0 : Number(avisoSuspension),
                 }),
-              'Vencimiento y suspensión guardados.'
+              (r) => `Vencimiento y suspensión guardados.${textoVencimientoMovido(r.vencimiento_movido)}`
             );
           }}
         >
           <h3 className="sa-h3">Vencimiento y suspensión</h3>
           <div className="sa-campos sa-campos-2">
             <div className="field">
-              <label htmlFor="sa-vence">Próximo vencimiento</label>
+              <label htmlFor="sa-vence">Próximo vencimiento del abono</label>
               <input id="sa-vence" type="date" value={vence} onChange={(e) => setVence(e.target.value)} disabled={ocupado} />
             </div>
             <div className="field">
@@ -498,6 +580,7 @@ export default function SuperadminPage() {
             <button type="submit" className="btn btn-primary" disabled={ocupado}>
               Guardar cambios
             </button>
+            {botonMandarAviso('aviso', 'abono')}
           </div>
         </form>
       </div>
@@ -505,25 +588,43 @@ export default function SuperadminPage() {
         <summary>Cómo funcionan los avisos</summary>
         <ul>
           <li>
-            Todos los meses se envía a la empresa un aviso con la cuota de la implementación que corresponde, el abono y las modificaciones
-            con costo; el total va en dólares, con su equivalente en pesos al dólar blue venta del día si hay cotización, y con los datos para
-            pagar por Mercado Pago.
+            La implementación y el abono se avisan por separado: cada cuota de la implementación en su fecha, y el abono (desde su primer
+            vencimiento, con las modificaciones con costo) en el próximo vencimiento del abono. Cada aviso va en dólares, con su equivalente en
+            pesos al dólar blue venta del día si hay cotización, y con los datos para pagar por Mercado Pago.
           </li>
           <li>
-            Con «Suspender a los … días», la instalación se suspende automáticamente esa cantidad de días después del vencimiento, y se avisa por
-            mail antes (con el aviso de suspensión) y al suspenderse. Vacío: no se suspende automáticamente.
+            Con «Suspender a los … días», la instalación se suspende automáticamente esa cantidad de días después del vencimiento sin pagar más
+            viejo (de la implementación o del abono), y se avisa por mail antes (con el aviso de suspensión) y al suspenderse. Vacío: no se
+            suspende automáticamente.
           </li>
-          <li>Los avisos salen solos en la revisión de cada hora.</li>
+          <li>
+            Los avisos salen solos en la revisión de cada hora. «Enviar aviso del abono» y «Enviar aviso de la cuota» (en Implementación) lo
+            envían en el momento; si esa etapa ya se avisó, se reenvía.
+          </li>
         </ul>
       </details>
     </section>
   );
 
   const seccionImplementacion = (
-    <SeccionImplementacion key="implementacion" implementacion={panel.cobro.implementacion} ocupado={ocupado} ejecutar={ejecutar} />
+    <SeccionImplementacion
+      key="implementacion"
+      implementacion={panel.cobro.implementacion}
+      ocupado={ocupado}
+      ejecutar={ejecutar}
+      accionAviso={panel.cobro.implementacion ? botonMandarAviso('aviso-implementacion', 'implementacion') : null}
+    />
   );
 
-  const seccionAbono = <SeccionAbono key="abono" abono={panel.cobro.abono} ocupado={ocupado} ejecutar={ejecutar} />;
+  const seccionAbono = (
+    <SeccionAbono
+      key="abono"
+      abono={panel.cobro.abono}
+      ocupado={ocupado}
+      ejecutar={ejecutar}
+      accionAviso={panel.cobro.abono ? botonMandarAviso('aviso-abono', 'abono') : null}
+    />
+  );
 
   const seccionModificaciones = (
     <SeccionModificaciones
@@ -539,7 +640,7 @@ export default function SuperadminPage() {
     <SuperadminPagos
       key="pagos"
       pagos={panel.pagos}
-      aviso={panel.cobro.aviso}
+      pendientes={pendientes}
       cotizacion={panel.cotizacion ?? null}
       ocupado={ocupado}
       ejecutar={ejecutar}
@@ -602,6 +703,7 @@ export default function SuperadminPage() {
             <thead>
               <tr>
                 <th>Fecha de envío</th>
+                <th>Cobro</th>
                 <th>Etapa</th>
                 <th>Vencimiento</th>
                 <th>Destinatario</th>
@@ -609,8 +711,9 @@ export default function SuperadminPage() {
             </thead>
             <tbody>
               {panel.correo.avisos.map((a) => (
-                <tr key={`${a.tipo}-${a.cuota_vence}`}>
+                <tr key={`${a.concepto}-${a.tipo}-${a.cuota_vence}`}>
                   <td>{formatearFechaHora(a.enviado_en)}</td>
+                  <td>{ETIQUETA_COBRO[a.concepto] ?? a.concepto}</td>
                   <td>{ETIQUETA_AVISO[a.tipo] ?? a.tipo}</td>
                   <td>{formatearFecha(a.cuota_vence)}</td>
                   <td className="sa-quiebre">{a.destinatario}</td>
@@ -746,22 +849,23 @@ export default function SuperadminPage() {
             {panel.plan.modulos.length} módulo{panel.plan.modulos.length === 1 ? '' : 's'}
           </span>
         </div>
+        {/* El vencimiento sin pagar más viejo, de la implementación o del abono (2026-11-09) */}
         <div className="sa-resumen-item">
           <span className="sa-resumen-label">Próximo vencimiento</span>
-          <span className="sa-resumen-valor">{instancia.cuota.vence ? formatearFecha(instancia.cuota.vence) : '—'}</span>
+          <span className="sa-resumen-valor">{masViejo ? formatearFecha(masViejo.vence) : '—'}</span>
           <span className="sa-resumen-meta">
-            <span className={`sa-chip ${estadoCuota.clase}`}>{estadoCuota.corto}</span>
-            {textoDias(instancia.cuota) && <span>{textoDias(instancia.cuota)}</span>}
+            <span className={`sa-chip ${ESTADO_CUOTA[masViejo?.estado ?? 'sin_definir'].clase}`}>{ESTADO_CUOTA[masViejo?.estado ?? 'sin_definir'].corto}</span>
+            {masViejo && textoDias(masViejo) && <span>{textoDias(masViejo)}</span>}
           </span>
         </div>
         <div className="sa-resumen-item">
-          <span className="sa-resumen-label">Aviso del mes</span>
-          <span className="sa-resumen-valor">{avisoMes?.configurado ? formatearUsd(avisoMes.total) : '—'}</span>
+          <span className="sa-resumen-label">Próximo aviso</span>
+          <span className="sa-resumen-valor">{masViejo?.total !== null && masViejo?.total !== undefined ? formatearUsd(masViejo.total) : '—'}</span>
           <span className="sa-resumen-meta">
-            {avisoMes?.configurado
-              ? avisoMes.implementacion
-                ? `Implementación cuota ${avisoMes.implementacion.numero} de ${avisoMes.implementacion.de}`
-                : `Aviso del ${formatearFecha(avisoMes.vence)}`
+            {masViejo
+              ? masViejo.aviso.implementacion
+                ? `Implementación cuota ${masViejo.aviso.implementacion.numero} de ${masViejo.aviso.implementacion.de}`
+                : `Abono del ${formatearFecha(masViejo.vence)}`
               : 'Sin desglose cargado'}
           </span>
         </div>

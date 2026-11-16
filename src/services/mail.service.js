@@ -402,37 +402,51 @@ const WHATSAPP_CEA = '298 439-7094';
 const WHATSAPP_CEA_URL = 'https://wa.me/5492984397094';
 const CUIT_CEA = '27-31968097-2';
 
-function textosDelAviso(tipo, { fecha, diasRestantes, suspendeEl }) {
+// Qué se cobra en el aviso, para el asunto y los textos: desde el 2026-11-09 la cuota de la
+// implementación y el abono llegan en mails separados, y cada uno dice cuál es. Sin desglose, "tu pago".
+function queSeCobra(aviso) {
+  const impl = aviso?.implementacion;
+  if (impl) {
+    const cuota = `la cuota ${impl.numero} de ${impl.de} de la implementación`;
+    return { nombre: cuota, del: `de ${cuota}`, vencido: 'vencida' };
+  }
+  if (aviso?.abono) return { nombre: 'el abono mensual', del: 'del abono mensual', vencido: 'vencido' };
+  return { nombre: 'tu pago', del: 'del pago', vencido: 'vencido' };
+}
+const conMayuscula = (texto) => texto.charAt(0).toUpperCase() + texto.slice(1);
+
+function textosDelAviso(tipo, { fecha, diasRestantes, suspendeEl, que = queSeCobra(null) }) {
+  const Que = conMayuscula(que.nombre);
   const casos = {
     por_vencer: () => ({
       etiqueta: 'Por vencer',
-      asunto: `tu pago vence el ${fecha}`,
-      titulo: `Tu pago vence el ${fecha}`,
-      detalle: `Faltan ${plural(diasRestantes)}. Pagalo antes de esa fecha y seguí usando el sistema sin cortes.`,
+      asunto: `${que.nombre} vence el ${fecha}`,
+      titulo: `${Que} vence el ${fecha}`,
+      detalle: `Faltan ${plural(diasRestantes)}. Pagá antes de esa fecha y seguí usando el sistema sin cortes.`,
     }),
     vence_hoy: () => ({
       etiqueta: 'Vence hoy',
-      asunto: 'tu pago vence hoy',
-      titulo: 'Tu pago vence hoy',
-      detalle: `Hoy, ${fecha}, es el último día para pagarlo.`,
+      asunto: `${que.nombre} vence hoy`,
+      titulo: `${Que} vence hoy`,
+      detalle: `Hoy, ${fecha}, es el último día para pagar.`,
     }),
     vencida: () => ({
       etiqueta: 'Pago vencido',
-      asunto: `tu pago está vencido desde el ${fecha}`,
-      titulo: 'Tu pago está vencido',
-      detalle: `Venció el ${fecha}, hace ${plural(-diasRestantes)}. Regularizalo para evitar la suspensión del servicio.`,
+      asunto: `${que.nombre} está ${que.vencido} desde el ${fecha}`,
+      titulo: `${Que} está ${que.vencido}`,
+      detalle: `Venció el ${fecha}, hace ${plural(-diasRestantes)}. Regularizá el pago para evitar la suspensión del servicio.`,
     }),
     suspension_proxima: () => ({
       etiqueta: 'Aviso de suspensión',
       asunto: `tu servicio se suspende el ${fechaLegible(suspendeEl)}`,
       titulo: `Tu servicio se suspende el ${fechaLegible(suspendeEl)}`,
-      detalle: `Tu pago venció el ${fecha}. Si no lo registramos antes de esa fecha, el servicio se suspende. Tus datos no se pierden.`,
+      detalle: `${Que} venció el ${fecha}. Si no registramos el pago antes de esa fecha, el servicio se suspende. Tus datos no se pierden.`,
     }),
     suspendida: () => ({
       etiqueta: 'Servicio suspendido',
       asunto: 'tu servicio fue suspendido',
       titulo: 'Tu servicio está suspendido',
-      detalle: `Por falta del pago vencido el ${fecha}. Tus datos están guardados: apenas registremos el pago, el servicio se reactiva.`,
+      detalle: `Por falta ${que.del}, ${que.vencido} el ${fecha}. Tus datos están guardados: apenas registremos el pago, el servicio se reactiva.`,
     }),
     reactivada: () => ({
       etiqueta: 'Servicio activo',
@@ -457,9 +471,11 @@ function bloquesDelAviso(aviso) {
   }
   if (aviso.abono) bloques.push({ titulo: 'Abono mensual', lineas: [{ concepto: aviso.abono.detalle, importe: usd(aviso.abono.importe) }] });
 
+  // El aviso de una cuota de la implementación no lleva modificaciones (van con el abono, 2026-11-09).
+  const m = aviso.modificaciones;
+  if (!m) return bloques;
   // Mientras queden sin cargo: cuántas se usaron y cuáles. Sin quedar: las con costo de este aviso
   // (y la sin cargo que tenga su aviso justo en este mes, esa única vez). La nota sale siempre.
-  const m = aviso.modificaciones;
   const lineas = [
     ...m.sin_cargo_listadas.map((x) => ({ ...x, importe: 'Sin cargo', sinCargo: true })),
     ...m.con_costo.map((x) => ({ ...x, importe: usd(x.importe) })),
@@ -481,14 +497,16 @@ function bloquesDelAviso(aviso) {
 // Aviso de pago de CEA a la empresa contratante (sale por el correo de CEA, SA_SMTP_*), con la
 // identidad de CEA Servicios (2026-10-21). tipo: por_vencer | vence_hoy | vencida |
 // suspension_proxima (necesita suspendeEl) | suspendida | reactivada. aviso: el desglose del
-// vencimiento en dólares (cobro-cea.armarAviso): implementación, abono, modificaciones y total; sin
-// nada configurado, el aviso sale sin desglose ni total. reactivada no lleva desglose ni Cómo pagar.
+// vencimiento en dólares, uno de los dos cobros (desde el 2026-11-09): la cuota de la implementación
+// (cobro-cea.armarAvisoImplementacion) o el abono con las modificaciones (cobro-cea.armarAviso), con su
+// total; el asunto dice cuál es. Sin nada configurado, el aviso sale sin desglose ni total.
+// reactivada no lleva desglose ni Cómo pagar.
 // cotizacion: el dólar blue venta (dolar-blue.obtenerCotizacion, ya resuelta por quien llama) o null;
 // con ella y un total, el mail suma el equivalente en pesos (2026-10-21); sin ella, sale solo en dólares.
 // prueba: el "Enviar mail de prueba" del panel (mismo diseño, marcado como prueba).
 export function armarCorreoCuota({ tipo, vence, diasRestantes, suspendeEl, aviso = null, cotizacion = null, prueba = false }) {
   const fecha = vence ? fechaLegible(vence) : '';
-  const textos = textosDelAviso(tipo, { fecha, diasRestantes, suspendeEl });
+  const textos = textosDelAviso(tipo, { fecha, diasRestantes, suspendeEl, que: queSeCobra(aviso) });
   const asunto = `${prueba ? '[Prueba] ' : ''}CEA Servicios: ${textos.asunto}`;
   const pagar = tipo !== 'reactivada';
   const desglose = pagar && aviso?.configurado ? aviso : null;

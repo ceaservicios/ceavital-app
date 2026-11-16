@@ -16,6 +16,7 @@ import pedidosClienteRoutes from './pedidos-cliente.routes.js';
 import portalRoutes from './portal.routes.js';
 import superadminRoutes from './superadmin.routes.js';
 import negocioRoutes from './negocio.routes.js';
+import vinculoRoutes from './vinculo.routes.js';
 import gruposPromocionRoutes from './grupos-promocion.routes.js';
 import combosRoutes from './combos.routes.js';
 import { requireModulo } from '../middleware/modulo.middleware.js';
@@ -40,6 +41,8 @@ router.use('/auth', authRoutes);
 router.use('/cuenta', cuentaRoutes);
 // Superadmin de la instalación (CEA): cuenta, sesión y cookie propias, aparte del negocio.
 router.use('/sa', superadminRoutes);
+// Consulta de CEA Servicios - Gestión: cuota y avisos de cuota, con token propio (VINCULO_GESTION_TOKEN).
+router.use('/vinculo', vinculoRoutes);
 router.use('/productos', productosRoutes);
 router.use('/vencimientos', vencimientosRoutes);
 router.use('/ventas', ventasRoutes);

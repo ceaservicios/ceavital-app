@@ -4,8 +4,10 @@ import { fechaHoyISO, formatearCotizacion, formatearFecha, formatearPesos, forma
 
 // Lo que CEA le cobra a la empresa, en dólares (panel /sa > Cuota y pagos, decisión del usuario del
 // 2026-10-21): la tabla del aviso del mes, la implementación en cuotas con recargo, el abono mensual y
-// las modificaciones solicitadas. Los datos vienen de GET /sa/panel (`cobro`, montos en centavos) y
-// toda acción pasa por `ejecutar` del panel (una a la vez, con la guardia contra el doble click, y
+// las modificaciones solicitadas. Desde el 2026-11-09 la implementación y el abono son dos cobros, cada
+// uno con su aviso por mail y su pago: el aviso del mes es el del abono, y cada cuota de la
+// implementación se avisa en su fecha. Los datos vienen de GET /sa/panel (`cobro`, montos en centavos)
+// y toda acción pasa por `ejecutar` del panel (una a la vez, con la guardia contra el doble click, y
 // recarga todo).
 
 export const NOMBRE_MEDIO = {
@@ -31,28 +33,26 @@ export function textoDelDesglose(desglose) {
   return texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : 'Sin desglose';
 }
 
-// Desglose del aviso pendiente, para la tarjeta "Aviso del mes".
+// Desglose del aviso del abono pendiente, para la tarjeta "Aviso del mes" (la implementación va aparte).
 export function TablaAviso({ aviso }) {
-  if (!aviso) return <p className="sa-ayuda">Cargá el próximo vencimiento para ver el aviso del mes.</p>;
+  if (!aviso) return <p className="sa-ayuda">Cargá el próximo vencimiento del abono para ver su aviso.</p>;
   if (!aviso.configurado) {
-    return <p className="sa-ayuda">Sin implementación ni abono cargados: el aviso se envía sin desglose ni total.</p>;
+    return <p className="sa-ayuda">Sin abono ni modificaciones con costo cargados.</p>;
   }
   const conCosto = aviso.modificaciones.con_costo;
   return (
     <table className="sa-tabla sa-total-mes">
       <tbody>
-        {aviso.implementacion && (
-          <tr>
-            <td>
-              Implementación · cuota {aviso.implementacion.numero} de {aviso.implementacion.de}
-            </td>
-            <td className="sa-monto">{formatearUsd(aviso.implementacion.importe)}</td>
-          </tr>
-        )}
         {aviso.abono && (
           <tr>
             <td>Abono mensual</td>
             <td className="sa-monto">{formatearUsd(aviso.abono.importe)}</td>
+          </tr>
+        )}
+        {aviso.abono_desde && (
+          <tr>
+            <td>Abono mensual · desde el {formatearFecha(aviso.abono_desde)}</td>
+            <td className="sa-monto sa-faltante">—</td>
           </tr>
         )}
         {conCosto.length === 0 ? (
@@ -100,6 +100,21 @@ export function LineaCotizacion({ cotizacion }) {
   );
 }
 
+// Si al guardar, el vencimiento del abono pasó solo a la fecha del primer abono (2026-11-09).
+export function textoVencimientoMovido(movido) {
+  if (!movido) return '';
+  return ` El próximo vencimiento del abono pasó al ${formatearFecha(movido.vence)}, el del primer abono.`;
+}
+
+// "la cuota 2 de 3 de la implementación" / "el abono", para los mensajes de los avisos.
+export function nombreDelCobro(pendiente) {
+  const cuota = pendiente?.aviso?.implementacion;
+  return cuota ? `la cuota ${cuota.numero} de ${cuota.de} de la implementación` : 'el abono';
+}
+
+// "de la cuota 2 de 3 de la implementación" / "del abono".
+export const delCobro = (pendiente) => (pendiente?.aviso?.implementacion ? `de ${nombreDelCobro(pendiente)}` : 'del abono');
+
 const ESTADO_CUOTA = {
   pagada: { texto: 'Pagada', clase: 'sa-chip-ok' },
   vencida: { texto: 'Vencida', clase: 'sa-chip-alerta' },
@@ -113,7 +128,9 @@ const implVacia = (impl) => ({
   primera_vence: impl?.primera_vence ?? '',
 });
 
-export function SeccionImplementacion({ implementacion: impl, ocupado, ejecutar }) {
+// accionAviso: el botón "Enviar aviso de la cuota" del panel (o null): manda el aviso de la cuota
+// pendiente, aparte del abono (2026-11-09).
+export function SeccionImplementacion({ implementacion: impl, ocupado, ejecutar, accionAviso = null }) {
   const [form, setForm] = useState(() => implVacia(impl));
 
   // Al guardar (o si cambió desde otra pestaña) el formulario muestra lo guardado.
@@ -131,7 +148,10 @@ export function SeccionImplementacion({ implementacion: impl, ocupado, ejecutar 
 
   function guardar(e) {
     e.preventDefault();
-    ejecutar(() => api.put('/sa/implementacion', form), (r) => (r.cobro.implementacion ? 'Implementación guardada.' : 'Implementación quitada.'));
+    ejecutar(
+      () => api.put('/sa/implementacion', form),
+      (r) => (r.cobro.implementacion ? 'Implementación guardada.' : 'Implementación quitada.')
+    );
   }
 
   const formulario = (
@@ -158,6 +178,7 @@ export function SeccionImplementacion({ implementacion: impl, ocupado, ejecutar 
         <button type="submit" className="btn btn-primary" disabled={ocupado}>
           Guardar implementación
         </button>
+        {accionAviso}
       </div>
     </form>
   );
@@ -166,7 +187,11 @@ export function SeccionImplementacion({ implementacion: impl, ocupado, ejecutar 
     <details className="sa-como">
       <summary>Cómo funciona</summary>
       <ul>
-        <li>Cada aviso mensual incluye la cuota que vence ese mes. Con todas las cuotas pagas, el aviso sigue solo con el abono.</li>
+        <li>
+          Cada cuota vence en su fecha y tiene su propio aviso por mail y su propio pago, aparte del abono. Si una cuota se atrasa, los avisos
+          del abono salen igual.
+        </li>
+        <li>«Enviar aviso de la cuota» envía en el momento el aviso de la primera cuota sin pagar.</li>
         <li>Con los cuatro campos vacíos se quita la implementación.</li>
       </ul>
     </details>
@@ -262,20 +287,26 @@ export function SeccionImplementacion({ implementacion: impl, ocupado, ejecutar 
   );
 }
 
-export function SeccionAbono({ abono, ocupado, ejecutar }) {
+// accionAviso: el botón "Enviar aviso del abono" del panel (o null), pedido del usuario del 2026-11-09.
+export function SeccionAbono({ abono, ocupado, ejecutar, accionAviso = null }) {
   const [detalle, setDetalle] = useState(abono?.detalle ?? '');
   const [importe, setImporte] = useState(abono ? usdParaCampo(abono.importe) : '');
+  const [desde, setDesde] = useState(abono?.desde ?? '');
 
-  const clave = abono ? `${abono.detalle}|${abono.importe}` : '';
+  const clave = abono ? `${abono.detalle}|${abono.importe}|${abono.desde ?? ''}` : '';
   useEffect(() => {
     setDetalle(abono?.detalle ?? '');
     setImporte(abono ? usdParaCampo(abono.importe) : '');
+    setDesde(abono?.desde ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clave]);
 
   function guardar(e) {
     e.preventDefault();
-    ejecutar(() => api.put('/sa/abono', { detalle, importe }), (r) => (r.cobro.abono ? 'Abono guardado.' : 'Abono quitado.'));
+    ejecutar(
+      () => api.put('/sa/abono', { detalle, importe, desde: desde || null }),
+      (r) => (r.cobro.abono ? 'Abono guardado.' : 'Abono quitado.') + textoVencimientoMovido(r.vencimiento_movido)
+    );
   }
 
   return (
@@ -286,6 +317,7 @@ export function SeccionAbono({ abono, ocupado, ejecutar }) {
       </div>
       <p className="sa-ayuda">
         Se cobra todos los meses, sin fecha de fin. El detalle figura tal cual en el aviso por mail, en una sola línea.
+        {abono?.desde && ` El primer abono vence el ${formatearFecha(abono.desde)}.`}
       </p>
       <form className="sa-aviso-form" onSubmit={guardar}>
         <div className="sa-campos sa-campos-4">
@@ -314,16 +346,30 @@ export function SeccionAbono({ abono, ocupado, ejecutar }) {
               placeholder="Ej.: 110"
             />
           </div>
+          <div className="field">
+            <label htmlFor="sa-abono-desde">Primer abono vence el</label>
+            <input id="sa-abono-desde" type="date" value={desde} onChange={(e) => setDesde(e.target.value)} disabled={ocupado} />
+          </div>
         </div>
         <div className="sa-form-pie">
           <button type="submit" className="btn btn-primary" disabled={ocupado}>
             Guardar abono
           </button>
+          {accionAviso}
         </div>
       </form>
       <details className="sa-como">
         <summary>Cómo funciona</summary>
         <ul>
+          <li>
+            El abono vence en el próximo vencimiento (en Aviso del mes) y tiene su propio aviso por mail y su propio pago, con las
+            modificaciones con costo que correspondan. La implementación se avisa y se paga aparte.
+          </li>
+          <li>
+            Si el abono empieza después, indicá cuándo vence el primero: el próximo vencimiento del abono pasa automáticamente a esa fecha. Sin
+            esa fecha, arranca en el próximo vencimiento.
+          </li>
+          <li>«Enviar aviso del abono» envía en el momento el aviso del abono pendiente.</li>
           <li>Con el detalle y el importe vacíos se quita el abono.</li>
         </ul>
       </details>

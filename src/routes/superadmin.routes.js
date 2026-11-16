@@ -32,6 +32,7 @@ import {
   iniciarAppSuperadminController,
   iniciarMailSuperadminController,
   logoutSuperadminController,
+  mandarAvisoSuperadminController,
   meSuperadminController,
   modificacionesSinCargoSuperadminController,
   panelSuperadminController,
@@ -74,6 +75,7 @@ router.get('/panel', panelSuperadminController);
 router.get('/registro', registroSuperadminController);
 router.put('/plan', cambiarPlanSuperadminController);
 router.put('/cuota', fijarCuotaSuperadminController);
+router.post('/cuota/aviso', mandarAvisoSuperadminController);
 router.put('/empresa-email', empresaEmailSuperadminController);
 router.put('/cupos', fijarCuposSuperadminController);
 router.post('/correo-prueba', correoPruebaSuperadminController);
