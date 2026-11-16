@@ -159,7 +159,7 @@ export default function PedidosClientePage() {
 
       <div className="card cliente-card">
         {cargando ? (
-          <div className="cliente-vacio">Cargando…</div>
+          <div className="cliente-vacio" aria-busy="true">Cargando…</div>
         ) : visibles.length === 0 ? (
           <div className="cliente-vacio">
             {pedidos.length === 0
@@ -212,7 +212,7 @@ export default function PedidosClientePage() {
                       <tr className="pedido-fila-detalle sin-click">
                         <td colSpan={7}>
                           {cargandoDetalle || !detalle ? (
-                            <div className="cliente-vacio">Cargando…</div>
+                            <div className="cliente-vacio" aria-busy="true">Cargando…</div>
                           ) : (
                             <div className="pedido-detalle">
                               <div className="pedido-detalle-cabecera">

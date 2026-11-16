@@ -140,7 +140,7 @@ export default function CuentaPagarDetallePage() {
     }, 'No se pudo eliminar la cuenta.');
   }
 
-  if (cargando) return <div className="cliente-vacio">Cargando…</div>;
+  if (cargando) return <div className="cliente-vacio" aria-busy="true">Cargando…</div>;
   if (!cuenta) {
     return (
       <div className="cpagar-page">

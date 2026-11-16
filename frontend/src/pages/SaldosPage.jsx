@@ -80,7 +80,7 @@ export default function SaldosPage() {
   }, [datos]);
 
   if (!r) {
-    return <div className="saldos-page">{error ? <div className="alert alert-danger">{error}</div> : <div className="cliente-vacio">Cargando…</div>}</div>;
+    return <div className="saldos-page">{error ? <div className="alert alert-danger">{error}</div> : <div className="cliente-vacio" aria-busy="true">Cargando…</div>}</div>;
   }
 
   const mes = new Date(`${datos.hoy}T12:00:00`).toLocaleDateString('es-AR', { month: 'long' });

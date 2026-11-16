@@ -407,7 +407,7 @@ export default function SeccionPromociones() {
 
         {cargando ? (
           <div className="config-catalogo-lista">
-            <div className="config-catalogo-vacio">Cargando…</div>
+            <div className="config-catalogo-vacio" aria-busy="true">Cargando…</div>
           </div>
         ) : grupos.length === 0 ? (
           <div className="config-catalogo-lista">

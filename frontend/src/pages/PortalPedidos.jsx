@@ -97,7 +97,7 @@ export default function PortalPedidos({ onSesionVencida, avisoInicial, onCambio 
       {exito && <div className="alert alert-exito">{exito}</div>}
 
       {cargando ? (
-        <div className="cliente-vacio">Cargando…</div>
+        <div className="cliente-vacio" aria-busy="true">Cargando…</div>
       ) : pedidos.length === 0 ? (
         <div className="card cliente-card">
           <div className="cliente-vacio">Todavía no hay pedidos registrados. Podés armar uno desde la pestaña Comprar.</div>
@@ -138,7 +138,7 @@ export default function PortalPedidos({ onSesionVencida, avisoInicial, onCambio 
                       <div className="alert alert-danger">{errorDetalle}</div>
                     </div>
                   ) : !detalle ? (
-                    <div className="cliente-vacio">Cargando…</div>
+                    <div className="cliente-vacio" aria-busy="true">Cargando…</div>
                   ) : (
                     <div className="pedido-detalle">
                       {detalle.estado === 'pendiente' && (

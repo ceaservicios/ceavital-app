@@ -202,7 +202,7 @@ function PortalContenido() {
         {tab === 'comprar' && <PortalComprar onSesionVencida={volverAlIngreso} onPedidoEnviado={pedidoEnviado} />}
         {tab === 'pedidos' && <PortalPedidos onSesionVencida={volverAlIngreso} avisoInicial={avisoPedido} onCambio={cargarPedidos} />}
 
-        {tab === 'cuenta' && cargando && <div className="cliente-vacio">Cargando…</div>}
+        {tab === 'cuenta' && cargando && <div className="cliente-vacio" aria-busy="true">Cargando…</div>}
         {tab === 'cuenta' && error && <div className="alert alert-danger">{error}</div>}
 
         {tab === 'cuenta' && cuenta && (

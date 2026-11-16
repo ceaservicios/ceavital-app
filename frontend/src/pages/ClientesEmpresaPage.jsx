@@ -77,7 +77,7 @@ export default function ClientesEmpresaPage() {
         </div>
 
         {cargando ? (
-          <div className="cliente-vacio">Cargando…</div>
+          <div className="cliente-vacio" aria-busy="true">Cargando…</div>
         ) : clientesFiltrados.length === 0 ? (
           <div className="cliente-vacio">
             {clientes.length === 0 ? 'Todavía no hay clientes registrados.' : 'Sin resultados para esa búsqueda.'}

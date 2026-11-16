@@ -85,7 +85,7 @@ export default function FijoFormPage() {
     }, 'No se pudo eliminar el fijo.');
   }
 
-  if (!form) return <div className="cpagar-page">{error ? <div className="alert alert-danger">{error}</div> : <div className="cliente-vacio">Cargando…</div>}</div>;
+  if (!form) return <div className="cpagar-page">{error ? <div className="alert alert-danger">{error}</div> : <div className="cliente-vacio" aria-busy="true">Cargando…</div>}</div>;
 
   const set = (campo) => (e) => setForm({ ...form, [campo]: e.target.value });
   const cambiaCalendario = fijo && (form.desde !== fijo.proximo || form.frecuencia !== fijo.frecuencia);

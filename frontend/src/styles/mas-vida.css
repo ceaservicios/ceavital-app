@@ -1,0 +1,396 @@
+/* Rediseño "más vida" (2026-11-16, pedido del usuario: "tomemos los efectos visuales y la forma de
+   los colores de DaleFit"; aprobado sobre la maqueta de Stock: "Sí, a todo el sistema").
+   - El color en capas y los efectos del rediseño de DaleFit, con la paleta de CEAVital: el Verde
+     Esmeralda hace lo que allá hace el dorado y el Azul lo que hace la plata.
+   - Coral y Dorado siguen solo para alertas (marca.md §4): lo único que late son alertas.
+   - Ningún bloque cambia de tamaño ni de lugar: solo color, sombra y movimiento.
+   - Vuelve la sombra suave en las tarjetas (el 2026-10-29 se habían dejado planas; el usuario la
+     aprobó en la maqueta).
+   `:root` delante de cada regla: le gana a la regla de cada pantalla sin depender del orden de carga. */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- 1. Fondo: halo muy suave verde (izquierda) y azul (derecha), quieto al bajar ---------- */
+:root .app-layout-main {
+  background:
+    radial-gradient(1000px 440px at 0% -14%, rgba(42, 154, 111, 0.17), transparent 62%),
+    radial-gradient(820px 400px at 100% -6%, rgba(34, 66, 140, 0.1), transparent 62%);
+}
+
+/* ---------- 2. Entrada: el panel verde, las pestañas y las tarjetas suben y aparecen, de a uno ---------- */
+@keyframes cv-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes cv-aparecer {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* "backwards": al terminar no deja el transform puesto, así el hover y lo fijo (sticky) siguen
+   andando. Los avisos (.alert) no se animan: tienen que verse en el acto. */
+:root .app-layout-content > * > :is(.hero, .card, .pestanas) {
+  animation: cv-entrar 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+:root .app-layout-content > * > :is(.hero, .card, .pestanas):nth-child(2) { animation-delay: 60ms; }
+:root .app-layout-content > * > :is(.hero, .card, .pestanas):nth-child(3) { animation-delay: 120ms; }
+:root .app-layout-content > * > :is(.hero, .card, .pestanas):nth-child(n + 4) { animation-delay: 180ms; }
+
+/* Los renglones de una tabla aparecen en cascada cuando llegan los datos (los primeros diez). */
+:root .cliente-tabla tbody tr {
+  animation: cv-aparecer 0.35s ease-out backwards;
+}
+:root .cliente-tabla tbody tr:nth-child(2) { animation-delay: 25ms; }
+:root .cliente-tabla tbody tr:nth-child(3) { animation-delay: 50ms; }
+:root .cliente-tabla tbody tr:nth-child(4) { animation-delay: 75ms; }
+:root .cliente-tabla tbody tr:nth-child(5) { animation-delay: 100ms; }
+:root .cliente-tabla tbody tr:nth-child(6) { animation-delay: 125ms; }
+:root .cliente-tabla tbody tr:nth-child(7) { animation-delay: 150ms; }
+:root .cliente-tabla tbody tr:nth-child(8) { animation-delay: 175ms; }
+:root .cliente-tabla tbody tr:nth-child(9) { animation-delay: 200ms; }
+:root .cliente-tabla tbody tr:nth-child(n + 10) { animation-delay: 225ms; }
+/* Los renglones que se abren con un click (detalle, confirmar, editar) aparecen en el acto. */
+:root .cliente-tabla tbody tr:is(.pedido-fila-detalle, .pago-fila-confirmar, .vencimientos-confirm-fila, .cierre-fila-extra, .vd-fila-edicion) {
+  animation-delay: 0s;
+}
+
+/* ---------- 3. Panel verde: sombra del mismo verde, un brillo que lo cruza una vez al entrar y las
+   cifras chicas que se levantan al pasar el mouse ---------- */
+@keyframes cv-brillo {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+:root .hero {
+  box-shadow: 0 16px 36px -18px rgba(14, 75, 56, 0.6);
+}
+:root .hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.14) 50%, transparent 65%);
+  transform: translateX(-100%);
+  animation: cv-brillo 1.4s 0.45s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+:root .hero-mini {
+  animation: cv-entrar 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s backwards;
+  transition: transform 0.2s ease-out, border-color 0.2s ease-out, background-color 0.2s ease-out;
+}
+:root .hero-mini:nth-child(2) { animation-delay: 0.27s; }
+:root .hero-mini:nth-child(3) { animation-delay: 0.34s; }
+:root .hero-mini:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(3, 28, 20, 0.74);
+}
+:root .hero-mini-icono {
+  position: relative;
+  transition: transform 0.3s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+:root .hero-mini:hover .hero-mini-icono {
+  transform: rotate(-6deg) scale(1.1);
+}
+
+/* Alertas que laten (un aro que se agranda y se apaga): el ícono rojo del panel verde y los
+   contadores del menú (lotes vencidos, deudas vencidas). Solo aparecen si hay algo. */
+@keyframes cv-latido {
+  0% {
+    opacity: 0.75;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+:root .hero-tono-rojo::after,
+:root .sidebar-badge::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 2px solid #ff8a93;
+  opacity: 0;
+  pointer-events: none;
+  animation: cv-latido 2.2s ease-out infinite;
+}
+
+/* ---------- 4. Tarjetas: sombra suave y el borde se pone verde al pasar el mouse ---------- */
+:root .card {
+  box-shadow: 0 1px 2px rgba(16, 32, 26, 0.04), 0 12px 30px -14px rgba(16, 32, 26, 0.16);
+  transition: border-color 0.2s ease-out, box-shadow 0.2s ease-out;
+}
+:root .card:hover {
+  border-color: rgba(14, 75, 56, 0.32);
+}
+/* La barra de arriba de las listas largas (Stock, Proveedores) es el encabezado de la tarjeta: filo
+   verde que se apaga hacia la derecha y un velo verde que baja (el encabezado en banda de DaleFit). */
+@media (min-width: 861px) {
+  :root .lista-entera .cliente-toolbar {
+    background:
+      linear-gradient(90deg, #0e4b38, rgba(14, 75, 56, 0.3) 40%, transparent 72%) top / 100% 3px no-repeat,
+      linear-gradient(180deg, rgba(14, 75, 56, 0.07), rgba(14, 75, 56, 0) 85%),
+      var(--bg-surface);
+  }
+}
+
+/* ---------- 5. Tablas y listas: títulos en verde, el renglón se pinta de verde tenue al pasar y el
+   ícono gira. Los renglones que no se tocan (sin-click) quedan quietos. ---------- */
+:root :is(.cliente-tabla th, .pedido-items th, .caja-cart-head, .usuarios-tabla-head) {
+  color: var(--color-primary);
+  font-weight: 700;
+  border-bottom-color: rgba(14, 75, 56, 0.22);
+}
+@media (min-width: 861px) {
+  :root .lista-entera .cliente-tabla th {
+    box-shadow: inset 0 -1px 0 rgba(14, 75, 56, 0.24);
+  }
+}
+:root .cliente-tabla tbody tr {
+  transition: background-color 0.15s ease-out;
+}
+:root :is(.cliente-tabla tbody tr:not(.sin-click):not(.grupo-fila), .usuarios-fila, .saldos-fila):hover {
+  background: #eef5f1;
+}
+:root :is(.cliente-tabla, .usuarios-fila, .saldos-fila) .icono-cat {
+  transition: transform 0.3s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+:root :is(.cliente-tabla tbody tr:not(.sin-click):not(.grupo-fila), .usuarios-fila, .saldos-fila):hover .icono-cat {
+  transform: rotate(-6deg) scale(1.08);
+}
+:root .cliente-td-nombre {
+  transition: color 0.15s ease-out;
+}
+:root .cliente-tabla tbody tr:not(.sin-click):not(.grupo-fila):hover .cliente-td-nombre {
+  color: var(--color-primary);
+}
+:root .cliente-tabla tbody tr:not(.sin-click):not(.grupo-fila):hover .boton-icono:not(.boton-icono-peligro) {
+  color: var(--color-primary);
+  border-color: rgba(14, 75, 56, 0.3);
+  background: var(--bg-surface);
+}
+:root .boton-icono:not(:disabled):not(.boton-icono-peligro):hover {
+  color: var(--color-primary);
+  background: #e3f0e9;
+  border-color: rgba(14, 75, 56, 0.5);
+}
+:root .boton-icono:not(:disabled):active {
+  transform: scale(0.95);
+}
+/* Etiquetas de categoría: un borde fino de su mismo color, para que no queden pegadas al fondo. */
+:root .tag {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 24%, transparent);
+}
+
+/* ---------- 6. Botones: el principal en degradé verde, con halo y un brillo que lo cruza al pasar el
+   mouse. Deshabilitado queda como estaba (gris), por eso las reglas van con :not(:disabled). ---------- */
+:root .btn {
+  transition: background-color 0.15s ease-out, border-color 0.15s ease-out, color 0.15s ease-out, box-shadow 0.2s ease-out,
+    transform 0.15s ease-out, opacity 0.15s ease-out;
+}
+:root .btn:not(:disabled):active {
+  transform: scale(0.98);
+}
+/* Los botones comunes; los de peligro, el del portal y los del Superadmin conservan su propio hover. */
+:root .btn:not(.btn-primary):not([class*='peligro']):not([class*='sa-btn']):not(.portal-salir):not(:disabled):hover {
+  border-color: rgba(14, 75, 56, 0.4);
+  background: #f0f6f2;
+}
+:root .btn-primary:not(:disabled) {
+  position: relative;
+  overflow: hidden;
+  border-color: #0e4b38;
+  background: linear-gradient(135deg, #17785a, #0e4b38 70%);
+  box-shadow: 0 8px 20px -8px rgba(14, 75, 56, 0.65);
+}
+:root .btn-primary:not(:disabled):hover {
+  border-color: #0a3a2b;
+  background: linear-gradient(135deg, #13684d, #0a3a2b 70%);
+  box-shadow: 0 12px 26px -8px rgba(14, 75, 56, 0.7);
+}
+:root .btn-primary:not(:disabled)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.32), transparent 70%);
+  transform: translateX(-100%);
+  transition: transform 0.7s ease-out;
+}
+:root .btn-primary:not(:disabled):hover::after {
+  transform: translateX(100%);
+}
+/* Acción de un renglón ("Pagar"): se levanta un poco al pasar el mouse. */
+:root .btn-fila {
+  transition: filter 0.15s ease-out, box-shadow 0.2s ease-out, transform 0.15s ease-out;
+}
+:root .btn-fila:not(:disabled):hover {
+  box-shadow: 0 6px 14px -6px rgba(16, 32, 26, 0.5);
+}
+:root .btn-fila:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+/* ---------- 7. Campos: el borde se pone verde al pasar y el foco tiene un aro más visible ---------- */
+:root :is(.cliente-buscar, .stock-filtro, .field input, .field select, .field textarea) {
+  transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out, background-color 0.15s ease-out;
+}
+:root :is(.cliente-buscar, .stock-filtro, .field input, .field select):not(:disabled):not(:focus):hover {
+  border-color: rgba(14, 75, 56, 0.45);
+}
+:root :is(.cliente-buscar, .stock-filtro, .field input, .field select, .field textarea):focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 4px rgba(14, 75, 56, 0.14);
+}
+
+/* ---------- 8. Pestañas y filtros en píldora ---------- */
+:root .pestana-icono {
+  transition: transform 0.3s cubic-bezier(0.3, 1.6, 0.5, 1), background-color 0.15s ease-out;
+}
+:root .pestana:not(.pestana-activa):hover .pestana-icono {
+  transform: rotate(-6deg) scale(1.1);
+}
+:root .pestana-activa {
+  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--c) 70%, transparent);
+}
+:root .chip {
+  transition: background-color 0.15s ease-out, border-color 0.15s ease-out, color 0.15s ease-out;
+}
+:root .chip:not(.chip-activo):hover {
+  border-color: rgba(14, 75, 56, 0.4);
+  color: var(--color-primary);
+}
+
+/* ---------- 9. Sin datos: recuadro con ícono (bandeja vacía); cargando: un aro que gira ----------
+   El "Cargando…" lleva aria-busy="true" en el código de cada pantalla. */
+@keyframes cv-girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+:root .cliente-vacio {
+  border-color: rgba(14, 75, 56, 0.25);
+  background: linear-gradient(180deg, rgba(14, 75, 56, 0.045), transparent);
+}
+:root :is(.cliente-vacio, .saldos-vacio, .config-catalogo-vacio)::before {
+  content: '';
+  display: block;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 10px;
+  border-radius: 12px;
+  background: rgba(14, 75, 56, 0.1)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='%230e4b38' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 12h-6l-2 3h-4l-2-3H2'/%3E%3Cpath d='M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z'/%3E%3C/svg%3E")
+    center / 22px no-repeat;
+}
+:root :is(.cliente-vacio, .saldos-vacio, .config-catalogo-vacio)[aria-busy='true']::before {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 3px solid rgba(14, 75, 56, 0.15);
+  border-top-color: var(--color-primary);
+  background: none;
+  animation: cv-girar 0.8s linear infinite;
+}
+
+/* ---------- 10. Menú lateral: luz verde arriba y azul abajo, el activo flota y los íconos se mueven ---------- */
+:root .sidebar {
+  background:
+    radial-gradient(130% 40% at 0% 0%, rgba(42, 154, 111, 0.55), transparent 70%),
+    radial-gradient(120% 36% at 100% 100%, rgba(34, 66, 140, 0.5), transparent 70%),
+    var(--sidebar-bg);
+}
+:root a.sidebar-item .sidebar-item-icon {
+  transition: color 0.15s ease-out, transform 0.3s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+:root a.sidebar-item:not(.sidebar-item-active):hover .sidebar-item-icon {
+  transform: translateX(2px) scale(1.1);
+}
+:root a.sidebar-item.sidebar-item-active,
+:root a.sidebar-item.sidebar-item-active:hover {
+  background: linear-gradient(135deg, #ffffff, #e2efe8);
+  box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.45);
+}
+:root .sidebar-badge {
+  position: relative;
+}
+
+/* ---------- 11. Lo que no toma lo común: Caja, el ingreso y el portal del cliente ---------- */
+/* Caja: un resultado de la búsqueda se pinta de verde tenue al pasar (la promo conserva el suyo). */
+:root button.caja-search-item:not(.caja-search-item-combo):hover {
+  background: #eef5f1;
+}
+/* Ingreso: el panel verde con la misma luz que el menú, el lado blanco con el halo del fondo y el
+   formulario que sube y aparece. */
+:root .login-panel {
+  background:
+    radial-gradient(130% 40% at 0% 0%, rgba(42, 154, 111, 0.55), transparent 70%),
+    radial-gradient(120% 36% at 100% 100%, rgba(34, 66, 140, 0.5), transparent 70%),
+    var(--color-primary);
+}
+:root .login-main {
+  background:
+    radial-gradient(900px 420px at 0% -10%, rgba(42, 154, 111, 0.12), transparent 62%),
+    radial-gradient(700px 360px at 100% 110%, rgba(34, 66, 140, 0.08), transparent 62%);
+}
+:root .login-contenido {
+  animation: cv-entrar 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+/* Portal del cliente: el halo del fondo y la misma entrada que en el sistema. */
+:root .portal-page {
+  background:
+    radial-gradient(1000px 440px at 0% -14%, rgba(42, 154, 111, 0.14), transparent 62%),
+    radial-gradient(820px 400px at 100% -6%, rgba(34, 66, 140, 0.08), transparent 62%),
+    var(--bg-app);
+  background-attachment: local;
+}
+:root .portal-contenido > :is(.hero, .card, .pestanas) {
+  animation: cv-entrar 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+:root .portal-contenido > :is(.hero, .card, .pestanas):nth-child(2) { animation-delay: 60ms; }
+:root .portal-contenido > :is(.hero, .card, .pestanas):nth-child(n + 3) { animation-delay: 120ms; }
+
+/* ---------- Reducir movimiento: todo quieto y visible (global.css acorta las duraciones; acá se
+   apagan las animaciones que se repiten y el brillo) ---------- */
+@media (prefers-reduced-motion: reduce) {
+  :root .hero-tono-rojo::after,
+  :root .sidebar-badge::after,
+  :root .hero::before {
+    display: none;
+  }
+  :root :is(.cliente-vacio, .saldos-vacio, .config-catalogo-vacio)[aria-busy='true']::before {
+    animation: none;
+  }
+}
+/* Al imprimir no hay animación ni brillo: todo sale visible desde el principio. */
+@media print {
+  :root .hero::before,
+  :root .hero-tono-rojo::after,
+  :root .sidebar-badge::after {
+    display: none;
+  }
+  :root * {
+    animation: none !important;
+  }
+}

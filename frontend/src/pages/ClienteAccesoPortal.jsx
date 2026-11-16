@@ -135,7 +135,7 @@ export default function ClienteAccesoPortal({ clienteId, razonSocial, email }) {
     }
   }
 
-  if (cargando) return <div className="card cliente-card"><div className="cliente-vacio">Cargando…</div></div>;
+  if (cargando) return <div className="card cliente-card"><div className="cliente-vacio" aria-busy="true">Cargando…</div></div>;
 
   if (!acceso) {
     return <div className="card cliente-card">{error && <div className="alert alert-danger">{error}</div>}</div>;

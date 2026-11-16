@@ -163,7 +163,7 @@ export default function ProveedorDetallePage() {
     }, 'No se pudo eliminar el proveedor.');
   }
 
-  if (cargando) return <div className="cliente-vacio">Cargando…</div>;
+  if (cargando) return <div className="cliente-vacio" aria-busy="true">Cargando…</div>;
   if (!detalle) {
     return (
       <div className="cliente-page">

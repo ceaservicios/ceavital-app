@@ -181,7 +181,7 @@ export default function StockPage() {
         </div>
 
         {cargando ? (
-          <div className="cliente-vacio">Cargando…</div>
+          <div className="cliente-vacio" aria-busy="true">Cargando…</div>
         ) : productosFiltrados.length === 0 ? (
           <div className="cliente-vacio">
             {productos.length === 0 ? 'Todavía no hay productos registrados.' : 'Ningún producto coincide con la búsqueda y los filtros.'}

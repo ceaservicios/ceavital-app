@@ -232,7 +232,7 @@ export default function ProductoDetallePage() {
     }, 'No se pudo eliminar el producto.');
   }
 
-  if (cargando) return <div className="cliente-vacio">Cargando…</div>;
+  if (cargando) return <div className="cliente-vacio" aria-busy="true">Cargando…</div>;
   if (!detalle) {
     return (
       <div className="cliente-page">

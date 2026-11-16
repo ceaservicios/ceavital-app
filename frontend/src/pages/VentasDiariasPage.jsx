@@ -570,7 +570,7 @@ export default function VentasDiariasPage() {
             </div>
           )}
           {cargando && !datos ? (
-            <div className="cliente-vacio">Cargando…</div>
+            <div className="cliente-vacio" aria-busy="true">Cargando…</div>
           ) : ventas.length === 0 ? (
             <div className="cliente-vacio">Sin ventas para estos filtros.</div>
           ) : (
@@ -627,7 +627,7 @@ export default function VentasDiariasPage() {
                         <tr className="pedido-fila-detalle sin-click">
                           <td colSpan={columnas}>
                             {!detalle ? (
-                              <div className="cliente-vacio">Cargando…</div>
+                              <div className="cliente-vacio" aria-busy="true">Cargando…</div>
                             ) : detalle.error ? (
                               <div className="alert alert-danger">{detalle.error}</div>
                             ) : (
@@ -694,7 +694,7 @@ export default function VentasDiariasPage() {
           )}
 
           {cargando && !datos ? (
-            <div className="cliente-vacio">Cargando…</div>
+            <div className="cliente-vacio" aria-busy="true">Cargando…</div>
           ) : gastos.length === 0 ? (
             <div className="cliente-vacio">Sin gastos registrados en el período.</div>
           ) : (

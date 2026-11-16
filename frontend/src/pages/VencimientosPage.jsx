@@ -70,7 +70,7 @@ export default function VencimientosPage() {
   }
 
   if (cargando) {
-    return <div className="cliente-vacio">Cargando…</div>;
+    return <div className="cliente-vacio" aria-busy="true">Cargando…</div>;
   }
 
   if (error && !datos) {

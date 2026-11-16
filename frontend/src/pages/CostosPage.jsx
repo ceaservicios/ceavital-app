@@ -65,7 +65,7 @@ export default function CostosPage() {
   }, [productos]);
 
   if (cargando) {
-    return <div className="cliente-vacio">Cargando…</div>;
+    return <div className="cliente-vacio" aria-busy="true">Cargando…</div>;
   }
 
   const unidad = (etiqueta) => etiqueta && <span className="costos-unidad">{etiqueta.startsWith('/') ? etiqueta : ` ${etiqueta}`}</span>;

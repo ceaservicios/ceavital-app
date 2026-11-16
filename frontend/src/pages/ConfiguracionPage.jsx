@@ -133,7 +133,7 @@ function SeccionCatalogo({ titulo, endpoint, singular, descripcion, icono, onCam
         </form>
 
         <div className="config-catalogo-lista">
-          {cargando && <div className="config-catalogo-vacio">Cargando…</div>}
+          {cargando && <div className="config-catalogo-vacio" aria-busy="true">Cargando…</div>}
           {!cargando && items.length === 0 && <div className="config-catalogo-vacio">Sin {titulo.toLowerCase()} registradas.</div>}
           {items.map((item) => (
             <div className="config-catalogo-fila" key={item.id}>
@@ -257,7 +257,7 @@ function SeccionDatosNegocio({ onCambio }) {
         {error && <div className="alert alert-danger">{error}</div>}
         {aviso && <div className="alert alert-exito">{aviso}</div>}
         {cargando ? (
-          <div className="config-catalogo-vacio">Cargando…</div>
+          <div className="config-catalogo-vacio" aria-busy="true">Cargando…</div>
         ) : (
           <form className="config-negocio-form" onSubmit={guardar}>
             {CAMPOS_NEGOCIO.map((c) => (
@@ -342,7 +342,7 @@ function SeccionStockEn() {
         {error && <div className="alert alert-danger">{error}</div>}
         {aviso && <div className="alert alert-exito">{aviso}</div>}
         {stockEn === null ? (
-          !error && <div className="config-catalogo-vacio">Cargando…</div>
+          !error && <div className="config-catalogo-vacio" aria-busy="true">Cargando…</div>
         ) : (
           <div className="config-stock-opciones" role="radiogroup" aria-label="Visualización del stock">
             {OPCIONES_STOCK.map((o) => (
@@ -427,7 +427,9 @@ export default function ConfiguracionPage() {
 
   return (
     <div className="config-page">
+      {/* Sin contar: la cifra principal es el nombre del negocio. */}
       <Hero
+        animar={false}
         etiqueta="Tu negocio"
         valor={resumen.nombre || '—'}
         sub="Así figura en emails y documentos."

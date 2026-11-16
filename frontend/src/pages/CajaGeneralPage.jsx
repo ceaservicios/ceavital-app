@@ -127,7 +127,7 @@ export default function CajaGeneralPage() {
   }
 
   if (!datos) {
-    return <div className="cliente-page">{error ? <div className="alert alert-danger">{error}</div> : <div className="cliente-vacio">Cargando…</div>}</div>;
+    return <div className="cliente-page">{error ? <div className="alert alert-danger">{error}</div> : <div className="cliente-vacio" aria-busy="true">Cargando…</div>}</div>;
   }
 
   const rangos = rangosRapidos(hoy, datos.primera ?? hoy);

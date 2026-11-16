@@ -847,7 +847,9 @@ export default function CajaPage() {
       {/* Panel verde (2026-10-29): el total a cobrar arriba, como el visor de un punto de venta, con
           el medio de cobro elegido y el último ticket. Compacto, para dejarle lugar al carrito. Caja
           sigue siendo solo para cobrar. */}
+      {/* Sin contar (animar={false}): el total cambia con cada producto y tiene que verse en el acto. */}
       <Hero
+        animar={false}
         etiqueta="Total a cobrar"
         valor={formatearMonto(total)}
         sub={articulos === 0 ? 'Sin productos: buscá o escaneá uno para empezar.' : articulos === 1 ? '1 artículo' : `${articulos} artículos`}

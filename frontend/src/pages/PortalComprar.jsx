@@ -238,7 +238,7 @@ export default function PortalComprar({ onSesionVencida, onPedidoEnviado }) {
         />
 
         {cargando ? (
-          <div className="cliente-vacio">Cargando…</div>
+          <div className="cliente-vacio" aria-busy="true">Cargando…</div>
         ) : visibles.length === 0 ? (
           <div className="cliente-vacio">
             {productos.length === 0 ? 'Todavía no hay productos disponibles.' : 'Sin productos que coincidan con la búsqueda.'}

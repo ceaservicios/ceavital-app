@@ -85,7 +85,7 @@ export default function FijosPage() {
   const tipos = useMemo(() => resumenPorTipo(activos), [activos]);
 
   if (!datos) {
-    return <div className="saldos-page">{error ? <div className="alert alert-danger">{error}</div> : <div className="cliente-vacio">Cargando…</div>}</div>;
+    return <div className="saldos-page">{error ? <div className="alert alert-danger">{error}</div> : <div className="cliente-vacio" aria-busy="true">Cargando…</div>}</div>;
   }
 
   const total = activos.reduce((a, f) => a + porMes(f), 0);

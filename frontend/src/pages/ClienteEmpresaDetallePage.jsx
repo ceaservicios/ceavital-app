@@ -187,7 +187,7 @@ export default function ClienteEmpresaDetallePage() {
   if (cargando) {
     return (
       <div className="cliente-page">
-        <div className="cliente-vacio">Cargando…</div>
+        <div className="cliente-vacio" aria-busy="true">Cargando…</div>
       </div>
     );
   }

@@ -80,7 +80,7 @@ export default function ProveedoresPage() {
         </div>
 
         {cargando ? (
-          <div className="cliente-vacio">Cargando…</div>
+          <div className="cliente-vacio" aria-busy="true">Cargando…</div>
         ) : filtrados.length === 0 ? (
           <div className="cliente-vacio">{proveedores.length === 0 ? 'Todavía no hay proveedores registrados.' : 'Sin resultados para esa búsqueda.'}</div>
         ) : (
